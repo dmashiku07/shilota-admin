@@ -1,0 +1,76 @@
+<div class="row">
+  <div class="col-md-12">
+    <div class="card">
+      <div class="card-header">
+        <h4 class="card-title" id="basic-layout-form">Add Faq</h4>
+      </div>
+      <div class="card-body">
+        <div class="px-3">
+
+
+          <form class="form" [formGroup]="Form" novalidate (ngSubmit)="add(Form.value)">
+
+
+            <div class="col-md-12">
+              <div class="form-group">
+                <label for="projectinput3">Title</label>
+
+                <input type="text" class="form-control" formControlName="title" #title [maxlength]="30">
+                <p *ngIf="Form.controls['title'].touched && !Form.controls['title'].valid" class="error-msg">
+                  <span *ngIf="Form.controls['title'].hasError('required') ">
+                    Title is required
+                  </span>
+                  <span *ngIf="Form.controls['title'].hasError('minlength') ">
+                    Title must have 3 characters length.
+                  </span>
+                  <span *ngIf="Form.controls['title'].hasError('maxlength') ">
+                    Title with in 30 characters length.
+                  </span>
+
+                </p>
+              </div>
+            </div>
+
+            <div class="col-md-12">
+              <div class="form-group">
+                <label for="projectinput4">Content</label>
+                <ckeditor #content formControlName="content" [readonly]="false" debounce="500">
+                </ckeditor>
+
+                <!-- <input type="text" formControlName="content" #content class="form-control">	 -->
+                <p *ngIf="Form.controls['content'].touched && !Form.controls['content'].valid" class="error-msg">
+                  <span *ngIf="Form.controls['content'].hasError('required') ">
+                    Content is required
+                  </span>
+
+
+                </p>
+              </div>
+            </div>
+
+            <div class="form-actions">
+
+              <button type="submit" class="btn btn-raised btn-raised btn-primary">
+                <i class="fa fa-check-square-o"></i> Save
+              </button>
+            </div>
+
+
+
+
+
+
+
+          </form>
+        </div>
+      </div>
+
+
+    </div>
+  </div>
+</div>
+
+<script>
+
+  config.removePlugins = 'link'
+</script>

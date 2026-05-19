@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Shilota</title>
+  <base href="/">
+  <link rel="icon" type="image/x-icon" href="favicon.png">
+  <link rel="manifest" href="manifest.json">
+  <link href="assets/fonts/font-awesome-4.7.0/css/font-awesome.min.css" rel="stylesheet">
+  <link href="assets/fonts/feather/style.min.css" type='text/css' rel="stylesheet">
+  <link href="assets/fonts/simple-line-icons/style.css" type='text/css' rel="stylesheet">
+
+  <link href='https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap'
+    rel='stylesheet' type='text/css'>
+  <link rel="stylesheet" href="assets/vendor/pace/themes/black/pace-theme-flash.css" />
+  <style type="text/css">
+    .pace .pace-activity {
+      top: 19px;
+      right: 19px;
+      display: none;
+    }
+
+    .page-loading {
+      position: fixed;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      right: 0;
+      overflow: hidden;
+      background: rgba(51, 51, 51, 1.00);
+      opacity: 0;
+      transition: opacity 1s ease-in-out;
+      z-index: -1;
+    }
+
+    .loading-icon {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 38px;
+      height: 38px;
+      margin-left: -19px;
+      margin-top: -19px;
+    }
+
+    app-root:empty~.page-loading {
+      opacity: 1;
+      z-index: 1;
+    }
+  </style>
+  <script src="https://cdn.ckeditor.com/4.5.11/full/ckeditor.js"></script>
+  <script src="assets/vendor/pace/pace.min.js"></script>
+  <script>
+    window.__cabiConfig = window.__cabiConfig || {};
+  </script>
+  <script src="assets/runtime-config.local.js"></script>
+  <script type="text/javascript">
+    (function (window) {
+      // Polyfills DOM4 MouseEvent only on IE11
+      // Fixes ngx-charts line-chart hover
+      // https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent/MouseEvent#Polyfill
+      if (!!window.MSInputMethodContext && !!document.documentMode || document.documentMode === 10) {
+        function MouseEvent(eventType, params) {
+          params = params || {
+            bubbles: false,
+            cancelable: false
+          };
+          var mouseEvent = document.createEvent('MouseEvent');
+          mouseEvent.initMouseEvent(eventType, params.bubbles, params.cancelable, window, 0, 0, 0, 0, 0, false, false,
+            false, false, 0, null);
+
+          return mouseEvent;
+        }
+
+        MouseEvent.prototype = Event.prototype;
+
+        window.MouseEvent = MouseEvent;
+      }
+
+      // Initialize PACE
+      window.paceOptions = {
+        document: true,
+        eventLag: true,
+        restartOnPushState: true,
+        restartOnRequestAfter: true,
+        ajax: {
+          trackMethods: ['POST', 'GET']
+        }
+      };
+    })(window);
+  </script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+
+<body>
+  <app-root></app-root>
+  <div class="page-loading">
+    <img src="assets/img/oval.svg" class="loading-icon" />
+  </div>
+</body>
+
+</html>

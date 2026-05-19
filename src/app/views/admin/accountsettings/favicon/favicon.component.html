@@ -1,0 +1,43 @@
+<div class="row">
+  <div class="col-md-12">
+    <div class="card">
+      <div class="card-header">
+        <h4 class="card-title" id="basic-layout-form">Favicon Setting</h4>
+      </div>
+      <div class="card-body">
+        <div class="px-3">
+          <div *ngIf="loading" class="text-center py-4">
+            <i class="fa fa-spinner fa-spin mr-2"></i>
+            Loading favicon settings...
+          </div>
+          <form *ngIf="!loading && Form" class="form" [formGroup]="Form" novalidate (ngSubmit)="addFavi(Form.value)">
+            <div class="col-md-12">
+              <div class="form-group">
+                <label for="projectinput3">Favicon</label>
+                <input type="file" id="favIcon" name="favIcon" class="form-control browse_btnn"
+                  formControlName="favIcon" #favIcon />
+                <p *ngIf="Form.controls['favIcon'].touched && !Form.controls['favIcon'].valid" class="error-msg">
+                  <span *ngIf="Form.controls['favIcon'].hasError('required') ">
+                    favicon is required
+                  </span>
+                </p>
+              </div>
+            </div>
+            <div class="col-md-12">
+              <div class="form-group">
+                <img src="{{this.url}}/favicon.png" width="50" height="auto">
+              </div>
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn btn-raised btn-raised btn-primary" [disabled]="isLoading">
+                <i *ngIf="!isLoading" class="fa fa-check-square-o"></i>
+                <i *ngIf="isLoading" class="fa fa-spinner fa-spin"></i>
+                {{ isLoading ? 'Saving...' : 'Save' }}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

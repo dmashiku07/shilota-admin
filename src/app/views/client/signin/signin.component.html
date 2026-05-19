@@ -1,0 +1,69 @@
+<div class="profile-view pt-3">
+  <div class="">
+    <div class="">
+      <div class="hor_padding20">
+        <a routerLink="/">
+          <div class="back_arrow align-middle padding_left15" id="backLink"></div>
+        </a>
+      </div>
+      <h5 class="heading pt-2">{{ 'Sign in' | translate }}</h5>
+    </div>
+  </div>
+  <div class="hor_padding20 ride-review height-80vh e90vh">
+    <div [ngClass]="(!UserIsAuthenticated)?'social_login margin_top30 visible':'social_login margin_top30 invisible'">
+      <h6 class="margin_bottom10 font_size13">{{ 'Sign in Using' | translate }}</h6>
+       <div class="row justify-content-center">
+        <div id="googleSignIn"></div> 
+       </div>
+    </div>
+    <div
+      [ngClass]="(!UserIsAuthenticated)?'or margin_top30 margin_bottom20 visible':'or margin_top30 margin_bottom20 invisible'">
+      <span>{{ 'or' | translate }}</span>
+    </div>
+    <div [ngClass]="(!UserIsAuthenticated)?'profile-form form-design visible':'profile-form form-design invisible'">
+      <form [formGroup]="signinForm" novalidate (ngSubmit)="onLoginSubmit(signinForm.value)">
+        <div class="relPos upInputs">
+          <input type="text" name="username" formControlName='username' id="username" autocomplete="off"
+            [(ngModel)]="social_email" #username required />
+          <label class="upLabel mt-2">{{ 'Email' | translate }}</label>
+        </div>
+        <small class="text-danger"
+          *ngIf="signinForm.controls['username'].touched && !signinForm.controls['username'].valid">
+          {{ 'Email is required' | translate }}
+        </small>
+        <div class="relPos upInputs">
+          <input type="password" name="password" formControlName="password" id="password" [maxLength]="30" #password
+            required />
+          <label class="upLabel mt-2">{{ 'Password' | translate }}</label>
+        </div>
+        <small class="text-danger"
+          *ngIf="signinForm.controls['password'].touched && signinForm.controls['password'].hasError('required')">
+          {{ 'Password is required' | translate }}
+        </small>
+        <small class="text-danger"
+          *ngIf="signinForm.controls['password'].touched && !signinForm.controls['password'].hasError('required') && signinForm.controls['password'].hasError('minlength')">
+          {{ 'Passwords must be at least 6 characters long.' | translate }}
+        </small>
+        <div class="">
+          <div class="margin_top30">
+            <div class="text-right margin_top10"><a routerLink="/forgot-password" class="d-inline-block">{{ 'Forgot
+                Password?' | translate }}
+              </a></div>
+          </div>
+        </div>
+        <div class="">
+          <div class="margin_top30">
+            <input type="submit" class="btn btn_default full_width primary_clr_bg" value="{{ 'Sign in' | translate }}">
+            <div class="text-center margin_top10">{{ 'Not a User?' | translate }} <a routerLink="/signup"
+                class="d-inline-block">{{ 'Create account' | translate }}</a></div>
+          </div>
+        </div>
+      </form>
+    </div>
+    <div [ngClass]="(UserIsAuthenticated)?'profile-form form-design visible':'profile-form form-design invisible'">
+      <div class="pos_rel form-group change-mobile-numbertxt">
+        <div id="firebaseui-auth-container" class="auth-containter"></div>
+      </div>
+    </div>
+  </div>
+</div>

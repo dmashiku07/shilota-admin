@@ -1,0 +1,68 @@
+<div class="pt-3" [ngClass]="(!braintreeIsReady)?'pt-3 visible':'pt-3 invisible'">
+  <div class="hor_padding15">
+    <a routerLink="/">
+      <div class="back_arrow" id="backLink"></div>
+    </a>
+    <a routerLink="/wallet-history" class="float-right clr_black">{{ 'History' | translate }}</a>
+  </div>
+  <h5 class="heading dis_none">
+    <span>{{ 'Available Balance:' | translate }}</span>
+    <span class="green_txt">{{ currencySymbol }}</span>
+    <span class="green_txt">{{ walletmoney || '0.00' }}</span>
+  </h5>
+  <h5 class="heading">
+    <span>{{ 'Balance:' | translate }} </span>
+    <span class="green_txt">{{ currencySymbol }} </span>
+    <span class="green_txt">{{ walletmoney || '0.00' }}</span>
+  </h5>
+</div>
+<div class="pt-3" [ngClass]="(braintreeIsReady)?'pt-3 visible':'pt-3 invisible'">
+  <div class="hor_padding15">
+    <a routerLink="/">
+      <div class="back_arrow" id="backLink"></div>
+    </a>
+  </div>
+  <h5 class="heading"><span>{{ 'Wallet Payment' | translate }}</span></h5>
+</div>
+<form [formGroup]="walletForm" novalidate (ngSubmit)="addMoney(walletForm.value)">
+  <div [ngClass]="(!showBraintreeContainer)?'pos_rel mb-3 height-65vh visible':'pos_rel mb-3 height-65vh invisible'">
+    <div class="pt-5 text-center hor_padding20">
+      <h3 class="margin_top20">{{ 'Add Money to Wallet' | translate }}</h3>
+      <h6>{{ 'It is Easy, Safe' | translate }}  {{ 'Secure' | translate }}</h6>
+      <div class="form-design  mt-5">
+        <div class="relPos upInputs">
+          <input type="text" name="add_amount" formControlName="add_amount" id="add_amount" [maxlength]="6"
+            (input)="numberOnly($event)" #add_amount required />
+          <label class="upLabel mt-2">{{ 'Enter Amount to be added' | translate }}</label>
+        </div>
+        <p class="text-left margin_top10 mb-0">
+          <span>{{ 'Amount' | translate }}:</span>
+          <span class="green_txt">{{ currencySymbol }}</span>
+        </p>
+        <small class="text-danger float-left"
+          *ngIf="walletForm.controls['add_amount'].touched && !walletForm.controls['add_amount'].valid">
+          {{ 'Amount is required' | translate }}
+        </small>
+      </div>
+    </div>
+  </div>
+  
+  <div
+    [ngClass]="(!showBraintreeContainer)?'btn_div col-12 col-sm-12 col-md-12 col-lg-12 col-xl-4 hor_padding20  btn-btm visible':'btn_div col-12 col-sm-12 col-md-12 col-lg-12 col-xl-4 hor_padding20  btn-btm invisible'">
+    <button type="submit" [disabled]="braintreeIsLoading" class="btn btn_default full_width primary_clr_bg">
+      <span *ngIf="!braintreeIsLoading">{{ 'Add Money' | translate }}</span>
+      <span *ngIf="braintreeIsLoading">{{ 'Loading' | translate }}...</span>
+    </button>
+    <p class="pt-3 text-center mb-0"> {{ 'Book Using wallet ?' | translate }} <a routerLink="/search" class="green_txt d-inline-block">{{ 'Ride Now' | translate }}</a></p>
+  </div>
+</form>
+<div [ngClass]="(showBraintreeContainer)?'pos_rel height-65vh visible':'pos_rel height-65vh invisible'">
+  <div class="text-center hor_padding20">
+    <div id="dropin-container"></div>
+  </div>
+</div>
+
+<div
+  [ngClass]="(braintreeIsReady)?'btn_div col-12 col-sm-12 col-md-12 col-lg-12 col-xl-4 hor_padding20 btn-btm visible':'btn_div col-12 col-sm-12 col-md-12 col-lg-12 col-xl-4 hor_padding20 btn-btm invisible'">
+  <button type="button" (click)="pay()" class="btn btn_default full_width primary_clr_bg margin_top20">{{ 'Pay Now' | translate }}</button>
+</div>

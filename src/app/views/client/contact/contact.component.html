@@ -1,0 +1,96 @@
+<section class="overall_home">
+  <div class="help_banner">
+    <div class="container">
+      <div class="">
+        <h1 class="help_txt text-center">{{users.helppagesheader}}</h1>
+      </div>
+    </div>
+  </div>
+  <div class="help_content margin_top80 margin_bottom80">
+    <div class="container">
+      <div class="row">
+        <div class="col-12 col-sm-12 col-md-4 col-lg-3">
+          <button type="button" class="btn btn_default full_width primary_clr_bg help_mobile"
+            (click)="isCollapsed = !isCollapsed" [attr.aria-expanded]="!isCollapsed" aria-controls="collapseExample">
+            {{ 'Menu' | translate }}
+          </button>
+          <div class="help_menu collapse" id="collapseExample" [ngbCollapse]="isCollapsed">
+            <div class="">
+              <div class="contact_div margin_bottom25">
+                <h6 routerLinkActive="active"><a [routerLink]="['/contact']" class="clr_black active">{{ 'Contact Us' | translate }}</a>
+                </h6>
+                <h6 routerLinkActive="active"><a [routerLink]="['/faq']" class="clr_black" *ngIf="faqCount != 0">{{ 'FAQ' | translate }}</a>
+                </h6>
+              </div>
+              <div class="help_div" *ngIf="count != 0">
+                <h6 routerLinkActive="active" *ngFor="let page of pages">
+                  <a [routerLink]="['/help', hyphenateUrlParams(page.title)]" class="clr_black">{{ page.title }}</a>
+                </h6>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="col-12 col-sm-12 col-md-8 col-lg-9">
+          <div class="help_details">
+            <h4>{{ 'Contact Us' | translate }}</h4>
+            <div class="email_phone margin_top30">
+              <div class="row">
+                <div class="d-inline-block email_inner" *ngIf="users.smtpUsername">
+                  <h6>{{ 'Email' | translate }}</h6>
+                  <h4>{{users.email}}</h4>
+                </div>
+                <div class="d-inline-block email_inner email_mobile" *ngIf="users.phone">
+                  <h6>{{ 'Phone' | translate }}</h6>
+                  <h4>{{users.phone}}</h4>
+                </div>
+              </div>
+            </div>
+            <div class="contact_form form-design">
+              <form [formGroup]="userForm" novalidate (ngSubmit)="sendMail(userForm.value)">
+                <div class="relPos upInputs mt-4">
+                  <input type="text" formControlName="name" [maxLength]="30" (keypress)="charOnly($event)" #name
+                    required />
+                  <label class="upLabel">{{ 'Name' | translate }}</label>
+                </div>
+                <small class="text-danger"
+                  *ngIf="userForm.controls['name'].touched && !userForm.controls['name'].valid">
+                  {{ 'Name is required' | translate }}
+                </small>
+                <div class="relPos upInputs mt-4">
+                  <input type="text" formControlName="email" [maxLength]="30" #email required />
+                  <label class="upLabel">{{ 'Email' | translate }}</label>
+                </div>
+                <small class="text-danger"
+                  *ngIf="userForm.controls['email'].touched && !userForm.controls['email'].valid">
+                  {{ 'Email is required' | translate }}
+                </small>
+                <div class="relPos upInputs mt-4">
+                  <input type="text" formControlName="subject" [maxLength]="30" #subject required />
+                  <label class="upLabel">{{ 'Subject' | translate }}</label>
+                </div>
+                <small class="text-danger"
+                  *ngIf="userForm.controls['subject'].touched && !userForm.controls['subject'].valid">
+                  {{ 'Subject is required' | translate }}
+                </small>
+                <div class="form-group mt-4">
+                  <textarea class="form-control height_auto" rows="5" formControlName="message" #message
+                    required></textarea>
+                  <label>{{ 'Message' | translate }}</label>
+                </div>
+                <small class="text-danger"
+                  *ngIf="userForm.controls['message'].touched && !userForm.controls['message'].valid">
+                  {{ 'Message is required' | translate }}
+                </small>
+                <div class="row margin_top40">
+                  <div class="col-4 col-lg-3">
+                    <button class="btn btn_default full_width primary_clr_bg" type="submit">{{ 'Send' | translate }}</button>
+                  </div>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>

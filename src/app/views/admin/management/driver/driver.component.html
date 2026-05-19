@@ -1,0 +1,76 @@
+<section id="base-style">
+  <div class="row">
+    <div class="col-12">
+      <div class="card">
+        <div class="card-header">
+          <h4 class="card-title">Driver Management</h4>
+        </div>
+        <div class="card-body collapse show">
+          <div class="card-block card-dashboard">
+            <div class="actions float-left dataTables_filter">
+              
+              <input class="form-control form-control-sm" type="text" name="search" [(ngModel)]="filter" (ngModelChange)="onFilterChange()" placeholder="Search">
+              <br>
+            </div>
+            <table class="table table-striped table-responsive-md table-bordered base-style">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th (click)="sort('full_name')">Name
+                    <span class="ft-arrow-up" *ngIf="key =='full_name'" [ngClass]="{'ft-arrow-up':reverse,'ft-arrow-down':!reverse}"></span>
+                  </th>
+                  <th>Email
+                    <span class="ft-arrow-down" *ngIf="key =='email'" [ngClass]="{'ft-arrow-up':reverse,'ft-arrow-down':!reverse}"></span>
+                  </th>
+                  <th>Mobile</th>
+                  <!-- <th>Location</th> -->
+                  <th>Action</th>
+                  <th>Submission</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngIf="loading">
+                  <td colspan="6" class="text-center py-4">
+                    <i class="fa fa-spinner fa-spin mr-2"></i>
+                    Loading drivers...
+                  </td>
+                </tr>
+                <tr *ngFor="let page of pages; let i = index">
+                  <td>{{rowNumber(i)}}</td>
+                  <td>{{page.full_name | lowercase}}</td>
+                  <td>{{page.email}}</td>
+                  <td>{{page.phone_number}}</td>
+                  <td>
+                    <button class="btn btn-raised btn-danger mr-1" (click)="deactive(page._id)" *ngIf="page.approval==1">
+                      Deactivate</button>
+                    <button class="btn btn-raised btn-success mr-1" (click)="active(page._id)" *ngIf="page.approval==0">
+                      Activate</button>
+                    <a class="btn btn-raised btn-icon btn-warning mr-1" [routerLink]="['/admin/management/details',page._id]">
+                      <i class="fa fa-pencil"></i></a>
+                    <a class="btn btn-raised btn-icon btn-info mr-1" [routerLink]="['/admin/management/details',page._id]">
+                      <i class="fa fa-eye"></i></a>
+                  </td>
+                  <td>
+                    <span class="badge badge-warning white" *ngIf="page.completionStatus && page.completionStatus == 0;">Pending</span>
+                    <span class="badge badge-success white" *ngIf="page.completionStatus && page.completionStatus == 1;">Approved</span>
+                    <span class="badge badge-warning white" *ngIf="!page.completionStatus">Pending</span>
+                  </td>
+                </tr>
+                <tr *ngIf="!loading && pages.length === 0 ">
+                  <td colspan="6" style="text-align:center;">No result found</td>
+                </tr>
+              </tbody>
+            </table>
+            <app-server-pagination
+              [page]="pagination.page"
+              [pageSize]="pagination.pageSize"
+              [totalPages]="pagination.totalPages"
+              [totalItems]="pagination.totalItems"
+              (pageChange)="onPageChange($event)">
+            </app-server-pagination>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>

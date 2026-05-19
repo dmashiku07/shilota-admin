@@ -1,0 +1,9 @@
+/* .logo_wdth img {
+    height: 30px !important;
+} */
+
+@media (min-width: 992px){
+    .navbar .navbar-header {
+        padding-left: 0px !important;
+    }
+}

@@ -1,0 +1,300 @@
+<div class="row">
+  <div class="col-md-12">
+    <div class="card">
+      <div class="card-header">
+        <h4 class="card-title" id="basic-layout-form">Website Setting </h4>
+      </div>
+      <div class="card-body">
+        <div class="px-3">
+          <div *ngIf="loading" class="text-center py-4">
+            <i class="fa fa-spinner fa-spin mr-2"></i>
+            Loading website settings...
+          </div>
+
+          <form *ngIf="!loading && userForm" class="form" [formGroup]="userForm" novalidate (ngSubmit)="updateSetting(userForm.value)">
+            <div class="col-md-12">
+              <div class="form-group">
+                <label for="projectinput3">Site Name</label>
+                <input type="text" class="form-control" formControlName="siteName" #siteName>
+                <p *ngIf="userForm.controls['siteName'].touched && !userForm.controls['siteName'].valid">
+                  <span *ngIf="userForm.controls['siteName'].hasError('required') " class="error-msg">
+                    Site Name is required
+                  </span>
+                </p>
+              </div>
+            </div>
+
+            <div class="col-md-12">
+              <div class="form-group">
+                <label for="projectinput3">Admin Login Email ID</label>
+                <input type="text" class="form-control" formControlName="username" #username>
+                <p *ngIf="userForm.controls['username'].touched && !userForm.controls['username'].valid">
+                  <span *ngIf="userForm.controls['username'].hasError('email') " class="error-msg">
+                    Email not valid
+                  </span>
+                </p>
+              </div>
+            </div>
+
+            <div class="col-md-12">
+              <div class="form-group">
+                <label for="projectinput3">Contact Email ID</label>
+                <input type="text" class="form-control" formControlName="email" #email>
+                <p *ngIf="userForm.controls['email'].touched && !userForm.controls['email'].valid">
+                  <span *ngIf="userForm.controls['email'].hasError('email') " class="error-msg">
+                    Email not valid
+                  </span>
+                </p>
+              </div>
+            </div>
+
+
+
+            <div class="col-md-12">
+              <div class="form-group">
+                <label for="projectinput4">App Link Title</label>
+                <input type="text" formControlName="apptitle" #apptitle class="form-control">
+                <p *ngIf="userForm.controls['apptitle'].touched && !userForm.controls['apptitle'].valid" class="error-msg">
+                  <span *ngIf="userForm.controls['apptitle'].hasError('required') ">
+                    App Link Title is required
+                  </span>
+                  <span *ngIf="userForm.controls['apptitle'].hasError('minlength') ">
+                    App Link Title must have 3 characters length.
+                  </span>
+
+                </p>
+              </div>
+            </div>
+
+
+            <div class="col-md-12">
+              <div class="form-group">
+                <label for="projectinput4">App Link Content</label>
+                <input type="text" formControlName="appcontent" #appcontent class="form-control">
+                <p *ngIf="userForm.controls['appcontent'].touched && !userForm.controls['appcontent'].valid" class="error-msg">
+                  <span *ngIf="userForm.controls['appcontent'].hasError('required') ">
+                    App Link Content is required
+                  </span>
+                  <span *ngIf="userForm.controls['appcontent'].hasError('minlength') ">
+                    App Link Content must have 3 characters length.
+                  </span>
+
+
+                </p>
+              </div>
+            </div>
+
+
+            <div class="col-md-12">
+              <div class="form-group">
+                <label for="projectinput4">Footer</label>
+                <input type="text" formControlName="footer" #footer class="form-control">
+                <p *ngIf="userForm.controls['footer'].touched && !userForm.controls['footer'].valid" class="error-msg">
+                  <span *ngIf="userForm.controls['footer'].hasError('required') ">
+                    Footer is required
+                  </span>
+
+
+                </p>
+              </div>
+            </div>
+
+            <div class="col-md-12">
+              <div class="form-group">
+                <label for="projectinput4">Phone Number</label>
+                <input type="text" formControlName="phone" #phone class="form-control" [min]="1"
+                  (keypress)="numberOnly($event)">
+                <p *ngIf="userForm.controls['phone'].touched && !userForm.controls['phone'].valid" class="error-msg">
+                  <span *ngIf="userForm.controls['phone'].hasError('required') ">
+                    Phone Number Must be in numeric
+                  </span>
+
+                </p>
+              </div>
+            </div>
+
+            <div class="col-md-12">
+              <div class="form-group">
+                <label for="projectinput4">Currency Code</label>
+                <input type="text" formControlName="currencyCode" #currencyCode class="form-control">
+                <p *ngIf="userForm.controls['currencyCode'].touched && !userForm.controls['currencyCode'].valid" class="error-msg">
+                  <span *ngIf="userForm.controls['currencyCode'].hasError('required') ">
+                    Currency Code is required
+                  </span>
+                </p>
+              </div>
+            </div>
+
+            <div class="col-md-12">
+              <div class="form-group">
+                <label for="projectinput4">Currency Symbol</label>
+                <input type="text" formControlName="currencySymbol" #currencySymbol class="form-control">
+                <p *ngIf="userForm.controls['currencySymbol'].touched && !userForm.controls['currencySymbol'].valid" class="error-msg">
+                  <span *ngIf="userForm.controls['currencySymbol'].hasError('required') ">
+                    Currency Symbol is required
+                  </span>
+
+
+                </p>
+              </div>
+            </div>
+            <div class="col-md-12">
+              <div class="form-group">
+                <label for="projectinput4">Emergency Contact</label>
+                <input type="text" formControlName="emergencyContact" #emergencyContact
+                  class="form-control" [min]="1" (keypress)="numberOnly($event)">
+                <p *ngIf="userForm.controls['emergencyContact'].touched && !userForm.controls['emergencyContact'].valid" class="error-msg">
+                  <span *ngIf="userForm.controls['emergencyContact'].hasError('required') ">
+                    Emergency Contact Must be in numeric
+                  </span>
+
+                </p>
+              </div>
+            </div>
+
+
+
+
+            <div class="col-md-12">
+              <div class="form-group">
+                <h4 class="form-section">
+                  <i class="ft-file-text"></i> App Setting</h4>
+              </div>
+            </div>
+
+            <div class="col-md-12">
+              <div class="form-group">
+                <label for="projectinput4">Maximum distance coverage to find cab in search ( in kms )</label>
+                <input type="number" formControlName="distancePerCab" #distancePerCab
+                  class="form-control" [min]="1" [max]="99">
+
+
+                <p *ngIf="userForm.controls['distancePerCab'].touched && !userForm.controls['distancePerCab'].valid" class="error-msg">
+                  <span *ngIf="userForm.controls['distancePerCab'].hasError('required') ">
+                    This field Must be in numeric
+                  </span>
+
+
+                </p>
+              </div>
+            </div>
+
+            <div class="col-md-12">
+              <div class="form-group ">
+                <label for="projectinput4">Maximum distance per ride ( in kms )</label>
+                <div class="position-relative">
+                  <input type="text" formControlName="maxdisperride" #maxdisperride
+                    class="form-control" (keypress)="numberOnly($event)">
+                </div>
+                <p *ngIf="userForm.controls['maxdisperride'].touched && !userForm.controls['maxdisperride'].valid" class="error-msg">
+                  <span *ngIf="userForm.controls['maxdisperride'].hasError('required') ">
+                    Maximum Distance field is required
+                  </span>
+                </p>
+              </div>
+            </div>
+
+
+
+            <div class="col-md-12">
+              <div class="form-group ">
+                <label for="projectinput4">Tax (percentage)</label>
+                <div class="position-relative has-icon-left">
+                  <input type="number" formControlName="tax" #tax class="form-control" [min]="0"
+                    [max]="99">
+                  <div class="form-control-position">
+                    <i class="ft-percent"></i>
+                  </div>
+                </div>
+                <p *ngIf="userForm.controls['tax'].touched && !userForm.controls['tax'].valid" class="error-msg">
+                  <span *ngIf="userForm.controls['tax'].hasError('required') ">
+                    This field Must be in numeric
+                  </span>
+
+
+                </p>
+              </div>
+            </div>
+
+            <div class="col-md-12">
+              <div class="form-group">
+                <label for="projectinput4">Maximum Distance coverage for base price (in kms)</label>
+                <input type="number" formControlName="maxDistance" #maxDistance
+                  class="form-control" [min]="1" [max]="99">
+
+           
+                <p *ngIf="userForm.controls['maxDistance'].touched && !userForm.controls['maxDistance'].valid" class="error-msg">
+                  <span *ngIf="userForm.controls['maxDistance'].hasError('required') ">
+                    This field Must be in numeric
+                  </span>
+
+
+                </p>
+              </div>
+            </div>
+
+            <div class="col-md-12">
+              <div class="form-group">
+                <label for="projectinput4">Google Map API Key</label>
+                <textarea formControlName="googleMapKey" #googleMapKey class="form-control"></textarea>
+                <p *ngIf="userForm.controls['googleMapKey'].touched && !userForm.controls['googleMapKey'].valid" class="error-msg">
+                  <span *ngIf="userForm.controls['googleMapKey'].hasError('required') ">
+                    Google Map API is required
+                  </span>
+
+                </p>
+              </div>
+            </div>
+
+
+            <div class="col-md-12">
+              <div class="form-group ">
+                <label for="projectinput4">Vehicle Inspection Duration ( in months )</label>
+                <div class="position-relative">
+                  <input type="text" formControlName="inspectionon" #inspectionon
+                    class="form-control" [min]="1" [max]="12" (keypress)="numberOnly($event)">
+                </div>
+                <p *ngIf="userForm.controls['inspectionon'].touched && !userForm.controls['inspectionon'].valid" class="error-msg">
+                  <span *ngIf="userForm.controls['inspectionon'].hasError('required') ">
+                    Vehicle Inspection Duration is required
+                  </span>
+                </p>
+              </div>
+            </div>
+
+            <div class="col-md-12">
+              <div class="form-group">
+                <label for="projectinput4">Help Pages header</label>
+                <textarea formControlName="helppagesheader" #helppagesheader class="form-control"></textarea>
+                <p *ngIf="userForm.controls['helppagesheader'].touched && !userForm.controls['helppagesheader'].valid" class="error-msg">
+                  <span *ngIf="userForm.controls['helppagesheader'].hasError('required') ">
+                    Help page header text is required.
+                  </span>
+
+                </p>
+              </div>
+            </div>
+
+            <div class="form-actions">
+              <button type="submit" class="btn btn-raised btn-raised btn-primary" [disabled]="isLoading">
+                <i *ngIf="!isLoading" class="fa fa-check-square-o"></i>
+                <i *ngIf="isLoading" class="fa fa-spinner fa-spin"></i>
+                {{ isLoading ? 'Saving...' : 'Save' }}
+              </button>
+              <span *ngIf="saveStatus === 'saved'" class="text-success ml-2">
+                <i class="fa fa-check-circle mr-1"></i>
+                Updated successfully
+              </span>
+              <span *ngIf="saveStatus === 'error'" class="text-danger ml-2">
+                <i class="fa fa-times-circle mr-1"></i>
+                Update failed
+              </span>
+            </div>
+          </form>
+        </div>
+      </div>
+
+
+    </div>
+  </div>
+</div>

@@ -1,0 +1,11 @@
+.disable_cabs {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.visible {
+  display: block;
+}
+.invisible {
+  display: none;
+}

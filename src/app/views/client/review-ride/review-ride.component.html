@@ -1,0 +1,41 @@
+<div class="margin_top20">
+  <div class="hor_padding20">
+    <a [routerLink]="['/your-rides']">
+      <div class="back_arrow close_arrow align-middle mb-2"></div>
+    </a>
+  </div>
+  <h5 class="heading pt-2">{{ 'Write a Review' | translate }}</h5>
+</div>
+<form class="form" [formGroup]="Form" novalidate (ngSubmit)="add(Form.value)">
+  <div class="">
+    <div class="hor_padding20 margin_top20">
+      <div class="ride-review" style="overflow: hidden;">
+        <div class="margin_bottom10">
+          <small class="">{{ 'Your Rating' | translate }}</small>
+          <section class='rating-widget'>
+            <div class="rating-stars constatnt-rate">
+              <star-rating value="{{this.rating}}" checkedcolor="#f04e29" uncheckedcolor="#cdcdcd" size="24px"
+                readonly="false" (rate)="onRate($event)"></star-rating>
+            </div>
+          </section>
+        </div>
+        <div class="form-design">
+          <div class="relPos upInputs">
+            <input type="text" formControlName="review_message" #review_message [min]="5" [(ngModel)]="review_msg"
+              required />
+            <label class="upLabel">{{ 'Message' | translate }}</label>
+          </div>
+          <p *ngIf="Form.controls['review_message'].touched && !Form.controls['review_message'].valid"
+            class="error-msg">
+            <span *ngIf="Form.controls['review_message'].hasError('required') ">
+              {{ 'Kindly enter your review' | translate }}
+            </span>
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="btn_div col-12 col-sm-12 col-md-12 col-lg-12 col-xl-4 hor_padding20">
+    <button type="submit" class="btn btn_default full_width primary_clr_bg margin_top20">{{ 'Submit' | translate }}</button>
+  </div>
+</form>

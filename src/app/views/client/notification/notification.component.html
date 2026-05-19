@@ -1,0 +1,66 @@
+<div class="">
+  <div class="margin_top20" id="title">
+    <div class="hor_padding15">
+      <a routerLink="/"
+        ><div class="back_arrow align-middle" id="backLink"></div
+      ></a>
+    </div>
+    <h5 class="heading mb-0 pt-2">{{ 'Notifications' | translate }}</h5>
+  </div>
+  <div class="search_cabs ride-review height-80vh e90vh" *ngIf="notificationStatus">
+    <a class="clr_black" *ngFor="let notify of notification">
+      <div class="notification_data border_bottom p-2">
+        <div class="d-table">
+          <div class="d-table-cell align-middle">
+            <div
+              class="notifi_profile_pic align-middle admin-profile-img"
+              *ngIf="notify.title == 'Admin'"
+              [ngStyle]="{ 'background-image': 'url(assets/images/admin.png)' }"
+            ></div>
+            <div
+              class="notification_icons notifi_ride_accept tick_whiteIcon align-middle"
+              *ngIf="notify.title == 'Payment Completed'"
+              [ngStyle]="{
+                'background-image': 'url(assets/images/icons/tick_white.png)'
+              }"
+            ></div>
+            <div
+              class="notification_icons notifi_ride_accept tick_whiteIcon align-middle"
+              *ngIf="notify.title == 'Wallet Credited'"
+              [ngStyle]="{
+                'background-image': 'url(assets/images/icons/tick_white.png)'
+              }"
+            ></div>
+          </div>
+          <div class="d-table-cell align-middle hor_padding15">
+            <h6 class="margin_bottom5 text_hide_table_cell">
+              {{ notify.title | translate }}
+            </h6>
+            <p *ngIf="notify.title != 'Wallet Credited'" class="font_size13 mb-0">{{ notify.message | translate }}</p>
+             <p *ngIf="notify.title == 'Wallet Credited'" class="font_size13 mb-0">{{ 'Your wallet has been credited & wallet balance is ' | translate }}{{ notify.message }}</p>
+            <span class="font_size13 teritary_txt">
+              {{notify.notified_at * 1000 | date:"EEE, MMMM d, h:mm a":'GMT' }}</span
+            >
+          </div>
+        </div>
+      </div>
+    </a>
+  </div>
+  
+  <div class="empty_notifications" *ngIf="!notificationStatus">
+    <div class="d-table invite-earn scroll_div full_width">
+      <div class="hor_padding20 d-table-cell align-middle">
+        <div class="text-center">
+          <div class="no_icons no_notification"></div>
+        </div>
+        <div class="text-center hor_padding20">
+          <h5>{{ 'No New Notifications' | translate }}</h5>
+          <p class="margin_bottom30 font_size13">
+            {{ 'Check this section for New updates, exclusive offers and general notifications' | translate }}
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>

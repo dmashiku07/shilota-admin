@@ -1,0 +1,72 @@
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="card-title" id="basic-layout-form">Email Setting (SMTP)</h4>
+            </div>
+            <div class="card-body">
+                <div class="px-3">
+                    <div *ngIf="loading" class="text-center py-4">
+                        <i class="fa fa-spinner fa-spin mr-2"></i>
+                        Loading email settings...
+                    </div>
+                    <form *ngIf="!loading && userForm" class="form" [formGroup]="userForm" novalidate (ngSubmit)="updateSmtp(userForm.value)">
+                        <div class="col-md-12">
+                            <div class="form-group">
+                                <label for="projectinput3">SMTP Host</label>
+                                <input type="text" class="form-control" formControlName="smptHost" #smptHost>
+                                <p *ngIf="userForm.controls['smptHost'].touched && !userForm.controls['smptHost'].valid" class="error-msg">
+                                    <span *ngIf="userForm.controls['smptHost'].hasError('required') ">
+                                        SMTP Host is required
+                                    </span>
+                                </p>
+                            </div>
+                        </div>
+                        <div class="col-md-12">
+                            <div class="form-group">
+                                <label for="projectinput4">SMTP Port</label>
+                                <input type="text" formControlName="smtpPort" #smtpPort class="form-control">
+                                <p *ngIf="userForm.controls['smtpPort'].touched && !userForm.controls['smtpPort'].valid" class="error-msg">
+                                    <span *ngIf="userForm.controls['smtpPort'].hasError('required') ">
+                                        SMTP Port is required
+                                    </span>
+                                </p>
+                            </div>
+                        </div>
+                        <div class="col-md-12">
+                            <div class="form-group">
+                                <label for="projectinput4">SMTP Username</label>
+                                <input type="text" formControlName="smtpUsername" #smtpUsername 
+                                    class="form-control">
+                                <p *ngIf="userForm.controls['smtpUsername'].touched && !userForm.controls['smtpUsername'].valid" class="error-msg">
+                                    <span *ngIf="userForm.controls['smtpUsername'].hasError('required') ">
+                                        SMTP Username is required
+                                    </span>
+                                </p>
+                            </div>
+                        </div>
+                        <div class="col-md-12">
+                            <div class="form-group">
+                                <label for="projectinput4">SMTP Password</label>
+                                <input type="password" formControlName="smtpPassword" #smtpPassword
+                                    class="form-control">
+                                <p *ngIf="userForm.controls['smtpPassword'].touched && !userForm.controls['smtpPassword'].valid" class="error-msg">
+                                    <span *ngIf="userForm.controls['smtpPassword'].hasError('required') ">
+                                        SMTP Password is required
+                                    </span>
+                                </p>
+                            </div>
+                        </div>
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-raised btn-raised btn-primary" [disabled]="isLoading">
+                                <i *ngIf="!isLoading" class="fa fa-check-square-o"></i>
+                                <i *ngIf="isLoading" class="fa fa-spinner fa-spin"></i>
+                                {{ isLoading ? 'Saving...' : 'Save' }}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

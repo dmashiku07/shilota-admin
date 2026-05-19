@@ -1,0 +1,13 @@
+node_modules
+dist
+.angular
+.git
+.gitignore
+npm-debug.log
+yarn-error.log
+.DS_Store
+coverage
+tmp
+*.local
+server/config.local.js
+src/assets/runtime-config.js

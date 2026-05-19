@@ -1,0 +1,48 @@
+<div class="pt-3">
+  <div class="hor_padding15">
+    <a routerLink="/profile">
+      <div class="back_arrow align-middle" id="backLink"></div>
+    </a>
+  </div>
+  <h5 class="heading pt-2">{{ 'Emergency Contacts' | translate }}</h5>
+</div>
+<div class="ride-review pt-0 pos_rel hor_padding20  height-70vh">
+  <div class="emerg_contacts border_bottom padding20 px-0"
+    *ngFor="let contact of emergency_contact_list; let i = index">
+    <div class="d-table full_width">
+      <div class="d-table-cell">
+        <h6 class="mb-0 text_hide_table_cell">{{contact.name}}</h6>
+        <a class="clr_black font_size15" href="javascript:void(0)">{{contact.phone_no}}</a>
+      </div>
+      <div class="d-table-cell align-middle text-right pos_rel">
+        <div ngbDropdown class="d-inline-block">
+          <span id="dropdownBasic1" class="del_icon" ngbDropdownToggle>
+          </span>
+          <div ngbDropdownMenu aria-labelledby="dropdownBasic1">
+            <a [routerLink]="['/edit-emergency-contact', i+1]"><button (click)="editContact(contact,i);"
+                ngbDropdownItem>{{ 'Edit' | translate }}</button></a>
+            <button (click)="open(content);" ngbDropdownItem>{{ 'Delete' | translate }}</button>
+          </div>
+          <ng-template #content let-modal>
+            <div class="modal-header">
+              <h4 class="modal-title" id="modal-basic-title">{{ 'Delete Contact' | translate }}</h4>
+              <button type="button" class="close" aria-label="Close" (click)="modal.dismiss('Cross click')">
+                <span aria-hidden="true">&times;</span>
+              </button>
+            </div>
+            <div class="modal-body">
+              <p>{{ 'Are you sure want to delete this contact?' | translate }}</p>
+            </div>
+            <div class="modal-footer"><button class="btn btn-outline-secondary" (click)="modal.dismiss('Cross click')"
+                type="button">{{ 'Cancel' | translate }}</button><button class="btn btn-primary" type="button"
+                (click)="deleteContact(i);">{{ 'Ok' | translate }}</button>
+            </div>
+          </ng-template>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class=" btn_div col-12 col-sm-12 col-md-12 col-lg-12 col-xl-4 hor_padding20">
+  <button class="btn btn_border full_width" type="submit" routerLink="/add-emergency-contact">{{ 'Add Contact' | translate }}</button>
+</div>

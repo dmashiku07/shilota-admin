@@ -1,0 +1,45 @@
+<section onclick="closeNav()" class="overall_home">
+  <div class="help_banner">
+    <div class="container">
+      <div class="">
+        <h1 class="help_txt text-center">{{users.helppagesheader}}</h1>
+      </div>
+    </div>
+  </div>
+  <div class="help_content margin_top80 margin_bottom80">
+    <div class="container">
+      <div class="row">
+        <div class="col-12 col-sm-12 col-md-4 col-lg-3">
+          <button type="button" class="btn btn_default full_width primary_clr_bg help_mobile" (click)="isCollapsed = !isCollapsed"
+            [attr.aria-expanded]="!isCollapsed" aria-controls="collapseExample">
+            {{ 'Menu' | translate }}
+          </button>
+          <div class="help_menu collapse" id="collapseExample" [ngbCollapse]="isCollapsed">
+            <div class="">
+              <div class="contact_div margin_bottom25">
+                <h6 routerLinkActive="active"><a [routerLink]="['/contact']" class="clr_black active">{{ 'Contact Us' | translate }}</a></h6>
+                <h6 routerLinkActive="active"><a [routerLink]="['/faq']" class="clr_black">{{ 'FAQ' | translate }}</a></h6>
+              </div>
+              <div class="help_div" *ngIf="count != 0">
+                <h6 routerLinkActive="active" *ngFor="let page of pages">
+                  <a [routerLink]="['/help', hyphenateUrlParams(page.title)]" class="clr_black">{{ page.title }}</a>
+                </h6>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="col-12 col-sm-12 col-md-8 col-lg-9">
+          <div class="help_details">
+            <h4>{{ 'Frequently Asked Questions' | translate }}</h4>
+            <div class="frequent_details margin_top30">
+              <h5><a [routerLink]="['/faq']">
+                  <div class="faq_back align-middle margin_right10"></div>
+                </a>{{faq.title}}</h5>
+              <p class="margin_top25" [innerHTML]="faq.content"></p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>

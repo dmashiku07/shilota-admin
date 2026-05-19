@@ -1,0 +1,21 @@
+<div class="server-pagination" *ngIf="totalItems > 0">
+  <div class="server-pagination__summary">
+    Showing page {{ page }} of {{ totalPages }} ({{ totalItems }} records)
+  </div>
+  <div class="server-pagination__controls">
+    <button type="button" class="btn btn-sm btn-outline-secondary" (click)="goTo(page - 1)" [disabled]="page <= 1">
+      Previous
+    </button>
+    <button
+      type="button"
+      class="btn btn-sm"
+      *ngFor="let pageNo of pages"
+      [ngClass]="pageNo === page ? 'btn-dark' : 'btn-outline-secondary'"
+      (click)="goTo(pageNo)">
+      {{ pageNo }}
+    </button>
+    <button type="button" class="btn btn-sm btn-outline-secondary" (click)="goTo(page + 1)" [disabled]="page >= totalPages">
+      Next
+    </button>
+  </div>
+</div>

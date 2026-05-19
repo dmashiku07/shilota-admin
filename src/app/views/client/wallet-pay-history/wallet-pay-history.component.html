@@ -1,0 +1,42 @@
+<div class="pt-3" id="title">
+  <div class="hor_padding15">
+    <a routerLink="/wallet">
+      <div class="back_arrow align-middle" id="backLink"></div>
+    </a>
+  </div>
+  <h5 class="heading pt-2">{{ 'Wallet History' | translate }}</h5>
+</div>
+<div class="search_cabs white_bg pos_rel height-80vh e90vh" *ngIf="loadhistory">
+  <div class="w_his border_bottom padding20" *ngFor="let walhis of wallethistory">
+    <div class="d-table full_width">
+      <div class="d-table-cell">
+        <div class="arrows green_arrow margin_right15 align-middle" *ngIf="walhis.type === 'credit'"></div>
+        <div class="arrows red_arrow margin_right15 align-middle" *ngIf="walhis.type === 'debit'"></div>
+        <div class="amount_details d-inline-block align-middle">
+          <h6 class="mb-0 break_line" *ngIf="walhis.transaction ==='addmoney'" >{{ 'Add money' | translate }}</h6>
+          <h6 class="mb-0 break_line" *ngIf="walhis.transaction ==='payride'" >{{ 'Pay ride' | translate }}</h6>
+          <span class="font_size12">{{ walhis.updated_at * 1000 | date:"MMM d,yyyy":"GMT" }}</span>
+        </div>
+      </div>
+      <div class="d-table-cell align-middle">
+        <div class="green_txt text-right">&#x200E;
+          <span>{{this.currencySymbol}}</span><span>{{ walhis.amount }}</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="search_cabs white_bg pos_rel height-80vh e90vh" *ngIf="!loadhistory">
+  <div class="empty_wallet">
+    <div class="d-table scroll_div full_width">
+      <div class="hor_padding20 d-table-cell align-middle">
+        <div class="text-center">
+          <div class="no_icons no_wallet"></div>
+        </div>
+        <div class="text-center hor_padding20">
+          <h5>{{ 'No Transactions' | translate }}</h5>
+          <a routerLink="/wallet"> <p class="margin_bottom30 font_size13">{{ 'Load Cash' | translate }}</p></a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

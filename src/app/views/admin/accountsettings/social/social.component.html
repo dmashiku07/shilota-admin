@@ -1,0 +1,85 @@
+<div class="row">
+  <div class="col-md-12">
+    <div class="card">
+      <div class="card-header">
+        <h4 class="card-title" id="basic-layout-form">Social Link Setting</h4>
+      </div>
+      <div class="card-body">
+        <div class="px-3">
+          <div *ngIf="loading" class="text-center py-4">
+            <i class="fa fa-spinner fa-spin mr-2"></i>
+            Loading social settings...
+          </div>
+          <form *ngIf="!loading && userForm" class="form" [formGroup]="userForm" novalidate (ngSubmit)="updateUser(userForm.value)">
+            <div class="col-md-12">
+              <div class="form-group">
+                <label for="projectinput3">Facebook</label>
+                <input type="url" class="form-control" pattern="https?://.+" formControlName="facebook" #facebook placeholder="http://www.facebook.com">
+                <p *ngIf="userForm.controls['facebook'].touched && !userForm.controls['facebook'].valid" class="error-msg">
+                  <span *ngIf="userForm.controls['facebook'].hasError('pattern') ">
+                    Facebook URL Must be a valid URL!
+                  </span>
+                </p>
+              </div>
+            </div>
+            <div class="col-md-12">
+              <div class="form-group">
+                <label for="projectinput4">Twitter</label>
+                <input type="text" formControlName="twitter" pattern="https?://.+" #twitter
+                  class="form-control" placeholder="http://www.twitter.com">
+                <p *ngIf="userForm.controls['twitter'].touched && !userForm.controls['twitter'].valid" class="error-msg">
+                  <span *ngIf="userForm.controls['twitter'].hasError('pattern') ">
+                    Twitter URL Must be a valid URL!
+                  </span>
+                </p>
+              </div>
+            </div>
+            <div class="col-md-12">
+              <div class="form-group">
+                <label for="projectinput4">Instagram</label>
+                <input type="text" formControlName="instagram" pattern="https?://.+" #instagram
+                  class="form-control" placeholder="http://www.instagram.com">
+                <p *ngIf="userForm.controls['instagram'].touched && !userForm.controls['instagram'].valid" class="error-msg">
+                  <span *ngIf="userForm.controls['instagram'].hasError('pattern') ">
+                    Instagram URL Must be a valid URL!
+                  </span>
+                </p>
+              </div>
+            </div>
+            <div class="col-md-12">
+              <div class="form-group">
+                <label for="projectinput4">Linkedin</label>
+                <input type="text" formControlName="linkedin" pattern="https?://.+" #linkedin
+                  class="form-control" placeholder="http://www.linkedin.com">
+                <p *ngIf="userForm.controls['linkedin'].touched && !userForm.controls['linkedin'].valid" class="error-msg">
+                  <span *ngIf="userForm.controls['linkedin'].hasError('pattern') ">
+                    Linkedin URL Must be a valid URL!
+                  </span>
+                </p>
+              </div>
+            </div>
+            <div class="col-md-12">
+              <div class="form-group">
+                <label for="projectinput4">GooglePlus</label>
+                <input type="text" formControlName="googleplus" pattern="https?://.+" #googleplus
+                  class="form-control" placeholder="http://www.googleplus.com">
+                <p *ngIf="userForm.controls['googleplus'].touched && !userForm.controls['googleplus'].valid" class="error-msg">
+                  <span *ngIf="userForm.controls['googleplus'].hasError('pattern') ">
+                    GooglePlus URL Must be a valid URL!
+                  </span>
+                </p>
+              </div>
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn btn-raised btn-raised btn-primary" [disabled]="isLoading">
+                <i *ngIf="!isLoading" class="fa fa-check-square-o"></i>
+                <i *ngIf="isLoading" class="fa fa-spinner fa-spin"></i>
+                {{ isLoading ? 'Saving...' : 'Save' }}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

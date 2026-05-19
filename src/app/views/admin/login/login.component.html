@@ -1,0 +1,47 @@
+<!--Login Page Starts-->
+<section id="login">
+  <div class="container-fluid">
+    <div class="row full-height-vh">
+      <div class="col-12 d-flex align-items-center justify-content-center">
+        <div class="card card-inverse login_bg text-center width-400">
+          <div class="card-header">
+            <h4 class="card-title">Login</h4>
+          </div>
+          <div class="card-body">
+            <div class="card-block">
+              <form [formGroup]="form" novalidate (ngSubmit)="onLoginSubmit(form.value)">
+                <div class="form-group">
+                  <div class="col-md-12">
+                    <input type="email" class="form-control" formControlName='username' name="inputEmail" id="username"
+                      placeholder="Email" autocomplete=off>
+                    <small *ngIf="form.controls['password'].touched && !form.controls['password'].valid && form.controls['username'].hasError('required') "
+                      class="form-text text-muted danger">Email
+                      is required</small>
+                    <small *ngIf="!form.controls['username'].valid && !form.controls['username'].hasError('required') && form.controls['username'].hasError('email') "
+                      class="form-text text-muted danger">Email
+                      is not valid</small>
+                  </div>
+                </div>
+                <div class="form-group">
+                  <div class="col-md-12">
+                    <input type="password" class="form-control" formControlName='password' name='password' id='password'
+                      placeholder="Password" autocomplete=off>
+                    <small *ngIf="form.controls['password'].touched && !form.controls['password'].valid && form.controls['password'].hasError('required')"
+                      class="form-text text-muted danger">Password
+                      is required</small>
+                  </div>
+                </div>
+                <div class="form-group">
+                  <div class="col-md-12">
+                    <input type="submit" class="btn btn-success btn-block btn-raised" value="Login">
+                  </div>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+<!--Login Page Ends-->

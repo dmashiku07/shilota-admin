@@ -1,0 +1,68 @@
+<div id="mySidenav" class="home_menu sidenav">
+  <div class="padding_top20">
+    <div class="profile">
+      <div class="row heading pl-0 pr-0">
+        <div class="col-8 nav_profile_name">
+          <a routerLink="/profile">
+            <h5 class="extra_text_hide mb-0">{{ profileName }}</h5>
+            {{ profileTxt}}
+          </a>
+        </div>
+        <a routerLink="/profile">
+          <div class="col-4">
+            <div class="profile_pic" [ngStyle]="{'background-image': 'url(' + profilePhoto + ')'}"></div>
+          </div>
+        </a>
+      </div>
+    </div>
+  </div>
+  <div class="menus scroll_div hor_padding15 height-80vh">
+    <a routerLink="/your-rides" (click)="closeNav1()" class="border_bottom">
+      <div class="nav_ride nav_icons"></div>{{ 'Your Rides' | translate }}
+    </a>
+    <a routerLink="/wallet" class="wallet_menu border_bottom">
+      <div class="nav_wallet nav_icons"></div>{{ 'Wallet' | translate }} <span class="wallet_menu_amt">&#x200E;
+        {{this.currencySymbol}} {{this.walletMoney}}</span>
+    </a>
+    <a routerLink="/faq" (click)="closeNav1()" class="border_bottom">
+      <div class="nav_help nav_icons"></div>{{ 'Help' | translate }}
+    </a>
+    <a routerLink="/invite-friends" class="border_bottom">
+      <div class="nav_invite nav_icons"></div>{{ 'Invite' | translate }}
+    </a>
+  </div>
+  <div class="col-12" [style.visibility]="(logoutbtn) ? 'visible' : 'hidden' ">
+    <input type="button" class="logout-btn btn btn-small btn-primary" (click)="open(content);" value="{{ 'Logout' | translate }}">
+  </div>
+  <div class="col-12" [style.visibility]="(logoutbtn) ? 'visible' : 'hidden' ">
+    <input type="button" class="logout-btn btn btn-small btn-primary" (click)="open(accountdelete);" value="{{ 'Delete Account' | translate }}">
+  </div>
+</div>
+<ng-template #content let-modal>
+  <div class="modal-header">
+    <h4 class="modal-title" id="modal-basic-title">{{ 'Sign Out' | translate }}</h4>
+    <button type="button" class="close" aria-label="Close" (click)="modal.dismiss('Cross click')">
+      <span aria-hidden="true">&times;</span>
+    </button>
+  </div>
+  <div class="modal-body">
+    <p>{{ 'Are you sure want to sign out?' | translate }}</p>
+  </div>
+  <div class="modal-footer"><button class="btn btn-outline-secondary" (click)="modal.dismiss('Cross click')"
+      type="button">{{ 'Cancel' | translate }}</button><button class="btn btn-primary" type="button"
+      (click)="onProfileLogout();">{{ 'Ok' | translate }}</button></div>
+</ng-template>
+<ng-template #accountdelete let-modal>
+  <div class="modal-header">
+    <h4 class="modal-title" id="modal-account-delete">{{ 'Delete Account' | translate }}</h4>
+    <button type="button" class="close" aria-label="Close" (click)="modal.dismiss('Cross click')">
+      <span aria-hidden="true">&times;</span>
+    </button>
+  </div>
+  <div class="modal-body">
+    <p>{{ 'Are you sure want to delete the account?' | translate }}</p>
+  </div>
+  <div class="modal-footer"><button class="btn btn-outline-secondary" (click)="modal.dismiss('Cross click')"
+      type="button">{{ 'Cancel' | translate }}</button><button class="btn btn-primary" type="button"
+      (click)="onAccountDelete();">{{ 'Ok' | translate }}</button></div>
+</ng-template>

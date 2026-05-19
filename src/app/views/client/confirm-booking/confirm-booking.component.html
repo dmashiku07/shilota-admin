@@ -1,0 +1,66 @@
+<div class="confirm_booking pt-3" *ngIf="rideDetails as ride; else confirmBookingState">
+  <div class="alert_overlay"></div>
+  <div class="mobile_stickyheader">
+    <a (click)="goBack();">
+      <div class="back_arrow cursor_ptr align-middle margin_left15" id="backLink"></div>
+    </a>
+    <div class="details_heading text-center"><span class="font_size13 float-left">{{ ride.category_name }}</span>
+      <h5 class="d-inline-block">&nbsp;</h5>
+      <img *ngIf="showHeaderImage" [src]="ride.category_image" (error)="onCategoryImageError()" class="img-fluid width45 float-right margin_top10min" alt="" />
+    </div>
+  </div>
+  <div class=" hor_padding15 pos_rel pt-3">
+    <div class="ride-review-map pos_rel">
+      <agm-map [latitude]="drop_lat" [longitude]="drop_lng" [usePanning]="true" (mapReady)="onMapReady($event)">
+        <agm-direction [origin]="origin" [destination]="destination">
+        </agm-direction>
+      </agm-map>
+    </div>
+  </div>
+  <div class="btn_div pt-0 col-12 col-sm-12 col-md-12 col-lg-12 col-xl-4 hor_padding15 bottom-scroll">
+    <div class="ride_details pt-3">
+      <div class="confirm_locations">
+        <div class="">
+          <div class="font_size13 gry_txt margin_right10 d-inline-block">{{ 'PICKUP' | translate }}</div>
+          <div class="">{{ ride.pickup_location }}</div>
+        </div>
+        <div class="margin_top10">
+          <div class="font_size13 gry_txt margin_right10 d-inline-block">{{ 'DROP' | translate }}</div>
+          <div class="">{{ ride.drop_location }}</div>
+        </div>
+        <div class="margin_top10">
+          <div class="font_size13 gry_txt margin_right10 d-inline-block">{{ 'Fare' | translate }} ({{ 'Approximate' | translate }})</div>
+          <span class="margin_right10 d-inline-block">{{this.currencySymbol}}‎{{ this.approx_price }}</span>
+        </div>
+      </div>
+    </div>
+    <div class="row margin_top30">
+      <div [ngClass]="(bookingConfirmed === '1')?'col-12 invisible':'col-12 visible'">
+        <button class="btn btn_default full_width primary_clr_bg clearfix" (click)="confirmBooking();">{{ 'Confirm Booking' | translate }}</button>
+      </div>
+      <div [ngClass]="(bookingConfirmed === '1')?'col-12 text-center visible':'col-12 text-center invisible'">
+        <div class="search_icon margin_right10 margin_top15"></div>
+        <h5 class="d-inline-block">{{ 'Finding Driver....' | translate }}</h5>
+      </div>
+    </div>
+  </div>
+</div>
+
+<ng-template #confirmBookingState>
+  <div class="confirm_booking pt-3 hor_padding15">
+    <div class="mobile_stickyheader">
+      <a (click)="goBack();">
+        <div class="back_arrow cursor_ptr align-middle margin_left15" id="backLink"></div>
+      </a>
+      <div class="details_heading text-center">
+        <h5 class="d-inline-block">{{ 'Confirm Booking' | translate }}</h5>
+      </div>
+    </div>
+    <div class="pt-5 text-center" *ngIf="loading">
+      <h5>{{ 'Loading ride details...' | translate }}</h5>
+    </div>
+    <div class="pt-5 text-center" *ngIf="!loading">
+      <h5>{{ loadError || ('Unable to load ride details' | translate) }}</h5>
+    </div>
+  </div>
+</ng-template>

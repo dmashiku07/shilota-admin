@@ -1,0 +1,113 @@
+<div class="overlay_div" (click)="closeNav()"></div>
+<div class="hor_padding15 menu_search border_bottom pb-2 pt-3 text-center">
+  <span class="float-left pt-2 menu_img" (click)="openNav()"><img src="assets/images/nav.png" class="img-fluid " />
+  </span>
+  <a class="navbar-brand center_logo search_logo mr-0" routerLink="/">
+    <img src="assets/images/logo.png" class="img-fluid" alt="Logo">
+  </a>
+  <!-- <a routerLink="/signin" class="float-right login_link ">Sign in
+  </a> -->
+</div>
+<div class="ride-review hor_padding20 pos_rel height-89vh" (click)="closeNav()">
+  <div class="choose_locations mt-3 ">
+    <div class="book_cabs">
+      <div class="row mx-0 hor_padding15 padding_bottom15">
+        <div class=" pb-4 selectdiv padding_bottom10 hor_padding15 margin_top20 pos_rel" style="width: 100%;">
+          <h6 class="font_size12 mb-0">{{ 'When' | translate }}</h6>
+          <select class="select_trip" (change)="scheduleDialog($event.target.value)">
+            <option value="0">{{ 'Now' | translate }}</option>
+            <option value="1">{{ 'Later' | translate }}</option>
+          </select>
+          <div class="border_bottom pt-2"></div>
+        </div>
+        <div *ngIf="dialogVisible" id="hidden_div" class="pb-3" style="width: 100%; margin-top: -25px;">
+          <div class="hor_padding15">
+            <div class="margin_top20 pos_rel">
+              <h6 class="font_size12 mb-0">{{ 'Schedule Time' | translate }}</h6>
+              <input
+                type="datetime-local"
+                [min]="minDateTime"
+                [max]="maxDateTime"
+                class="calendar7 form-control border_none pl-0 pr-0 example-trigger"
+                [(ngModel)]="dateTime"
+                (ngModelChange)="onScheduleChange($event)">
+              <small class="text-danger" *ngIf="scheduleTimeError">
+                {{ 'Schedule Time is required' | translate }}
+              </small>
+              <small class="text-danger" *ngIf="scheduleTimeWrong">
+               {{ 'Schedule Time has to be 15 mins later from now.' | translate }}
+              </small>
+            </div>
+          </div>
+        </div>
+        <div class="search_points">
+          <div class="ride-points ml-0">
+            <span class="point-start"></span>
+            <span class="point-distance"></span>
+            <span class="point-end"></span>
+          </div>
+        </div>
+        <div class="search_place">
+          <a routerLink="/pickup-location" class="clr_black">
+            <div class="border_bottom pos_rel">
+              <span class="font_size12">{{ 'Pickup From' | translate }}</span>
+              <h6 class="margin_bottom15 extra_hide_twolines">{{ pickupDefault | translate }}</h6>
+            </div>
+          </a>
+          <a routerLink="/drop-location" class="clr_black">
+            <div class="margin_top15 pos_rel">
+              <span class="font_size12">{{ 'Drop Here' | translate }}</span>
+              <h6 class="extra_hide_twolines">{{ dropDefault | translate }}</h6>
+            </div>
+          </a>
+        </div>
+      </div>
+      <div class="row mx-0 hor_padding15">
+        <div class="selectdiv padding_bottom10 hor_padding15 margin_top0 pos_rel" style="width: 100%;">
+          <h6 class="font_size12 mb-0">{{ 'Payment Option' | translate }}</h6>
+          <select [ngModel]="paymentType" class="select_trip" (change)="changePayment($event.target.value)">
+            <option value="cash">{{ 'Cash' | translate }}</option>
+            <option value="card">{{ 'Card' | translate }}</option>
+          </select>
+          <div class="border_bottom pt-2"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div [ngClass]="(serviceAvailable)?'available_rides pt-4 visible':'available_rides pt-4 invisible'">
+    <p class="text-uppercase font_size13 gry_txt d-inline-block">{{ 'available rides' | translate }} <span
+        class="total_rides d-inline-block">({{availCategorySum}})</span></p>
+    <div class="vehicles_available pt-0">
+      <div class="border_bottom pos_rel" id="searchid" *ngFor="let category of availCategories;">
+        <div class="d-table full_width disable_cabs" *ngIf="category.available === '0'">
+          <div class="d-table-cell align-middle img_search">
+            <img src="{{category.image}}" class="img-fluid" />
+            <span class="wait_time font_size12 d-block">{{category.reach_pickup}}</span>
+          </div>
+          <div class="d-table-cell align-middle padding_left20">
+            <h6 class="font_size16 font_wt500 mb-0 break_line">{{category.category_name}}</h6>
+            <span class="amount">-</span>
+          </div>
+          <div class="d-table-cell align-middle"><i class="fa fa-angle-right font_size20 float-right"></i></div>
+        </div>
+        <div class="d-table full_width" *ngIf="category.available === '1'">
+          <div class="d-table-cell align-middle img_search" (click)="requestRide(category)">
+            <img src="{{category.image}}" class="img-fluid" />
+            <span class="wait_time font_size12 d-block">{{category.reach_pickup}}</span>
+          </div>
+          <div class="d-table-cell align-middle padding_left20" (click)="requestRide(category)">
+            <h6 class="font_size16 font_wt500 mb-0 break_line">{{category.category_name}}</h6>
+            <span class="amount">{{ this.currencySymbol }}</span><span class="amount">{{category.baseprice}}</span>
+          </div>
+          <div class="d-table-cell align-middle" (click)="requestRide(category)"><i
+              class="fa fa-angle-right font_size20 float-right"></i></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div
+    [ngClass]="(serviceAvailable)?'unavailable_service margin_top50 text-center invisible':'unavailable_service margin_top50 text-center visible'">
+    <div class="no_services"></div>
+    <p class="font_size20 margin_top10">{{ 'Unfortunately, No Services found.' | translate }}</p>
+  </div>
+</div>

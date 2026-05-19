@@ -1,0 +1,83 @@
+<div class="alert_overlay"></div>
+<div class="pt-3">
+  <div class="hor_padding15">
+    <a routerLink="/your-rides">
+      <div class="back_arrow align-middle" id=""></div>
+    </a>
+    <a routerLink="/sos-alert" class="red_txt float-right">{{ 'SOS Alert' | translate }}</a>
+  </div>
+</div>
+<div class="hor_padding15 pt-4 text-center" *ngIf="loading">
+  <h6 class="font_size16 mb-0">{{ 'Loading ride details...' | translate }}</h6>
+</div>
+<div class="hor_padding15 pt-4 text-center red_txt" *ngIf="!loading && loadError">
+  <h6 class="font_size16 mb-0">{{ loadError | translate }}</h6>
+</div>
+<ng-container *ngIf="!loading && rideDetails">
+<div class="hor_padding15 pos_rel pt-3">
+  <div class="ride-review-map pos_rel" *ngIf="origin && destination">
+    <agm-map (mapReady)="onMapReady($event)">
+      <agm-direction [origin]="origin" [destination]="destination">
+      </agm-direction>
+    </agm-map>
+  </div>
+</div>
+<div class="btn_div pt-0 col-12 col-sm-12 col-md-12 col-lg-12 col-xl-4 hor_padding15 bottom-scroll mob-fxd">
+  <div class="ride_details pt-3">
+    <div class="row">
+      <div class="col-sm">
+        <h6 class="font_size12 margin_top5 driver_name float-left">{{ 'Approximate Price:' | translate }} {{ currencySymbol }}
+          {{ rideDetails?.baseprice }} </h6>
+      </div>
+      <div class="col-sm">
+        <h6 class="font_size12 margin_top5 driver_name float-right" *ngIf="distanceDetails?.distance"> (
+          {{ distanceDetails?.distance }}) </h6><h6 class="font_size12 margin_top5 driver_name float-right">{{ distanceDetails?.duration }}</h6>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-8 col-sm-9 col-md-8 col-lg-9 align-middle pr-0">
+        <div class="profile-img-icon d-inline-block">
+          <div class="profile_pic d-inline-block" [ngStyle]="{'background-image': 'url(' + profilePhoto + ')'}"></div>
+          <div class="rating text-center"><img src="assets/images/star.png" class="img-fluid star_width" />
+            <span>{{ driverRatings }}</span></div>
+        </div>
+        <div class="profile-details align-top padding_top10 padding_right10 padding_left10" *ngIf="rideDetails">
+          <h6 class="font_size16 font_wt500 mb-0 driver_name">{{ rideDetails?.driver_id?.full_name }}</h6>
+          <h6 class="font_size12 margin_top5 driver_name">{{ vehicleDetails?.driver_vehicle }} </h6>
+          <h6 class="font_size12 margin_top5 driver_name">{{ rideDetails?.vehicle_no }}</h6>
+          <!-- <h6 class="font_size12 margin_top5 driver_name">{{ this.rideDetails.driver_id.phone_number }}</h6> -->
+        </div>
+      </div>
+      <div class="col-4 col-sm-3 col-md-4 col-lg-3 align-middle text-center float-right padding_left0">
+        <div class="font_size12 ver_margin10"><span>{{ rideDetails?.driver_id?.phone_number }}</span></div>
+        <span class="otp_tag font_size13"><span>{{ 'OTP' | translate }} </span><br> <span>{{ rideDetails?.onride_otp }}</span></span>
+      </div>
+    </div>
+  </div>
+  <div class="row" [ngClass]="(rideStatus !== 'onride')?'row visible':'row invisible'">
+    <div class="col-12">
+      <button (click)="open(content);" class="btn btn_default full_width primary_clr_bg margin_top20">{{ 'Cancel Ride' | translate }}</button>
+    </div>
+  </div>
+  <div class="row" [ngClass]="(rideStatus === 'completed')?'row visible':'row invisible'">
+    <div class="col-12" *ngIf="origin && destination">
+      <a (click)="reviewaride(ride_id);"><button
+          class="btn btn_default full_width primary_clr_bg margin_top20">{{ 'Write Review' | translate }}</button></a>
+    </div>
+  </div>
+</div>
+</ng-container>
+<ng-template #content let-modal>
+  <div class="modal-header">
+    <h4 class="modal-title" id="modal-basic-title">{{ 'Ride Cancellation' | translate }}</h4>
+    <button type="button" class="close" aria-label="Close" (click)="modal.dismiss('Cross click')">
+      <span aria-hidden="true">&times;</span>
+    </button>
+  </div>
+  <div class="modal-body">
+    <p>{{ 'Are you sure want to cancel this ride?' | translate }}</p>
+  </div>
+  <div class="modal-footer"><button class="btn btn-outline-secondary" (click)="modal.dismiss('Cross click')"
+      type="button">{{ 'Cancel' | translate }}</button><button class="btn btn-primary" type="button"
+      (click)="confirmCancel();">{{ 'Okay' | translate }}</button></div>
+</ng-template>

@@ -1,0 +1,94 @@
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="card-title" id="basic-layout-form">Payment Setting</h4>
+            </div>
+            <div class="card-body">
+                <div class="px-3">
+                    <div *ngIf="loading" class="text-center py-4">
+                        <i class="fa fa-spinner fa-spin mr-2"></i>
+                        Loading payment settings...
+                    </div>
+
+
+                    <form *ngIf="!loading && userForm" class="form" [formGroup]="userForm" novalidate (ngSubmit)="updatePayment(userForm.value)">
+
+
+                        <div class="col-md-12">
+                            <div class="form-group">
+                                <input type="radio" formControlName="BraintreeStatus" #BraintreeStatus
+                                    [value]="1"> Braintree (Live)
+                                <input type="radio" formControlName="BraintreeStatus" #BraintreeStatus
+                                    [value]="0"> Sandbox (Test)
+                                <p *ngIf="userForm.controls['BraintreeStatus'].touched && !userForm.controls['BraintreeStatus'].valid" class="error-msg">
+                                    <span *ngIf="userForm.controls['BraintreeStatus'].hasError('required') ">
+                                        This field is required
+                                    </span>
+
+
+                                </p>
+                            </div>
+                        </div>
+                        <div class="col-md-12">
+                            <div class="form-group">
+                                <label for="projectinput3">Braintree Merchand ID</label>
+                                <input type="text" class="form-control" formControlName="merchandId" #merchandId>
+                                <p *ngIf="userForm.controls['merchandId'].touched && !userForm.controls['merchandId'].valid" class="error-msg">
+                                    <span *ngIf="userForm.controls['merchandId'].hasError('required') ">
+                                        Braintree merchand id is required
+                                    </span>
+
+
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="col-md-12">
+                            <div class="form-group">
+                                <label for="projectinput4">Braintree Public Key</label>
+                                <input type="text" formControlName="publicKey" #publicKey class="form-control">
+                                <p *ngIf="userForm.controls['publicKey'].touched && !userForm.controls['publicKey'].valid" class="error-msg">
+                                    <span *ngIf="userForm.controls['publicKey'].hasError('required') ">
+                                        Braintree public key is required
+                                    </span>
+
+
+                                </p>
+                            </div>
+                        </div>
+
+
+                        <div class="col-md-12">
+                            <div class="form-group">
+                                <label for="projectinput4">Braintree Private Key</label>
+                                <input type="text" formControlName="privateKey" #privateKey class="form-control">
+                                <p *ngIf="userForm.controls['publicKey'].touched && !userForm.controls['publicKey'].valid" class="error-msg">
+                                    <span *ngIf="userForm.controls['publicKey'].hasError('required') ">
+                                        Braintree private key is required
+                                    </span>
+
+
+                                </p>
+                            </div>
+                        </div>
+
+
+
+
+
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-raised btn-raised btn-primary" [disabled]="isLoading">
+                                <i *ngIf="!isLoading" class="fa fa-check-square-o"></i>
+                                <i *ngIf="isLoading" class="fa fa-spinner fa-spin"></i>
+                                {{ isLoading ? 'Saving...' : 'Save' }}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+
+        </div>
+    </div>
+</div>

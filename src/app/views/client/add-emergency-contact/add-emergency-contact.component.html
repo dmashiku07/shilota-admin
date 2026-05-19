@@ -1,0 +1,43 @@
+<div class="pt-3">
+  <div class="hor_padding15">
+    <a routerLink="/emergency-contacts">
+      <div class="back_arrow align-middle" id="backLink"></div>
+    </a>
+  </div>
+  <h5 class="heading pt-2">{{ 'Add Emergency Contact' | translate }}</h5>
+</div>
+<form [formGroup]="addContactForm" class="form-profile margin_top15" novalidate
+  (ngSubmit)="onProfileSubmit(addContactForm.value)">
+  <div class=" pos_rel edit_emergency ride-review height-70vh">
+    <div class="hor_padding15 pt-4 form-design">
+      <div class="relPos upInputs">
+        <input type="text" class="std-cod" [maxLength]="30" formControlName='contact_name'
+          id="contact_name" (keypress)="charOnly($event)" #contact_name required />
+        <label class="upLabel mt-2">{{ 'Enter Full Name' | translate }}
+</label>
+      </div>
+      <small class="text-danger"
+        *ngIf="addContactForm.controls['contact_name'].touched && !addContactForm.controls['contact_name'].valid">
+       {{ 'Full Name is required' | translate }}
+      </small>
+      <div class="relPos upInputs">
+        <ngx-intl-tel-input [cssClass]="'form-control verify-intl-phone'" [preferredCountries]="preferredCountries"
+          [enableAutoCountrySelect]="false" [enablePlaceholder]="true" [searchCountryFlag]="true"
+          [searchCountryField]="[SearchCountryField.Iso2, SearchCountryField.Name]" [selectFirstCountry]="false"
+          [selectedCountryISO]="CountryISO.India" [maxLength]="15" 
+          [phoneValidation]="true" [separateDialCode]="separateDialCode" name="contact_no" formControlName="contact_no">
+        </ngx-intl-tel-input>
+        <!--  <input type="text" class="form-control std-cod" [maxLength]="15" (keypress)="numberOnly($event)" formControlName='contact_no' id="contact_no"
+          #contact_no required />
+        <label class="upLabel mt-2">Mobile Number</label> -->
+      </div>
+      <small class="text-danger"
+        *ngIf="addContactForm.controls['contact_no'].touched && !addContactForm.controls['contact_no'].valid">
+        {{ 'Valid Mobile Number is required' | translate }}
+      </small>
+    </div>
+  </div>
+  <div class="margin_top30 hor_padding20 btn_div col-12 col-sm-12 col-md-12 col-lg-12 col-xl-4">
+    <input type="submit" class="btn btn_default full_width primary_clr_bg margin_top30" value="{{ 'Update' | translate }}">
+  </div>
+</form>

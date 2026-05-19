@@ -1,0 +1,71 @@
+<div class="ride_completed text-center margin_top30">
+  <div class="payment_icon tick_icon"></div>
+  <h4 class="mb-0">{{ 'Ride Completed' | translate }}</h4>
+  <p class="font_size13 margin_top5">{{ 'Pay by Cash or Card' | translate }} </p>
+</div>
+<div [ngClass]="(!braintreeIsReady)?'scroll_div height-65vh visible':'scroll_div height-65vh invisible'">
+  <div class="wallet_checkbox margin_top30 hor_padding20" *ngIf="walletMoney">
+    <div class="border_bottom py_20">
+      <div class="payment_type_icons margin_right10 wallet_icon align-middle"></div>
+      <div class="d-inline-block align-middle"><span>{{ 'Use Wallet' | translate }}</span> <br /> <span
+          class="font_size13"><span>{{this.currencySymbol}}‎</span>
+          <span>{{this.rideDetails.walletmoney }}</span> </span></div>
+      <div class="checkbox checkbox-primary d-inline-block float-right margin_top10">
+        <input id="checkbox2" name="paywallet" (change)="checkWallet()" type="checkbox">
+        <label for="checkbox2"></label>
+      </div>
+    </div>
+  </div>
+  <div class="bill_details border_bottom margin_top20">
+    <div class="hor_padding20">
+      <h5>{{ 'Bill Details' | translate }}</h5>
+      <div class="border_bottom clearfix py_20">
+        <span class="float-left">{{ 'Ride Fare' | translate }}</span>
+        <span
+          class="float-right">&#x200E;<span>{{this.currencySymbol}}‎</span><span>{{this.rideDetails.ride_fare }}</span></span>
+      </div>
+      <div class="border_bottom clearfix py_20">
+        <span class="float-left">{{ 'Tax' | translate }}</span>
+        <span
+          class="float-right">&#x200E;<span>{{this.currencySymbol}}‎</span><span>{{this.rideDetails.ride_tax }}</span></span>
+      </div>
+      <div class="clearfix py_20">
+        <span class="float-left">{{ 'Total Fare' | translate }}</span>
+        <span
+          class="float-right">&#x200E;<span>{{this.currencySymbol}}‎</span><span>{{this.rideDetails.ride_total }}</span></span>
+      </div>
+      <div class="clearfix py_20">
+        <span class="float-left">{{ 'Amount Payable' | translate }}</span>
+        <span class="float-right">&#x200E;<span>{{this.currencySymbol}}‎</span><span>{{this.amounttopay }}</span></span>
+      </div>
+    </div>
+  </div>
+  <div
+    [ngClass]="(!sufficientWallet)?'bill_details margin_top20 margin_bottom20 visible':'bill_details margin_top20 margin_bottom20 invisible'">
+    <div class="hor_padding20">
+      <h5 class="">{{ 'Payment Type' | translate }}</h5>
+      <div class="radio border_bottom padding20">
+        <label class="mb-0"><input name="payby" (change)="changePayment($event.target.value)" value="card" type="radio"
+            [(ngModel)]="this.paymentType" > &nbsp; &nbsp;<span>{{ 'Using Card' | translate }}</span></label>
+        <div class="card_type float-right"></div>
+      </div>
+      <div [ngClass]="(walletUsed)?'radio border_bottom padding20 invisible':'radio border_bottom padding20 visible'">
+        <label class="mb-0"><input name="payby" (change)="changePayment($event.target.value)" value="cash" type="radio"
+            [(ngModel)]="this.paymentType"> &nbsp; &nbsp;<span>{{ 'Using Cash' | translate }}</span></label>
+        <div class="card_type float-right"></div>
+      </div>
+    </div>
+  </div>
+</div>
+<div
+  [ngClass]="(braintreeIsReady)?'scroll_div height-65vh hor_padding20 visible':'scroll_div height-65vh hor_padding20 invisible'">
+  <div id="dropin-container"></div>
+</div>
+<div
+  [ngClass]="(!braintreeIsReady)?'hor_padding20 margin_top20 btn_div col-12 col-sm-12 col-md-5 col-lg-5 col-xl-4 visible':'hor_padding20 margin_top20 btn_div col-12 col-sm-12 col-md-5 col-lg-5 col-xl-4 invisible'">
+  <button type="button" (click)="payRide();" [disabled]="onPaymentInitiate" class="btn btn_default full_width primary_clr_bg"><span>{{ 'Pay' | translate }}</span></button>
+</div>
+<div
+  [ngClass]="(braintreeIsReady)?'hor_padding20 margin_top20 btn_div col-12 col-sm-12 col-md-5 col-lg-5 col-xl-4 visible':'hor_padding20 margin_top20 btn_div col-12 col-sm-12 col-md-5 col-lg-5 col-xl-4 invisible'">
+  <button type="button" (click)="cardPayment();" class="btn btn_default full_width primary_clr_bg"><span>{{ 'Pay by Card' | translate }}</span></button>
+</div>

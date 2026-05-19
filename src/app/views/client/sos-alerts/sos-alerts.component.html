@@ -1,0 +1,55 @@
+<div class="margin_top20">
+  <div class="hor_padding15">
+    <a (click)="goBack();">
+      <div class="back_arrow align-middle" id="backLink"></div>
+    </a>
+  </div>
+  <h5 class="heading">{{ 'Emergency Alert' | translate }}</h5>
+</div>
+<div class="profile-view margin_top20">
+  <div class="emergency margin_top50 hor_padding20">
+    <div class="text-center">
+      <div class="alert-img margin_bottom20">
+        <img class="" src="assets/images/icons/alert.png">
+      </div>
+    </div>
+    <div class="border_bottom">
+      <h6 class="font_size16 font_wt500 margin-top10 margin_bottom10 text-center">{{ 'Use incase of Emergency' | translate }}</h6>
+      <p class="text-center margin_bottom30 font_size12 padding_left15 padding_right15">{{ 'We collects location data during on active booking from your device' | translate }}
+        {{ 'Including when the app in background. This data is used to ensure that user have a smooth and safe ride experience' | translate }}
+      </p>
+    </div>
+    <div class="border_bottom" *ngIf="this.sitesettings.emergencyContact">
+      <div class="msg-alert-phon padding_left20 text-center">
+        <span class="red_txt">
+          <a href="tel:{{this.sitesettings.emergencyContact}}">
+            <p class="margin_top10 margin_bottom10 padding_left20">
+              <span class="call_alert call_icon align-middle margin_right10"></span>
+              <span class="align-middle">{{ 'Call police control room' | translate }}</span>
+            </p>
+          </a>
+        </span>
+      </div>
+    </div>
+    <div class="border_bottom dis_mobile" *ngIf="this.emergencyContact">
+      <div class="msg-alert-phon padding_left20 text-center">
+        <a href="tel:{{ this.emergencyContact }}" class="red_txt">
+          <p class="margin_top10 margin_bottom10 padding_left20">
+            <span class="msg_alert call_icon align-middle margin_right10"></span>
+            <span class="align-middle">{{ 'Alert emergency contact' | translate }}</span>
+          </p>
+        </a>
+      </div>
+    </div>
+    <div class="border_bottom dis_none_mobile" *ngIf="this.emergencyContact">
+      <div class="msg-alert-phon padding_left20 text-center">
+        <a routerLink="/emergency-contacts" class="red_txt">
+          <p class="margin_top10 margin_bottom10 padding_left20">
+            <span class="msg_alert call_icon align-middle margin_right10"></span>
+            <span class="align-middle">{{ 'Show emergency contacts' | translate }}</span>
+          </p>
+        </a>
+      </div>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,79 @@
+<section class="overall_home">
+  <div class="banner banner_driver" *ngIf="!showDriverBanner">
+    <div class="container">
+      <div class="">
+        <h1 class="banner_driver_txt text-center">{{ bannerTitle | translate }}</h1>
+        <div class="row">
+          <div class="col-6 text-right">
+            <a *ngIf="users?.androidDriver" href="{{users?.androidDriver}}" target="_blank"><img
+                src="{{this.url}}/assets/frontend/images/playstore.png" class="img-fluid" /></a>
+          </div>
+          <div class="col-6">
+            <a *ngIf="users?.iosDriver" href="{{users?.iosDriver}}" target="_blank"><img
+                src="{{this.url}}/assets/frontend/images/appstore.png" class="img-fluid" /></a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="banner banner_driver" *ngIf="showDriverBanner"
+    [style.background-image]="'url(' + backgroundUrl + ')'">
+    <div class="container">
+      <div class="">
+        <h1 class="banner_driver_txt text-center">
+          {{ bannerTitle }}</h1>
+        <div class="row">
+          <div class="col-6 text-right">
+            <a *ngIf="users?.androidDriver" href="{{users?.androidDriver}}" target="_blank"><img
+                src="{{this.url}}/assets/frontend/images/playstore.png" class="img-fluid" /></a>
+          </div>
+          <div class="col-6">
+            <a *ngIf="users?.iosDriver" href="{{users?.iosDriver}}" target="_blank"><img
+                src="{{this.url}}/assets/frontend/images/appstore.png" class="img-fluid" /></a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="join_driver">
+    <div class="container">
+      <div class="row">
+        <div class="col-12 col-sm-8 col-md-9 col-lg-9">
+          <h2 class="join_driver_heading mb-0">{{ 'Join With Us' | translate }}</h2>
+          <p class="join_driver_desc mb-0">{{ 'Know about more ways of partnering with us & how each category can help you earn more.' | translate }} </p>
+        </div>
+        <div class="col-12 col-sm-4 col-md-3 col-lg-3">
+          <a [routerLink]="['/contact']" class="btn btn_default green_bg margin_top5">{{ 'Send Enquiry' | translate }}</a>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="features margin_top80 margin_bottom80">
+    <div class="container">
+      <div class="feature_list" *ngFor="let page of home; let index=index; let odd=odd; let even=even; ">
+        <div class="row" *ngIf="even">
+          <div class="col-12 col-sm-12 col-md-5 col-lg-5 dis_none_mobile">
+            <div class="feature_img driver_featuresImg1">
+              <img class="bg-image" [src]="getUploadUrl(page.image)" alt="images">
+            </div>
+          </div>
+          <div class="col-12 col-sm-12 col-md-7 col-lg-7 padding50">
+            <h2 class="feature_title">{{page.title}}</h2>
+            <p class="feature_desc" [innerHTML]="page.content"></p>
+          </div>
+        </div>
+        <div class="row" *ngIf="odd">
+          <div class="col-12 col-sm-12 col-md-7 col-lg-7 padding50">
+            <h2 class="feature_title">{{page.title}}</h2>
+            <p class="feature_desc" [innerHTML]="page.content"></p>
+          </div>
+          <div class="col-12 col-sm-12 col-md-5 col-lg-5 dis_none_mobile">
+            <div class="feature_img driver_featuresImg2">
+              <img class="bg-image" [src]="getUploadUrl(page.image)" alt="images">
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>

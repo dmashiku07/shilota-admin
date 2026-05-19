@@ -1,0 +1,249 @@
+<div class="row">
+    <div class="col-xl-3 col-lg-6 col-12">
+      <div class="card">
+        <div class="card-body">
+          <div class="px-3 py-3">
+            <div class="media">
+              <div class="media-body text-left">
+                <h4 class="mb-1 dashboard-icons font-weight-bold">{{this.count}}</h4>
+                <span><a [routerLink]="['/admin/management/user']" target="_blank">Total Riders</a></span>
+              </div>
+              <div class="media-right align-self-center">
+                <i class="icon-users dashboard-icons font-large-1 float-right"></i>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-xl-3 col-lg-6 col-12">
+      <div class="card">
+        <div class="card-body">
+          <div class="px-3 py-3">
+            <div class="media">
+              <div class="media-body text-left">
+                <h4 class="mb-1 dashboard-icons font-weight-bold">{{this.driverCount}}</h4>
+                <span><a [routerLink]="['/admin/management/driver']" target="_blank">Total Drivers</a></span>
+              </div>
+              <div class="media-right align-self-center">
+                <i class="icon-support dashboard-icons font-large-1 float-right"></i>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-xl-3 col-lg-6 col-12">
+      <div class="card">
+        <div class="card-body">
+          <div class="px-3 py-3">
+            <div class="media">
+              <div class="media-body text-left">
+                <h4 class="mb-1 dashboard-icons font-weight-bold">{{this.vehicleCount}}</h4>
+                <span><a [routerLink]="['/admin/management/vehicle']" target="_blank">Total Vehicles</a></span>
+              </div>
+              <div class="media-right align-self-center">
+                <i class="icon-speedometer dashboard-icons font-large-1 float-right"></i>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-xl-3 col-lg-6 col-12">
+      <div class="card">
+        <div class="card-body">
+          <div class="px-3 py-3">
+            <div class="media">
+              <div class="media-body text-left">
+                <h4 class="mb-1 dashboard-icons font-weight-bold">{{this.revenue}}</h4>
+                <span><a [routerLink]="['/admin/management/settlementHistory']" target="_blank">Total Revenue</a></span>
+              </div>
+              <div class="media-right align-self-center">
+                <i class="icon-bar-chart dashboard-icons font-large-1 float-right"></i>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="row">
+    <div class="col-sm-6">
+      <div class="card">
+        <div class="card-header">
+          <h4 class="card-title">Drivers</h4>
+        </div>
+        <div class="card-body">
+          <div class="card-block">
+            <div class="height-300 d-flex flex-column justify-content-center" *ngIf="!loading; else driverSummaryLoading">
+              <div class="mb-3">
+                <div class="d-flex justify-content-between font-weight-bold">
+                  <span>Online Drivers</span>
+                  <span>{{ onlineDriverCount }}</span>
+                </div>
+                <div class="progress mt-2">
+                  <div class="progress-bar bg-info" role="progressbar" [style.width.%]="(onlineDriverCount / totalDriversTracked) * 100"></div>
+                </div>
+              </div>
+              <div>
+                <div class="d-flex justify-content-between font-weight-bold">
+                  <span>Active Drivers</span>
+                  <span>{{ activedriverCount }}</span>
+                </div>
+                <div class="progress mt-2">
+                  <div class="progress-bar bg-primary" role="progressbar" [style.width.%]="(activedriverCount / totalDriversTracked) * 100"></div>
+                </div>
+              </div>
+            </div>
+            <ng-template #driverSummaryLoading>
+              <div class="height-300 d-flex align-items-center justify-content-center text-muted">Loading driver metrics...</div>
+            </ng-template>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-sm-6">
+        <div class="card">
+            <div class="card-header">
+              <h4 class="card-title">Rides</h4>
+            </div>
+            <div class="card-body">
+              <div class="card-block">
+                <div class="height-300 d-flex flex-column justify-content-center" *ngIf="!loading; else rideSummaryLoading">
+                  <div class="mb-3">
+                    <div class="d-flex justify-content-between font-weight-bold">
+                      <span>Successful Rides</span>
+                      <span>{{ status1 }}</span>
+                    </div>
+                    <div class="progress mt-2">
+                      <div class="progress-bar bg-success" role="progressbar" [style.width.%]="(status1 / successfulRideTotal) * 100"></div>
+                    </div>
+                  </div>
+                  <div class="mb-3">
+                    <div class="d-flex justify-content-between font-weight-bold">
+                      <span>Unsuccessful Rides</span>
+                      <span>{{ status2 }}</span>
+                    </div>
+                    <div class="progress mt-2">
+                      <div class="progress-bar bg-warning" role="progressbar" [style.width.%]="(status2 / successfulRideTotal) * 100"></div>
+                    </div>
+                  </div>
+                  <div>
+                    <div class="d-flex justify-content-between font-weight-bold">
+                      <span>Scheduled Rides</span>
+                      <span>{{ status3 }}</span>
+                    </div>
+                    <div class="progress mt-2">
+                      <div class="progress-bar bg-secondary" role="progressbar" [style.width.%]="(status3 / successfulRideTotal) * 100"></div>
+                    </div>
+                  </div>
+                </div>
+                <ng-template #rideSummaryLoading>
+                  <div class="height-300 d-flex align-items-center justify-content-center text-muted">Loading ride metrics...</div>
+                </ng-template>
+              </div>
+            </div>
+          </div>
+    </div>
+  </div>
+  <div class="row">
+    <div class="col-sm-6">
+        <div class="card">
+            <div class="card-header">
+              <h4 class="card-title">Rides Count</h4>
+            </div>
+            <div class="card-body">
+              <div class="col-md-12">
+                <div class="form-group">
+                  <ul class="list-group">
+                    <li class="list-group-item">
+                      <span class="badge bg-info white float-right">{{this.todayRide}}</span> Today
+                    </li>
+                    <li class="list-group-item">
+                      <span class="badge bg-primary white float-right">{{this.ridesCount}}</span> This Month
+                    </li>
+                    <li class="list-group-item">
+                      <span class="badge bg-info white float-right">{{this.totalRide}}</span> Total Rides
+                    </li>
+                  </ul>
+                </div>
+              </div>
+              <div class="action-buttons mt-4 mb-1 text-center">
+                <a class="btn btn-raised btn-primary white mr-2" [routerLink]="['/admin/management/rides']">View
+                  All</a>
+              </div>
+            </div>
+          </div>
+    </div>
+    <div class="col-sm-6">
+      <div class="card">
+        <div class="card-header">
+          <h4 class="card-title">Devices</h4>
+        </div>
+        <div class="card-body">
+          <div class="col-md-12">
+            <div class="form-group">
+              <ul class="list-group">
+                  <li class="list-group-item">
+                      <span class="badge bg-info white float-right">{{this.webUser}}</span> Web 
+                    </li>
+                <li class="list-group-item">
+                  <span class="badge bg-primary white float-right">{{this.iosUser}}</span> ios 
+                </li>
+                <li class="list-group-item">
+                  <span class="badge bg-info white float-right">{{this.andoridUser}}</span> Android </li>
+              </ul>
+            </div>
+          </div>
+          <div class="action-buttons mt-4 mb-1 text-center">
+            <a class="btn btn-raised btn-primary white mr-2" [routerLink]="['/admin/management/user']">View
+              All</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="row">
+    <div class="col-xl-12 col-lg-12 col-12">
+      <div class="card">
+        <div class="card-header">
+          <h4 class="card-title">Push Notification</h4>
+        </div>
+        <div class="card-body">
+          <div class="card-block">
+            <form class="form" [formGroup]="Form" novalidate (ngSubmit)="sendMessage(Form.value)">
+              <div class="col-md-12">
+                <div class="form-group">
+                  <input type="radio" formControlName="user" #user [value]="0"> Riders
+                  <input type="radio" formControlName="user" #user [value]="1"> Drivers
+                  <p *ngIf="Form.controls['user'].touched && !Form.controls['user'].valid" class="error-msg">
+                    <span *ngIf="Form.controls['user'].hasError('required') ">
+                      This field is required
+                    </span>
+                  </p>
+                </div>
+              </div>
+              <div class="col-md-12">
+                <div class="form-group">
+                  <textarea class="form-control" rows="3" formControlName="message" #message></textarea>
+                  <p *ngIf="Form.controls['message'].touched && !Form.controls['message'].valid" class="error-msg">
+                    <span *ngIf="Form.controls['message'].hasError('required') ">
+                      This field is required
+                    </span>
+                  </p>
+                </div>
+              </div>
+              <div class="col-md-12">
+                <div class="form-group center">
+                  <button type="submit" class="btn btn-raised btn-primary white mr-2">
+                    Send
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>  

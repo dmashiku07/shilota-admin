@@ -1,0 +1,3507 @@
+const passport = require('passport');
+const config = require('../config');
+require('../driverpassport')(passport);
+const jwt = require('jsonwebtoken');
+const async = require('async');
+const express = require('express');
+const router = express.Router();
+const path = require('path');
+const moment = require("moment");
+
+/* schemas */
+let Driver = require("../schema/driver");
+let Bodytypes = require("../schema/bodytypes");
+let Amenities = require("../schema/amenities");
+let Vehicles = require("../schema/vehicles");
+let Notifications = require("../schema/notification");
+let Help = require("../models/helppage");
+let Rides = require("../schema/rides");
+let UserDevices = require("../schema/driverdevices");
+let NotifyDevices = require("../schema/userdevices");
+let Payments = require("../schema/payments");
+let Wallet = require("../schema/wallets");
+let SelcomPaymentSession = require("../schema/selcompaymentsession");
+let Commissions = require("../schema/commissions");
+let Reviews = require("../schema/reviews");
+let Admin = require("../models/admin");
+let Settlements = require("../schema/settlement");
+let OtpVerification = require("../schema/otpverification");
+let translationServer = require("../translation/translate.js");
+
+/* api url */
+const base_url = config.baseUrl;
+
+/* upload directories */
+const driverassets = "./src/assets/media/drivers/";
+
+/* image uploads */
+const fs = require('fs');
+const multer = require('multer');
+const upload = multer();
+
+/* mailers */
+const nodemailer = require('nodemailer');
+
+/* push notifications */
+const pushService = require("../services/pushService");
+const braintree = require("braintree");
+
+/* random string generation */
+const crypto = require('crypto');
+const randomstring = require("randomstring");
+const smsService = require("../services/smsService");
+const selcomService = require("../services/selcomService");
+const cetsSyncService = require("../services/cetsSyncService");
+const { roundCustomerPayableAmount } = require("../utils/pricing");
+
+const OTP_EXPIRY_MINUTES = 5;
+const OTP_MAX_ATTEMPTS = 5;
+const DRIVER_WALLET_TYPE = "driver";
+const DRIVER_FORGOT_PASSWORD_OTP_PURPOSE = "forgot_password";
+
+function mapSelcomSessionStatus(payload) {
+  const paymentStatus = String(payload && payload.payment_status || "").trim().toUpperCase();
+  const resultcode = String(payload && payload.resultcode || "").trim();
+
+  if (resultcode === "000" && paymentStatus === "COMPLETED") {
+    return "verified";
+  }
+
+  if (paymentStatus === "CANCELLED" || paymentStatus === "USERCANCELED" || String(payload && payload.result || "").trim().toUpperCase() === "FAIL") {
+    return "failed";
+  }
+
+  return "pending";
+}
+
+async function applySelcomProviderUpdate(session, payload) {
+  const nextStatus = mapSelcomSessionStatus(payload);
+  session.status = nextStatus;
+  session.order_id = payload && payload.order_id ? String(payload.order_id) : session.order_id;
+  session.reference = payload && payload.reference ? String(payload.reference) : session.reference;
+  session.channel = payload && payload.channel ? String(payload.channel) : session.channel;
+  session.phone = payload && payload.phone ? String(payload.phone) : session.phone;
+  session.payment_status = payload && payload.payment_status ? String(payload.payment_status) : session.payment_status;
+  session.provider_result = payload && payload.result ? String(payload.result) : session.provider_result;
+  session.provider_resultcode = payload && payload.resultcode ? String(payload.resultcode) : session.provider_resultcode;
+  session.provider_message = payload && payload.message ? String(payload.message) : session.provider_message;
+  session.paid_amount = payload && selcomService.normalizeAmount(payload.amount) ? selcomService.normalizeAmount(payload.amount) : session.paid_amount;
+  session.provider_payload = payload || null;
+  session.callback_received_at = new Date();
+  if (nextStatus === "verified" && !session.verified_at) {
+    session.verified_at = new Date();
+  }
+  await session.save();
+  return session;
+}
+
+async function ensureSelcomPaymentVerified(session, transid) {
+  if (session.status === "verified" || session.status === "completed" || session.verified_at) {
+    return session;
+  }
+
+  const result = await selcomService.queryTransaction(transid);
+  if (String(result.resultcode) === "000") {
+    return applySelcomProviderUpdate(session, {
+      transid: transid,
+      result: result.result,
+      resultcode: result.resultcode,
+      message: result.message,
+      reference: result.reference,
+      payment_status: "COMPLETED",
+      amount: session.amount
+    });
+  }
+
+  if (String(result.resultcode) !== "111") {
+    await applySelcomProviderUpdate(session, {
+      transid: transid,
+      result: result.result,
+      resultcode: result.resultcode,
+      message: result.message,
+      reference: result.reference,
+      payment_status: result.result || "FAILED",
+      amount: session.amount
+    });
+  }
+
+  throw new Error(result.message || "Payment has not been verified yet");
+}
+
+function getDriverOtpPurpose(req) {
+  return req.body.purpose || "driver_signup";
+}
+
+function buildPhoneParts(rawPhoneNumber) {
+  const normalizedPhoneNumber = smsService.normalizePhoneNumber(rawPhoneNumber);
+  if (!normalizedPhoneNumber) {
+    return null;
+  }
+
+  let countryCode = 255;
+  let nationalNumber = normalizedPhoneNumber;
+  if (normalizedPhoneNumber.startsWith("255") && normalizedPhoneNumber.length > 3) {
+    nationalNumber = normalizedPhoneNumber.slice(3);
+  }
+
+  if (!nationalNumber || Number.isNaN(Number(nationalNumber))) {
+    return null;
+  }
+
+  return {
+    normalizedPhoneNumber: normalizedPhoneNumber,
+    countryCode: countryCode,
+    nationalNumber: Number(nationalNumber)
+  };
+}
+
+function hashOtp(phoneNumber, purpose, otp) {
+  return crypto
+    .createHash("sha256")
+    .update(`${config.secret}|${purpose}|${phoneNumber}|${otp}`)
+    .digest("hex");
+}
+
+async function verifyDriverOtpForPurpose(phoneNumber, purpose, otp) {
+  const otpVerification = await OtpVerification.findOne({
+    phone_number: phoneNumber,
+    purpose: purpose,
+    consumed: false
+  })
+    .sort({
+      createdAt: -1
+    })
+    .exec();
+
+  if (!otpVerification) {
+    return {
+      ok: false,
+      message: "OTP not found. Please request a new OTP"
+    };
+  }
+
+  if (otpVerification.expires_at <= new Date()) {
+    return {
+      ok: false,
+      message: "OTP has expired. Please request a new OTP"
+    };
+  }
+
+  if (otpVerification.attempt_count >= OTP_MAX_ATTEMPTS) {
+    return {
+      ok: false,
+      message: "Maximum OTP attempts exceeded. Please request a new OTP"
+    };
+  }
+
+  const hashedOtp = hashOtp(phoneNumber, purpose, otp);
+  if (hashedOtp !== otpVerification.otp_hash) {
+    await OtpVerification.updateOne(
+      {
+        _id: otpVerification._id
+      },
+      {
+        $inc: {
+          attempt_count: 1
+        }
+      }
+    ).exec();
+
+    return {
+      ok: false,
+      message: "Invalid OTP"
+    };
+  }
+
+  return {
+    ok: true,
+    otpVerification: otpVerification
+  };
+}
+
+function getDriverWalletAmount(driver) {
+  if (!driver || typeof driver.walletmoney === "undefined" || driver.walletmoney === null) {
+    return 0;
+  }
+
+  return Math.round(Number(driver.walletmoney || 0) * 100) / 100;
+}
+
+async function pushDriverWalletNotification(driverId, walletamount, message) {
+  const admin = await Admin.findOne({}).sort({ _id: -1 }).exec();
+  const notificationTitle = "Wallet Credited";
+  const notificationMessage = "Your wallet has been credited & wallet balance is " + walletamount;
+
+  let newNotification = new Notifications({
+    user_id: "0",
+    notify_to: String(driverId),
+    title: notificationTitle,
+    message: notificationMessage,
+    notified_at: timeZone()
+  });
+  await newNotification.save();
+
+  const devices = await UserDevices.find({ user_id: String(driverId) }).exec();
+  const tokens = devices.map(function (device) {
+    return device.device_token;
+  }).filter(Boolean);
+
+  if (tokens.length > 0) {
+    await pushService.sendNotification({
+      tokens: tokens,
+      message: message,
+      data: {
+        type: "payment",
+        message: message
+      },
+      mobile: true,
+      siteName: admin && admin.siteName
+    });
+  }
+}
+
+/* signup as driver user */
+router.post('/signup', function (req, res) {
+  if (!req.body.email || !req.body.password) {
+    res.json({
+      status: "false",
+      message: "Something went to be wrong"
+    });
+  } else {
+    let otp = randomstring.generate({
+      length: 4,
+      charset: 'numeric'
+    });
+    let BatchId = 'ID ' + otp.substr(0, 4);
+    let newDriver = new Driver({
+      email: req.body.email,
+      password: req.body.password,
+      full_name: req.body.full_name,
+      country_code: req.body.country_code,
+      phone_number: req.body.phone_number,
+      lat: req.body.lat,
+      lon: req.body.lon,
+      loc: [req.body.lon, req.body.lat],
+      instant_lat: req.body.lat,
+      instant_lng: req.body.lon,
+      location: req.body.location,
+      vehicle_inspection: "InComplete",
+      security_deposit: "InComplete",
+      vehicle_details: "InComplete",
+      payment_details: "InComplete",
+      live_status: "0",
+      approval: "1",
+      batch_id: BatchId
+    });
+    // save the driver details
+    newDriver.save(function (err, driver) {
+      if (err) {
+        res.json({
+          status: "false",
+          message: 'Email already exists.'
+        });
+      } else {
+        Vehicles.count({
+          user_id: driver._id
+        }).exec()
+          .then(function (count) {
+            if (count == '0') {
+              let newVehicle = new Vehicles({
+                user_id: driver._id,
+                completionStatus: "0"
+              });
+              newVehicle.save(function (err, vehicles) {
+                if (err) {
+                  senderr(res);
+                } else {
+                  driver.vehicle_id = vehicles._id;
+                  driver.save();
+                  cetsSyncService.enqueueDriverSync(driver._id, "driver_signup").catch(function (syncError) {
+                    console.error("CeTS driver signup enqueue failed:", syncError);
+                  });
+                  res.json({
+                    status: "true",
+                    message: 'Your account has been created, please login to your account.'
+                  });
+                }
+              });
+            }
+          });
+      }
+    });
+  }
+});
+
+/* driver phone OTP */
+router.post("/getotp", async function (req, res) {
+  const rawPhoneNumber = req.body.phone_number;
+  const purpose = getDriverOtpPurpose(req);
+
+  if (!rawPhoneNumber) {
+    return res.json({
+      status: "false",
+      message: "Phone number is required"
+    });
+  }
+
+  const phoneParts = buildPhoneParts(rawPhoneNumber);
+  if (!phoneParts) {
+    return res.json({
+      status: "false",
+      message: "Invalid phone number"
+    });
+  }
+
+  if (purpose === DRIVER_FORGOT_PASSWORD_OTP_PURPOSE) {
+    const existingDriver = await Driver.findOne({
+      country_code: `+${phoneParts.countryCode}`,
+      phone_number: phoneParts.nationalNumber,
+      deletion_status: 0
+    }).exec();
+
+    if (!existingDriver) {
+      return res.json({
+        status: "false",
+        message: "Phone number not registered"
+      });
+    }
+  }
+
+  const otp = randomstring.generate({
+    length: 6,
+    charset: "numeric"
+  });
+  const message = `Your CABI verification code is ${otp}`;
+
+  const smsResult = await smsService.sendSms(phoneParts.normalizedPhoneNumber, message);
+  if (!smsResult.success && !smsResult.skipped) {
+    return res.json({
+      status: "false",
+      message: "Failed to send OTP",
+      error: smsResult.error || smsResult.response || null
+    });
+  }
+
+  try {
+    await OtpVerification.deleteMany({
+      phone_number: phoneParts.normalizedPhoneNumber,
+      purpose: purpose,
+      verified: false,
+      consumed: false
+    }).exec();
+
+    let otpVerification = new OtpVerification({
+      phone_number: phoneParts.normalizedPhoneNumber,
+      country_code: phoneParts.countryCode,
+      purpose: purpose,
+      otp_hash: hashOtp(phoneParts.normalizedPhoneNumber, purpose, otp),
+      expires_at: moment()
+        .add(OTP_EXPIRY_MINUTES, "minutes")
+        .toDate(),
+      sms_enabled: !smsResult.skipped
+    });
+    await otpVerification.save();
+  } catch (error) {
+    return senderr(res);
+  }
+
+  return res.json({
+    status: "true",
+    message: smsResult.skipped ? "OTP generated successfully" : "OTP sent successfully",
+    otp: otp,
+    country_code: `+${phoneParts.countryCode}`,
+    phone_number: phoneParts.normalizedPhoneNumber,
+    sms_enabled: !smsResult.skipped,
+    expires_in: OTP_EXPIRY_MINUTES * 60
+  });
+});
+
+router.post("/resetpasswordbyotp", async function (req, res) {
+  const rawPhoneNumber = req.body.phone_number;
+  const otp = String(req.body.otp || "");
+  const newPassword = String(req.body.new_password || "");
+
+  if (!rawPhoneNumber || !otp || !newPassword) {
+    return res.json({
+      status: "false",
+      message: "Phone number, OTP and new password are required"
+    });
+  }
+
+  const phoneParts = buildPhoneParts(rawPhoneNumber);
+  if (!phoneParts) {
+    return res.json({
+      status: "false",
+      message: "Invalid phone number"
+    });
+  }
+
+  try {
+    const driver = await Driver.findOne({
+      country_code: `+${phoneParts.countryCode}`,
+      phone_number: phoneParts.nationalNumber
+    }).exec();
+
+    if (!driver) {
+      return res.json({
+        status: "false",
+        message: "Phone number not registered"
+      });
+    }
+
+    if (driver.deletion_status === 1) {
+      return res.json({
+        status: "error",
+        message: "Account has been deleted successfully"
+      });
+    }
+
+    const verificationResult = await verifyDriverOtpForPurpose(
+      phoneParts.normalizedPhoneNumber,
+      DRIVER_FORGOT_PASSWORD_OTP_PURPOSE,
+      otp
+    );
+
+    if (!verificationResult.ok) {
+      return res.json({
+        status: "false",
+        message: verificationResult.message
+      });
+    }
+
+    driver.password = newPassword;
+    await driver.save();
+
+    await OtpVerification.updateOne(
+      {
+        _id: verificationResult.otpVerification._id
+      },
+      {
+        $set: {
+          verified: true,
+          verified_at: new Date(),
+          consumed: true,
+          consumed_at: new Date()
+        }
+      }
+    ).exec();
+
+    return res.json({
+      status: "true",
+      message: "Password changed successfully"
+    });
+  } catch (_error) {
+    return senderr(res);
+  }
+});
+
+/* signin as user */
+router.post('/signin', function (req, res) {
+  Driver.findOne({
+    email: req.body.email
+  }, function (err, driver) {
+    if (err) throw err;
+    if (!driver) {
+      res.json({
+        status: "false",
+        message: 'Email not registered'
+      });
+    } else {
+
+      if (driver.deletion_status === 1) {
+        res.json({
+          status: "error",
+          message: 'Account has been deleted successfully'
+        });
+      }
+      else {
+        // check if password matches
+        driver.comparePassword(req.body.password, function (err, isMatch) {
+          if (isMatch && !err) {
+            // if driver is found and password is right create a token
+            let driverObj = driver.toObject();
+            driverObj.role = "driver";
+            let signintoken = jwt.sign(driverObj, config.secret);
+            //save the country_code & phone number
+            if (typeof req.body.country_code != 'undefined' && typeof req.body.phone_number != 'undefined') {
+              driver.country_code = req.body.country_code;
+              driver.phone_number = req.body.phone_number;
+              driver.save();
+            }
+            let profile_image = driver.profile_image;
+            if (typeof driver.profile_image == 'undefined') {
+              let profile_image = 'driver.png';
+            }
+            Vehicles.findOne({
+              user_id: driver._id
+            }, function (err, vehicleinfo) {
+              let result = {};
+              let vehicleStatus;
+              result.status = "true";
+              result.user_id = driver._id;
+              result.full_name = driver.full_name;
+              result.email = driver.email;
+              result.password = req.body.password;
+              result.country_code = driver.country_code;
+              result.phone_number = driver.phone_number;
+              result.vehicle_inspection = driver.vehicle_inspection;
+              result.security_deposit = driver.security_deposit;
+              result.vehicle_details = driver.vehicle_details;
+              result.payment_details = driver.payment_details;
+              result.user_image = base_url + '/gallery/drivers/' + profile_image;
+              result.token = 'JWT ' + signintoken;
+              result.emergency_contact = driver.emergency_contact;
+              result.walletmoney = getDriverWalletAmount(driver);
+              result.approval = ((driver.approval == '1') ? "true" : "false");
+              vehicleStatus = ((vehicleinfo.status == '1') ? "approved" : "rejected");
+              result.vehicle_approval = ((typeof vehicleinfo.category == 'undefined') ? "pending" : vehicleStatus);
+              res.json(result);
+            });
+          } else {
+            res.json({
+              status: "false",
+              message: 'Incorrect username or password'
+            });
+          }
+        });
+      }
+    }
+  });
+});
+
+/* driver profile */
+router.get('/profile/:userid', function (req, res) {
+  passport.authenticate('jwt', { session: false }, function (err, driver) {
+    if (err === "AccountDeleted") {
+      res.json({
+        status: "error",
+        message: 'Account has been deleted successfully'
+      });
+    } else if (!driver) {
+      res.json({
+        status: "error",
+        message: 'Unauthorized access'
+      });
+    } else {
+      let token = getToken(req.headers);
+      if (token) {
+        Driver.findOne({
+          _id: req.params.userid
+        }, function (err, driver) {
+          if (err) throw err;
+          if (!driver) {
+            res.json({
+              status: "false",
+              message: 'No users found.'
+            });
+          } else {
+            let profile_image = driver.profile_image;
+            if (typeof driver.profile_image == 'undefined') {
+              let profile_image = 'driver.png';
+            }
+
+            let result = {};
+            result.status = "true";
+            result.user_id = driver._id;
+            result.full_name = driver.full_name;
+            result.email = driver.email;
+            result.user_image = base_url + "/gallery/drivers/" + profile_image;
+            result.country_code = driver.country_code;
+            result.phone_number = driver.phone_number;
+            result.emergency_contact = driver.emergency_contact;
+            result.nextinspectionon = driver.inspectionon;
+            result.walletmoney = getDriverWalletAmount(driver);
+            let querystring = {
+              driver_id: req.params.userid
+            };
+            Reviews.count(querystring, function (err, count) {
+              if (count > 0) {
+                result.rating = parseFloat(driver.rating / count).toFixed(1);
+                res.json(result);
+              } else {
+                result.rating = "0";
+                res.json(result);
+              }
+            });
+          }
+        });
+      } else {
+        res.json({
+          status: "false",
+          message: "Something went to be wrong"
+        });
+      }
+    }
+  })(req, res);
+});
+
+/* admin datas */
+router.get('/admindatas', function (req, res, next) {
+  Bodytypes.find().exec()
+    .then(function (bodytypes) {
+      let result = [];
+      return Amenities.find().exec()
+        .then(function (amenities) {
+          return [bodytypes, amenities];
+        });
+    })
+    .then(function (result) {
+      Help.count(function (err, count) {
+        if (err) res.json({
+          status: "false",
+          message: "Something went to be wrong"
+        });
+        else {
+          let pagetypes = ['vehicleInspection', 'securityDeposit'];
+          let driverdocs = [],
+            currencycode;
+          Help.find().where('pagetype')
+            .in(pagetypes)
+            .exec(function (err, helps) {
+              helps.forEach(function (h) {
+                driverdocs.push(h);
+              });
+              if (!err) {
+                Admin.findOne(function (err, admin) {
+                  res.json({
+                    status: "true",
+                    body_type: result[0],
+                    amenities: result[1],
+                    driverdocs: driverdocs,
+                    currencycode: admin.currencyCode,
+                    currencysymbol: admin.currencySymbol,
+                    emergencycontact: admin.emergencyContact
+                  });
+                });
+              } else {
+                res.json({
+                  status: "false",
+                  message: "Something went to be wrong"
+                });
+              }
+            });
+        }
+      });
+    })
+    .then(undefined, function (err) {
+      senderr(res);
+    })
+});
+
+/* driver's new cab */
+router.get('/getvehicledetails/:userid', function (req, res) {
+  if (!req.params.userid) {
+    res.json({
+      status: "false",
+      message: "Something went to be wrong"
+    });
+  } else {
+    Vehicles.count({
+      user_id: req.params.userid
+    }).exec()
+      .then(function (count) {
+        if (count > 0) {
+          Vehicles.findOne({
+            user_id: req.params.userid
+          }, function (err, vehicles) {
+            if (!vehicles) {
+              res.json({
+                status: "false",
+                message: "Something went to be wrong"
+              });
+            }
+            vehicles.status = "true";
+            res.json(vehicles);
+          });
+        } else {
+          res.json({
+            status: "false",
+            message: 'No vehicles found.'
+          });
+        }
+      })
+      .then(undefined, function (err) {
+        res.json({
+          status: "false",
+          message: "Something went to be wrong"
+        });
+      })
+  }
+});
+
+router.post('/postvehicledetails', function (req, res) {
+  if (!req.body.user_id) {
+    res.json({
+      status: "false",
+      message: 'Something went to be wrong'
+    });
+  } else {
+    Vehicles.count({
+      user_id: req.body.user_id
+    })
+      .then(function (c) {
+        req.body.amenities = JSON.parse(req.body.amenities);
+        if (c > 0) {
+          Vehicles.findOneAndUpdate({
+            "user_id": req.body.user_id
+          }, {
+            "$set": req.body
+          }).exec(function (err, vehicles) {
+            let result = {
+              vehicle_details: "Complete"
+            };
+            if (err) {
+              res.json({
+                status: "false",
+                message: "Something went to be wrong"
+              });
+            } else {
+              Driver.findOneAndUpdate({
+                _id: req.body.user_id
+              }, {
+                $set: result
+              }).exec(function (err, driver) {
+                if (err) {
+                  res.json({
+                    status: "false",
+                    message: "Something went to be wrong"
+                  });
+                } else {
+                  let updatestring = {
+                    _id: req.body.user_id,
+                    vehicle_inspection: "Complete",
+                    security_deposit: "Complete",
+                    payment_details: "Complete",
+                    vehicle_details: "Complete",
+                    completionStatus: "1"
+                  };
+                  Driver.find(updatestring).
+                    exec(function (err, rides) {
+                      if (!err) {
+                        vehicles.category = undefined;
+                        vehicles.completionStatus = "1";
+                        vehicles.save();
+                        cetsSyncService.enqueueVehicleSync(vehicles._id, "vehicle_details_update").catch(function (syncError) {
+                          console.error("CeTS vehicle update enqueue failed:", syncError);
+                        });
+                        res.json({
+                          status: "true",
+                          message: 'Vehicle updated sucessfully'
+                        });
+                      } else {
+                        res.json({
+                          status: "true",
+                          message: 'Vehicle updated sucessfully'
+                        });
+                      }
+                    });
+                }
+              });
+            }
+          });
+        } else {
+          let newVehicle = new Vehicles(req.body);
+          // save the vehicle details
+          newVehicle.save(function (err, vehicles) {
+            if (err) {
+              res.json({
+                status: "false",
+                message: 'Something went to be wrong'
+              });
+            } else {
+              let result = {
+                vehicle_details: "Complete"
+              };
+              Driver.findOneAndUpdate({
+                _id: req.body.user_id
+              }, {
+                $set: result
+              }).exec(function (err, driver) {
+                if (err) {
+                  res.json({
+                    status: "false",
+                    message: "Something went to be wrong"
+                  });
+                } else {
+                  cetsSyncService.enqueueVehicleSync(vehicles._id, "vehicle_details_create").catch(function (syncError) {
+                    console.error("CeTS vehicle create enqueue failed:", syncError);
+                  });
+                  res.json({
+                    status: "true",
+                    message: 'Vehicle saved sucessfully'
+                  });
+                }
+              });
+            }
+          });
+        }
+      })
+      .then(undefined, function (err) {
+        res.json({
+          status: "false",
+          message: 'Something went to be wrong'
+        });
+      })
+  }
+});
+
+/* change password */
+router.post('/changepassword', function (req, res) {
+  passport.authenticate('jwt', { session: false }, function (err, driver) {
+    if (err === "AccountDeleted") {
+      res.json({
+        status: "error",
+        message: 'Account has been deleted successfully'
+      });
+    } else if (!driver) {
+      res.json({
+        status: "error",
+        message: 'Unauthorized access'
+      });
+    } else {
+      if (!req.body.user_id || !req.body.newpassword) {
+        res.json({
+          status: "false",
+          message: "Something went to be wrong"
+        });
+      } else {
+        Driver.findOne({
+          _id: req.body.user_id
+        }, function (err, driver) {
+          if (!driver) {
+            res.json({
+              status: "false",
+              message: "Something went to be wrong"
+            });
+          }
+          driver.password = req.body.newpassword;
+          driver.save(function (err) {
+            res.json({
+              status: "true",
+              message: 'Password changed successfully'
+            });
+          });
+        });
+      }
+    }
+  })(req, res);
+});
+
+/* reset password */
+router.post("/resetpassword", function (req, res, next) {
+  async.waterfall(
+    [
+      function (done) {
+        crypto.randomBytes(8, function (err, buf) {
+          let token = buf.toString("hex");
+          done(err, token);
+        });
+      },
+      function (token, done) {
+        Driver.findOne(
+          {
+            email: req.body.email
+          },
+          function (err, driver) {
+            if (!driver) {
+              res.json({
+                status: "false",
+                message: "No account with that email address exists."
+              });
+            } else {
+              if(driver.deletion_status===1){
+                res.json({
+                  status: "error",
+                  message: "Account Deleted."
+                });
+              }else{ 
+              driver.password = token;
+              driver.save(function (err) {
+                let mailOptions = {
+                  to: req.body.email, // list of receivers
+                  subject: "Password Changed !", // Subject line
+                  html: "Your new password : " + token // html body
+                };
+                Admin.findOne(function (err, admin) {
+                  let transporter = nodemailer.createTransport({
+                    host: admin.smptHost,
+                    port: admin.smtpPort,
+                    secure: false,
+                    auth: {
+                      user: admin.smtpUsername,
+                      pass: admin.smtpPassword
+                    }
+                  });
+                  // send mail with defined transport object
+                  transporter.sendMail(mailOptions, (error, info) => {
+                    if (error) {
+                      console.log(error);
+                      senderr(res);
+                    } else {
+                      res.json({
+                        status: "true",
+                        message: "Your Password has been reset successfully. Kindly check your registered mail now"
+                      });
+                    }
+                  });
+                });
+              });}
+            }
+          }
+        );
+      }
+    ],
+    function (err) {
+      if (err) {
+        senderr(res);
+      }
+    }
+  );
+});
+
+/* help pages */
+// router.get('/helppages', function (req, res) {
+//   passport.authenticate('jwt', { session: false }, function (err, driver) {
+//     if (err === "AccountDeleted") {
+//       res.json({
+//         status: "error",
+//         message: 'Account has been deleted successfully'
+//       });
+//     } else if (!driver) {
+//       res.json({
+//         status: "error",
+//         message: 'Unauthorized access'
+//       });
+//     } else {
+//       Help.count(function (err, count) {
+//         if (err) res.json({
+//           status: "false",
+//           message: "Something went to be wrong"
+//         });
+//         else {
+//           Help.find({
+//             type: "driver",
+//             pagetype: {
+//               $nin: ['vehicleInspection', 'securityDeposit']
+//             }
+//           }, function (err, helps) {
+//             if (!err) {
+//               res.json({
+//                 status: "true",
+//                 result: helps
+//               });
+//             } else {
+//               res.json({
+//                 status: "false",
+//                 message: "Something went to be wrong"
+//               });
+//             }
+//           });
+//         }
+//       });
+//     }
+//   })(req, res);
+// });
+
+router.get('/helppages', function (req, res) {
+  Help.count(function (err, count) {
+    if (err) res.json({
+      status: "false",
+      message: "Something went to be wrong"
+    });
+    else {
+      Help.find({
+        type: "driver",
+        pagetype: {
+          $nin: ['vehicleInspection', 'securityDeposit']
+        }
+      }, function (err, helps) {
+        if (!err) {
+          res.json({
+            status: "true",
+            result: helps
+          });
+        } else {
+          res.json({
+            status: "false",
+            message: "Something went to be wrong"
+          });
+        }
+      });
+    }
+  });
+});
+
+/* notifications */
+router.get('/notifications/:userid', function (req, res) {
+  passport.authenticate('jwt', { session: false }, function (err, driver) {
+    if (err === "AccountDeleted") {
+      res.json({
+        status: "error",
+        message: 'Account has been deleted successfully'
+      });
+    } else if (!driver) {
+      res.json({
+        status: "error",
+        message: 'Unauthorized access'
+      });
+    } else {
+      Notifications.count({
+        notify_to: req.params.userid
+      }, function (err, count) {
+        if (count > 0) {
+          Notifications.find({
+            notify_to: req.params.userid
+          }).sort({
+            '_id': -1
+          }).
+            exec(function (err, notifications) {
+              if (!err) {
+                res.json({
+                  status: "true",
+                  result: notifications
+                });
+              } else {
+                res.json({
+                  status: "false",
+                  message: "Something went to be wrong"
+                });
+              }
+            });
+        } else {
+          res.json({
+            status: "false",
+            message: 'No notifications found'
+          });
+        }
+      });
+    }
+  })(req, res);
+});
+
+/* add & edit & delete edit emergency_contact */
+router.post('/updateprofile', function (req, res) {
+  if (!req.body.user_id) {
+    res.json({
+      status: "false",
+      message: "Something went to be wrong"
+    });
+  } else {
+    if (typeof req.body.emergency_contact != 'undefined') {
+      req.body.emergency_contact = JSON.parse(req.body.emergency_contact);
+    }
+    Driver.findOneAndUpdate({
+      _id: req.body.user_id
+    }, {
+      $set: req.body
+    }).exec(function (err, driver) {
+      if (err) {
+        res.json({
+          status: "false",
+          message: "Something went to be wrong"
+        });
+      } else {
+        let updatestring = {
+          _id: req.body.user_id,
+          vehicle_inspection: "Complete",
+          security_deposit: "Complete",
+          payment_details: "Complete",
+          vehicle_details: "Complete"
+        };
+        let querystring = {
+          completionStatus: "1"
+        };
+        Driver.count(updatestring).
+          exec(function (err, updatedcount) {
+            if (updatedcount > 0) {
+              Vehicles.findOneAndUpdate({
+                "user_id": req.body.user_id
+              }, {
+                $set: querystring
+              }).exec(function (err, vehicles) {
+                if (err) {
+                  senderr(res);
+                } else {
+                  cetsSyncService.enqueueDriverSync(req.body.user_id, "driver_profile_update").catch(function (syncError) {
+                    console.error("CeTS driver profile enqueue failed:", syncError);
+                  });
+                  res.json({
+                    status: "true",
+                    message: 'User updated successfully'
+                  });
+                }
+              });
+            } else {
+              res.json({
+                status: "true",
+                message: 'User updated successfully'
+              });
+            }
+          });
+      }
+    });
+  }
+});
+
+/* add & edit & delete edit emergency_contact */
+router.post('/paymentinfo', function (req, res) {
+  if (!req.body.user_id || !req.body.type) {
+    res.json({
+      status: "false",
+      message: "Something went to be wrong"
+    });
+  } else {
+    Driver.findOne({
+      _id: req.body.user_id
+    }, function (err, driver) {
+      if (!driver) {
+        res.json({
+          status: "false",
+          message: "Something went to be wrong"
+        });
+      }
+      let pay = {};
+      pay.status = "true";
+      if (req.body.type == "cash") {
+        pay.type = req.body.type;
+      } else {
+        pay.type = req.body.type;
+        pay.routingno = req.body.routing_no; // ABA/Routing number of the receiving bank
+        pay.bankaccountno = req.body.bank_ac; // Recipient's bank account number
+        pay.name = req.body.name; // Recipient's name (as listed on the account)
+        pay.address = req.body.address; //Recipient's address (as listed on the account)
+      }
+      driver.payment_account = pay;
+      driver.payment_details = "Complete";
+      driver.save(function (err) {
+        let updatestring = {
+          _id: req.body.user_id,
+          vehicle_inspection: "Complete",
+          security_deposit: "Complete",
+          payment_details: "Complete",
+          vehicle_details: "Complete"
+        };
+        let querystring = {
+          completionStatus: "1"
+        };
+        Driver.count(updatestring).
+          exec(function (err, updatedcount) {
+            if (updatedcount > 0) {
+              Vehicles.findOneAndUpdate({
+                "user_id": req.body.user_id
+              }, {
+                $set: querystring
+              }).exec(function (err, vehicles) {
+                if (err) {
+                  senderr(res);
+                } else {
+                  res.json(pay);
+                }
+              });
+            } else {
+              res.json(pay);
+            }
+          });
+      });
+    });
+  }
+});
+
+/* send driver payment details */
+router.get('/paymentinfo/:userid', function (req, res) {
+  if (!req.params.userid) {
+    res.json({
+      status: "false",
+      message: "Something went to be wrong"
+    });
+  } else {
+    Driver.findOne({
+      _id: req.params.userid
+    }, function (err, driver) {
+      if (!driver) {
+        res.json({
+          status: "false",
+          message: "Something went to be wrong"
+        });
+      } else {
+        res.json(driver.payment_account);
+      }
+    });
+  }
+});
+
+/* get a braintree client token for driver wallet topups */
+router.post('/getclienttoken', function (req, res) {
+  passport.authenticate('jwt', { session: false }, function (err, authenticatedDriver) {
+    if (err === "AccountDeleted") {
+      return res.json({
+        status: "error",
+        message: 'Account has been deleted successfully'
+      });
+    } else if (!authenticatedDriver) {
+      return res.json({
+        status: "error",
+        message: 'Unauthorized access'
+      });
+    } else if (!req.body.user_id || String(authenticatedDriver._id) !== String(req.body.user_id)) {
+      return res.json({
+        status: "false",
+        message: 'Unauthorized access'
+      });
+    }
+
+    Driver.findOne({
+      _id: req.body.user_id
+    }, function (err, driver) {
+      if (err || !driver) {
+        return senderr(res);
+      }
+
+      Admin.findOne(function (adminErr, admin) {
+        if (adminErr || !admin) {
+          return senderr(res);
+        }
+
+        let gateway = braintree.connect({
+          environment:
+            admin.BraintreeStatus == "1" ? braintree.Environment.Production : braintree.Environment.Sandbox,
+          merchantId: admin.merchandId,
+          publicKey: admin.publicKey,
+          privateKey: admin.privateKey
+        });
+
+        let generateToken = function (customerId) {
+          let querystring = customerId ? { customerId: customerId } : {};
+          gateway.clientToken.generate(querystring, function (tokenErr, response) {
+            if (!tokenErr && response && response.success) {
+              return res.json({
+                status: "true",
+                clientToken: response.clientToken
+              });
+            }
+
+            return senderr(res);
+          });
+        };
+
+        if (driver.customer_id) {
+          return generateToken(driver.customer_id);
+        }
+
+        gateway.customer.create(
+          {
+            firstName: driver.full_name,
+            email: driver.email,
+            phone: driver.phone_number
+          },
+          function (customerErr, result) {
+            if (customerErr || !result || !result.success) {
+              return senderr(res);
+            }
+
+            driver.customer_id = result.customer.id;
+            driver.save(function (saveErr) {
+              if (saveErr) {
+                return senderr(res);
+              }
+
+              return generateToken(result.customer.id);
+            });
+          }
+        );
+      });
+    });
+  })(req, res);
+});
+
+/* add money to driver wallet */
+router.post('/addmoney', function (req, res) {
+  passport.authenticate('jwt', { session: false }, async function (err, authenticatedDriver) {
+    if (err === "AccountDeleted") {
+      return res.json({
+        status: "error",
+        message: 'Account has been deleted successfully'
+      });
+    } else if (!authenticatedDriver) {
+      return res.json({
+        status: "error",
+        message: 'Unauthorized access'
+      });
+    } else if (!req.body.user_id || !req.body.amount || !req.body.paynonce) {
+      return senderr(res);
+    } else if (String(authenticatedDriver._id) !== String(req.body.user_id)) {
+      return res.json({
+        status: "false",
+        message: 'Unauthorized access'
+      });
+    }
+
+    try {
+      const admin = await Admin.findOne({}).sort({ _id: -1 }).exec();
+      const driver = await Driver.findById(req.body.user_id).exec();
+      if (!admin || !driver) {
+        return senderr(res);
+      }
+
+      let gateway = braintree.connect({
+        environment: admin.BraintreeStatus == "1" ? braintree.Environment.Production : braintree.Environment.Sandbox,
+        merchantId: admin.merchandId,
+        publicKey: admin.publicKey,
+        privateKey: admin.privateKey
+      });
+
+      gateway.transaction.sale(
+        {
+          amount: req.body.amount,
+          paymentMethodNonce: req.body.paynonce,
+          options: {
+            submitForSettlement: true
+          }
+        },
+        async function (saleErr, result) {
+          if (saleErr || !result || !result.success) {
+            return senderr(res);
+          }
+
+          try {
+            await new Wallet({
+              user_id: String(req.body.user_id),
+              amount: Number(result.transaction.amount),
+              transaction_id: result.transaction.id,
+              type: "credit",
+              transaction: "addmoney",
+              wallet_for: DRIVER_WALLET_TYPE,
+              updated_at: timeZone()
+            }).save();
+
+            const updatedDriver = await Driver.findOneAndUpdate(
+              { _id: req.body.user_id },
+              {
+                $inc: {
+                  walletmoney: Number(result.transaction.amount)
+                }
+              },
+              {
+                new: true
+              }
+            ).exec();
+
+            const walletamount = getDriverWalletAmount(updatedDriver);
+            const translatedstring = translationServer.langTranslate("Amountcreditedtoyourwalletsuccessfully", "en");
+            await pushDriverWalletNotification(req.body.user_id, walletamount, translatedstring);
+
+            return res.json({
+              status: "true",
+              walletmoney: walletamount,
+              message: "Amount credited to your wallet successfully"
+            });
+          } catch (_walletError) {
+            return senderr(res);
+          }
+        }
+      );
+    } catch (_error) {
+      return senderr(res);
+    }
+  })(req, res);
+});
+
+/* create selcom hosted checkout for driver wallet topups */
+router.post('/getselcomurl', function (req, res) {
+  passport.authenticate("jwt", { session: false }, async function (err, driver) {
+    if (err === "AccountDeleted") {
+      return res.json({
+        status: "error",
+        message: "Account has been deleted successfully"
+      });
+    } else if (!driver) {
+      return res.json({
+        status: "error",
+        message: "Unauthorized access"
+      });
+    } else if (!req.body.user_id || !req.body.amount) {
+      return senderr(res);
+    } else if (String(driver._id) !== String(req.body.user_id)) {
+      return res.json({
+        status: "false",
+        message: "Unauthorized access"
+      });
+    } else if (!selcomService.isConfigured()) {
+      return res.json({
+        status: "false",
+        message: "Selcom payment is not configured"
+      });
+    }
+
+    try {
+      const amount = selcomService.normalizeAmount(req.body.amount);
+      if (!amount) {
+        return res.json({
+          status: "false",
+          message: "Invalid payment amount"
+        });
+      }
+
+      const transid = selcomService.generateTransId();
+      const returnUrl = selcomService.buildReturnUrl(transid);
+      const checkout = await selcomService.createOrder({
+        transid: transid,
+        amount: amount,
+        user: driver,
+        userId: req.body.user_id,
+        returnUrl: returnUrl,
+        remarks: "CABi driver wallet payment"
+      });
+
+      await SelcomPaymentSession.findOneAndUpdate(
+        { transid: transid },
+        {
+          transid: transid,
+          order_id: checkout.orderId,
+          user_id: String(req.body.user_id),
+          actor_type: DRIVER_WALLET_TYPE,
+          amount: amount,
+          status: "pending",
+          verified_at: null,
+          consumed_at: null,
+          expires_at: new Date(Date.now() + 30 * 60 * 1000)
+        },
+        {
+          upsert: true,
+          new: true,
+          setDefaultsOnInsert: true
+        }
+      ).exec();
+
+      return res.json({
+        status: "true",
+        message: "Payment URL generated successfully",
+        payment_url: checkout.paymentUrl,
+        return_url: returnUrl,
+        transid: transid
+      });
+    } catch (error) {
+      return res.json({
+        status: "false",
+        message: error && error.message ? error.message : "Unable to create Selcom payment"
+      });
+    }
+  })(req, res);
+});
+
+/* verify selcom transaction for driver wallet topups */
+router.get('/verifyselcom/:transid', async function (req, res) {
+  const transid = String(req.params.transid || "").trim();
+  if (!transid) {
+    return senderr(res);
+  }
+
+  try {
+    const session = await SelcomPaymentSession.findOne({
+      transid: transid,
+      actor_type: DRIVER_WALLET_TYPE
+    }).exec();
+
+    if (!session) {
+      return res.json({
+        status: "false",
+        message: "Payment session not found"
+      });
+    }
+
+    if (session.status === "verified" || session.status === "completed") {
+      return res.json({
+        status: "true",
+        message: "Payment verified successfully",
+        transid: transid,
+        paidamount: String(session.paid_amount || session.amount)
+      });
+    }
+
+    if (session.expires_at && session.expires_at.getTime() < Date.now()) {
+      return res.json({
+        status: "false",
+        message: "Payment session has expired"
+      });
+    }
+
+    const result = await selcomService.queryTransaction(transid);
+    if (String(result.resultcode) === "000") {
+      await applySelcomProviderUpdate(session, {
+        transid: transid,
+        result: result.result,
+        resultcode: result.resultcode,
+        message: result.message,
+        reference: result.reference,
+        payment_status: "COMPLETED",
+        amount: session.amount
+      });
+
+      return res.json({
+        status: "true",
+        message: result.message || "Payment verified successfully",
+        transid: transid,
+        paidamount: String(session.paid_amount || session.amount)
+      });
+    }
+
+    if (String(result.resultcode) !== "111") {
+      await applySelcomProviderUpdate(session, {
+        transid: transid,
+        result: result.result,
+        resultcode: result.resultcode,
+        message: result.message,
+        reference: result.reference,
+        payment_status: result.result || "FAILED",
+        amount: session.amount
+      });
+    }
+
+    return res.json({
+      status: "false",
+      message: result.message || "Payment is still pending"
+    });
+  } catch (error) {
+    return res.json({
+      status: "false",
+      message: error && error.message ? error.message : "Unable to verify Selcom payment"
+    });
+  }
+});
+
+/* finalize verified selcom driver wallet payment */
+router.post('/paybyselcom', function (req, res) {
+  passport.authenticate("jwt", { session: false }, async function (err, driver) {
+    if (err === "AccountDeleted") {
+      return res.json({
+        status: "error",
+        message: "Account has been deleted successfully"
+      });
+    } else if (!driver) {
+      return res.json({
+        status: "error",
+        message: "Unauthorized access"
+      });
+    } else if (!req.body.user_id || !req.body.amount || !req.body.paynonce) {
+      return senderr(res);
+    } else if (String(driver._id) !== String(req.body.user_id)) {
+      return res.json({
+        status: "false",
+        message: "Unauthorized access"
+      });
+    }
+
+    try {
+      const transid = String(req.body.paynonce).trim();
+      const amount = selcomService.normalizeAmount(req.body.amount);
+      const session = await SelcomPaymentSession.findOne({
+        transid: transid,
+        user_id: String(req.body.user_id),
+        actor_type: DRIVER_WALLET_TYPE
+      }).exec();
+
+      if (!session) {
+        return res.json({
+          status: "false",
+          message: "Payment session not found"
+        });
+      }
+
+      if (session.consumed_at) {
+        const currentDriver = await Driver.findById(req.body.user_id).exec();
+        return res.json({
+          status: "true",
+          walletmoney: getDriverWalletAmount(currentDriver),
+          message: "Payment has been done successfully"
+        });
+      }
+
+      if (session.status !== "verified" && !session.verified_at) {
+        try {
+          await ensureSelcomPaymentVerified(session, transid);
+        } catch (verifyError) {
+          return res.json({
+            status: "false",
+            message: verifyError && verifyError.message ? verifyError.message : "Payment has not been verified yet"
+          });
+        }
+      }
+
+      if (!amount || Math.abs(Number(session.amount) - Number(amount)) > 0.01) {
+        return res.json({
+          status: "false",
+          message: "Payment amount mismatch"
+        });
+      }
+
+      await new Wallet({
+        user_id: String(req.body.user_id),
+        amount: amount,
+        transaction_id: transid,
+        type: "credit",
+        transaction: "addmoney",
+        wallet_for: DRIVER_WALLET_TYPE,
+        updated_at: timeZone()
+      }).save();
+
+      const updatedDriver = await Driver.findOneAndUpdate(
+        { _id: req.body.user_id },
+        {
+          $inc: {
+            walletmoney: amount
+          }
+        },
+        {
+          new: true
+        }
+      ).exec();
+
+      session.status = "completed";
+      session.consumed_at = new Date();
+      await session.save();
+
+      const walletamount = getDriverWalletAmount(updatedDriver);
+      const translatedstring = translationServer.langTranslate("Amountcreditedtoyourwalletsuccessfully", "en");
+      await pushDriverWalletNotification(req.body.user_id, walletamount, translatedstring);
+
+      return res.json({
+        status: "true",
+        walletmoney: walletamount,
+        message: "Amount credited to your wallet successfully"
+      });
+    } catch (error) {
+      return res.json({
+        status: "false",
+        message: error && error.message ? error.message : "Unable to complete Selcom payment"
+      });
+    }
+  })(req, res);
+});
+
+/* driver wallet history */
+router.get('/wallethistory/:userid', function (req, res) {
+  passport.authenticate('jwt', { session: false }, function (err, driver) {
+    if (err === "AccountDeleted") {
+      return res.json({
+        status: "error",
+        message: 'Account has been deleted successfully'
+      });
+    } else if (!driver) {
+      return res.json({
+        status: "error",
+        message: 'Unauthorized access'
+      });
+    } else if (String(driver._id) !== String(req.params.userid)) {
+      return res.json({
+        status: "false",
+        message: 'Unauthorized access'
+      });
+    }
+
+    Wallet.count({
+      user_id: req.params.userid,
+      wallet_for: DRIVER_WALLET_TYPE
+    }, function (countErr, count) {
+      if (countErr) {
+        return senderr(res);
+      }
+
+      if (count > 0) {
+        Wallet.find({
+          user_id: req.params.userid,
+          wallet_for: DRIVER_WALLET_TYPE
+        })
+          .sort([["_id", -1]])
+          .exec(function (walletErr, wallets) {
+            if (!walletErr) {
+              return res.json({
+                status: "true",
+                payment_list: wallets
+              });
+            }
+
+            return res.json({
+              status: "false",
+              message: "No Wallet used"
+            });
+          });
+      } else {
+        return res.json({
+          status: "false",
+          message: "No Wallet used"
+        });
+      }
+    });
+  })(req, res);
+});
+
+/* dashboard for driver */
+router.get('/dashboard/:userid', function (req, res) {
+  passport.authenticate('jwt', { session: false }, function (err, driver) {
+    if (err === "AccountDeleted") {
+      res.json({
+        status: "error",
+        message: 'Account has been deleted successfully'
+      });
+    } else if (!driver) {
+      res.json({
+        status: "error",
+        message: 'Unauthorized access'
+      });
+    } else {
+      if (!req.params.userid) {
+        res.json({
+          status: "false",
+          message: "Something went to be wrong"
+        });
+      } else {
+        let reportsummary = {};
+        let ridebytoday = 0,
+          ridebymonth = 0;
+        let querystring = {
+          driver_id: req.params.userid,
+          ridestatus: "completed"
+        };
+        Rides.count(querystring, function (err, count) {
+          let ridesstatscount = count;
+          let total_earning = 0;
+          /* today starts at */
+          let start = new Date();
+          start.setHours(0, 0, 0, 0);
+          let todaystarts = start.toISOString();
+          /* today ends at */
+          let end = new Date();
+          let thisyear = (new Date()).getFullYear();
+          end.setHours(23, 59, 59, 999);
+          let todayends = end.toISOString();
+          let startmonth = new Date(start.getFullYear(), start.getMonth(), 1);
+          let endmonth = new Date(start.getFullYear(), start.getMonth() + 1, 0);
+          let monthstarts = startmonth.toISOString();
+          let monthends = endmonth.toISOString();
+          let settledamount = 0.0;
+          if (count > 0) {
+            Rides.find(querystring).
+              exec(function (err, rides) {
+                if (!err) {
+                  reportsummary.available_amount = 0;
+                  reportsummary.cash_collected = 0;
+                  reportsummary.booking_count = ridesstatscount;
+                  rides.forEach(function (ridesstats) {
+                    let rideids = [ridesstats._id];
+                    let tax = parseFloat(ridesstats.tax);
+                    let baseprice = parseFloat(ridesstats.baseprice);
+                    total_earning += tax + baseprice;
+                  });
+                  /* total earnings*/
+                  reportsummary.total_earning = Math.round(total_earning * 100) / 100;
+                  Rides.count({
+                    created_at: {
+                      $gte: todaystarts,
+                      $lte: todayends,
+                    },
+                    driver_id: req.params.userid,
+                    ridestatus: "completed"
+                  }, function (err, ridetoday) {
+                    if (ridetoday > 0) {
+                      ridebytoday = ridetoday;
+                    }
+                    reportsummary.ride_today = ridebytoday;
+                    Rides.count({
+                      created_at: {
+                        $gte: monthstarts,
+                        $lte: monthends,
+                      },
+                      driver_id: req.params.userid,
+                      ridestatus: "completed"
+                    }, function (err, ridemonth) {
+                      if (ridemonth > 0) {
+                        ridebymonth = ridemonth;
+                      }
+                      reportsummary.ridebymonth = ridebymonth;
+                      let query = Rides.aggregate([{
+                        $match: {
+                          driver_id: req.params.userid,
+                          ridestatus: "completed"
+                        }
+                      },
+                      {
+                        "$project": {
+                          "y": {
+                            "$year": "$created_at"
+                          },
+                          "m": {
+                            "$month": "$created_at"
+                          },
+                        }
+                      },
+                      {
+                        "$group": {
+                          "_id": {
+                            "year": "$y",
+                            "month": "$m",
+                          },
+
+                          count: {
+                            "$sum": 1
+                          }
+                        }
+                      },
+                      {
+                        $sort: {
+                          "_id.year": 1,
+                          "_id.month": 1,
+                          "_id.day": 1
+                        }
+                      }
+                      ]);
+
+                      let paymentQuery = Payments.aggregate([{
+                        $match: {
+                          driver_id: req.params.userid,
+                          payment_type: 'cash'
+                        }
+                      }, {
+                        $group: {
+                          _id: "null",
+                          totalbaseprice: {
+                            $sum: "$baseprice"
+                          },
+                          totalcommissionamount: {
+                            $sum: "$commissionamount"
+                          },
+                          totaltax: {
+                            $sum: "$tax"
+                          }
+                        }
+                      },
+                      {
+                        $addFields: {
+                          totalamount: {
+                            $add: ["$totalbaseprice", "$totalcommissionamount", "$totaltax"]
+                          }
+                        }
+                      }
+                      ]);
+
+                      let availableamoutQuery = Payments.aggregate([{
+                        $match: {
+                          driver_id: req.params.userid
+                        }
+                      }, {
+                        $group: {
+                          _id: "null",
+                          totalbaseprice: {
+                            $sum: "$baseprice"
+                          },
+                          totaltax: {
+                            $sum: "$tax"
+                          }
+                        }
+                      },
+                      {
+                        $addFields: {
+                          totalsumamount: {
+                            $add: ["$totalbaseprice", "$totaltax"]
+                          }
+                        }
+                      }
+                      ]);
+
+                      let settlementQuery = Settlements.aggregate([{
+                        $match: {
+                          driver_id: req.params.userid,
+                        }
+                      }, {
+                        $group: {
+                          _id: "null",
+                          totalearnings: {
+                            $sum: "$total_earning"
+                          },
+                        }
+                      },]);
+
+                      query.exec(function (err, ridedetails) {
+                        if (err) {
+                          senderr(res);
+                        } else {
+                          let data = JSON.parse(JSON.stringify(ridedetails));
+                          let latestridesbymonth = [];
+                          for (let i = 0; i < data.length; i++) {
+                            let ridemonth = JSON.parse(JSON.stringify(data[i]._id));
+                            for (let key in ridemonth) {
+                              if (key == 'month' && ridemonth["year"] == thisyear) {
+                                latestridesbymonth.push({
+                                  month: ridemonth["month"],
+                                  count: data[i].count,
+                                });
+                              }
+                            }
+                          }
+                          reportsummary.cumulative_report = latestridesbymonth;
+                          Driver.findOne({
+                            _id: req.params.userid
+                          }, function (err, driver) {
+                            if (!err) {
+                              reportsummary.livestatus = ((driver.live_status == '0') ? "false" : "true");
+                              settlementQuery.exec(function (err, settlementdetails) {
+                                //console.log(settlementdetails);
+                                if (!err && settlementdetails.length > 0) {
+                                  settledamount = settlementdetails[0].totalearnings;
+                                }
+                                availableamoutQuery.exec(function (err, availableamountdetails) {
+                                  if (!err && availableamountdetails.length > 0) {
+                                    let availamount = parseFloat(availableamountdetails[0].totalsumamount) - parseFloat(settledamount);
+                                    reportsummary.available_amount = Math.round(availamount * 100) / 100;
+                                  }
+                                  paymentQuery.exec(function (err, paymentdetails) {
+                                    if (!err && paymentdetails.length > 0) {
+                                      reportsummary.cash_collected = Math.round(paymentdetails[0].totalamount * 100) / 100;
+                                    }
+                                    Reviews.count({
+                                      driver_id: req.params.userid
+                                    }, function (err, count) {
+                                      if (count > 0) {
+                                        reportsummary.rating = parseFloat(driver.rating / count).toFixed(1);
+                                        res.json(reportsummary);
+                                      } else {
+                                        reportsummary.rating = "0";
+                                        res.json(reportsummary);
+                                      }
+                                    });
+                                  });
+                                });
+                              });
+                            } else {
+                              senderr(res);
+                            }
+                          });
+                        }
+                      });
+
+                    });
+                  });
+                } else {
+                  senderr(res);
+                }
+              });
+          } else {
+            Driver.findOne({
+              _id: req.params.userid
+            }, function (err, driver) {
+              if (!err) {
+                let noreportedsummary = {
+                  status: "true",
+                  available_amount: 0,
+                  cash_collected: 0,
+                  total_earning: 0,
+                  ride_today: 0,
+                  ridebymonth: 0,
+                  rating: "0",
+                  booking_count: 0,
+                  livestatus: ((driver.live_status == '0') ? "false" : "true"),
+                  cumulative_report: []
+                };
+                res.json(noreportedsummary);
+              } else {
+                senderr(res);
+              }
+            });
+          }
+        });
+      }
+    }
+  })(req, res);
+});
+
+/* upload user image */
+router.post('/uploadimage', function (req, res) {
+  passport.authenticate('jwt', { session: false }, function (err, driver) {
+    if (err === "AccountDeleted") {
+      res.json({
+        status: "error",
+        message: 'Account has been deleted successfully'
+      });
+    } else if (!driver) {
+      res.json({
+        status: "error",
+        message: 'Unauthorized access'
+      });
+    } else {
+      if (!req.body.user_id || !req.body.profileimage) {
+        res.json({
+          status: "false",
+          message: "Something went to be wrong"
+        });
+      } else {
+        let base64Data = req.body.profileimage;
+        let imagename = Date.now() + '.jpeg';
+        fs.writeFile(driverassets + imagename, base64Data, 'base64', function (err) {
+          if (err) {
+            res.json({
+              status: "false",
+              message: "Something went to be wrong"
+            });
+          } else {
+            Driver.findOne({
+              _id: req.body.user_id
+            }, function (err, driver) {
+              if (driver && typeof driver.profile_image != 'undefined') {
+                fs.unlink(driverassets + driver.profile_image, function (error) {
+                  if (error) {
+                    res.json({
+                      status: "false",
+                      message: "Something went to be wrong"
+                    });
+                  }
+                });
+              }
+              driver.profile_image = imagename;
+              driver.save();
+              res.json({
+                status: "true",
+                message: 'Image uploaded successfully'
+              });
+            });
+          }
+
+        });
+      }
+    }
+  })(req, res);
+});
+
+/* upload user image */
+/* upload user profile image */
+let storage = multer.diskStorage({
+  destination: function (req, file, callback) {
+    callback(null, driverassets)
+  },
+  filename: function (req, file, callback) {
+    crypto.pseudoRandomBytes(16, function (err, raw) {
+      if (err) return callback(err);
+      callback(null, raw.toString('hex') + path.extname(file.originalname));
+    });
+  }
+})
+
+router.post('/uploadprofileimage', function (req, res) {
+  passport.authenticate('jwt', { session: false }, function (err, driver) {
+    if (err === "AccountDeleted") {
+      res.json({
+        status: "error",
+        message: 'Account has been deleted successfully'
+      });
+    } else if (!driver) {
+      res.json({
+        status: "error",
+        message: 'Unauthorized access'
+      });
+    } else {
+      let upload = multer({
+        storage: storage,
+        fileFilter: function (req, file, callback) {
+          let ext = path.extname(file.originalname)
+          if (ext !== '.png' && ext !== '.jpg' && ext !== '.jpeg') {
+            return callback(res.end('Only images are allowed'), null)
+          }
+          callback(null, true)
+        }
+      }).single('driverImage');
+      upload(req, res, function (err) {
+        Driver.findOne({
+          _id: req.body.user_id
+        }, function (err, driver) {
+          /* if (driver && typeof driver.profile_image != 'undefined') {
+            fs.unlink(driverassets + driver.profile_image, function (error) {
+              if (error) {
+                senderr(res);
+              }
+            });
+          } */
+          driver.profile_image = res.req.file.filename;
+          driver.save();
+          res.json({
+            status: "true",
+            user_image: base_url + '/gallery/drivers/' + res.req.file.filename,
+            message: 'Image uploaded successfully'
+          });
+        });
+      })
+    }
+  })(req, res);
+});
+
+/* upload user documents */
+router.post('/uploaddoc', function (req, res) {
+
+  let result, colname;
+  let upload = multer({
+    storage: storage,
+    fileFilter: function (req, file, callback) {
+      let ext = path.extname(file.originalname)
+      if (ext !== '.jpg' && ext !== '.jpeg' && ext !== '.pdf') {
+        return callback(res.end('Only images & pdf are allowed'), null)
+      }
+      callback(null, true)
+    }
+  }).single('uploaddoc');
+  upload(req, res, function (err) {
+    Vehicles.findOne({
+      user_id: req.body.user_id
+    }, function (err, vehicles) {
+      if (req.body.uploaddocfor == "insurancedoc") {
+        if (vehicles && typeof vehicles.insurancedoc != 'undefined' && vehicles.insurancedoc != null) {
+          colname = vehicles.insurancedoc;
+        }
+        result = {
+          insurancedoc: res.req.file.filename
+        };
+      } else if (req.body.uploaddocfor == "licensedoc") {
+        if (vehicles && typeof vehicles.licensedoc != 'undefined' && vehicles.licensedoc != null) {
+          colname = vehicles.licensedoc;
+        }
+        result = {
+          licensedoc: res.req.file.filename
+        };
+      } else {
+        if (vehicles && typeof vehicles.bookdoc != 'undefined' && vehicles.bookdoc != null) {
+          colname = vehicles.bookdoc;
+        }
+        result = {
+          bookdoc: res.req.file.filename
+        };
+      }
+      if (vehicles && typeof colname != 'undefined' && colname != null) {
+        fs.unlink(driverassets + colname, function (error) {
+          if (error) {
+            res.json({
+              status: "false",
+              message: "Something went to be wrong123"
+            });
+          }
+        });
+      }
+      Vehicles.findOneAndUpdate({
+        "user_id": req.body.user_id
+      }, {
+        $set: result
+      }).exec(function (err, vehicles) {
+        if (err) {
+          res.json({
+            status: "false",
+            message: "Something went to be wrong12"
+          });
+        } else {
+          res.json({
+            status: "true",
+            message: 'Image uploaded successfully'
+          });
+        }
+      });
+    });
+  });
+});
+
+/* driver online or offline */
+router.post('/liveme', function (req, res) {
+  passport.authenticate('jwt', { session: false }, function (err, driver) {
+    if (err === "AccountDeleted") {
+      res.json({
+        status: "error",
+        message: 'Account has been deleted successfully',
+        deleted_type:"driver"
+      });
+    } else if (!driver) {
+      res.json({
+        status: "error",
+        message: 'Unauthorized access'
+      });
+    } else {
+      if (!req.body.user_id || !req.body.status) {
+        senderr(res);
+      } else {
+        Driver.findOne({
+          _id: req.body.user_id
+        }, function (err, driver) {
+          if (!driver) {
+            senderr(res);
+          } else {
+            if (driver.live_status != '2') {
+              let liveme = "0";
+              if (req.body.status == 'online') {
+                liveme = "1";
+              }
+              driver.live_status = liveme;
+              driver.save(function (err) {
+                res.json({
+                  status: "true",
+                  message: 'Driver is ' + req.body.status
+                });
+              });
+            } else {
+              res.json({
+                status: "false",
+                message: 'You are on ride'
+              });
+            }
+
+          }
+        });
+      }
+    }
+  })(req, res);
+});
+
+/* online driver instant status */
+router.post('/whereiam', function (req, res) {
+  passport.authenticate('jwt', { session: false }, function (err, driver) {
+    if (err === "AccountDeleted") {
+      res.json({
+        status: "error",
+        message: 'Account has been deleted successfully'
+      });
+    } else if (!driver) {
+      res.json({
+        status: "error",
+        message: 'Unauthorized access'
+      });
+    } else {
+      let translatedstring = "";
+      if (!req.body.user_id || !req.body.onride_id || !req.body.status) {
+        senderr(res);
+      } else {
+        let query;
+        let timestamp = timeZone();
+        if (req.body.status == "onride") {
+          query = Rides.findOne({
+            _id: req.body.onride_id,
+            onride_otp: req.body.onride_otp
+          });
+          //let querystring = [{ ridestatus: 'ontheway' }];
+          //querystring = [{ ridestatus: 'ontheway' }, { ridestatus: 'onride' }];
+          ridequery = Rides.find({
+            driver_id: req.body.user_id
+          }).or({
+            ridestatus: 'ontheway'
+          }).or({
+            ridestatus: 'onride'
+          });
+          ridequery.exec(function (err, rides) {
+            rides.forEach(function (rec) {
+              if (rec._id != req.body.onride_id) {
+                rec.ridestatus = 'cancelled';
+                rec.save();
+              }
+            });
+          });
+        } else {
+          query = Rides.findOne({
+            _id: req.body.onride_id
+          });
+        }
+        query.exec(function (err, rides) {
+          if (!rides) {
+            res.json({
+              status: "false",
+              message: "OTP verification failed."
+            });
+          } else {
+            console.log("Where iam api is calling");
+            console.log("instantstatus_req.body.status"+req.body.status);
+            rides.ridestatus = req.body.status;
+            rides.ridestatusat = timestamp;
+            if (req.body.status == "onride" && !rides.ride_started_at) {
+              rides.ride_started_at = new Date();
+            }
+            rides.save(function (err) {
+              Driver.findOne({
+                _id: req.body.user_id
+              }, function (err, driver) {
+                driver.live_status = "2";
+                driver.save();
+                
+                
+                if (req.body.status == "ontheway") {
+                  NotifyDevices.findOne({
+                    user_id: rides.user_id
+                  }, function (err, userdevices) {
+                    if (userdevices) {
+                      let lang = userdevices.lang_type;
+                      
+                      translatedstring = translationServer.langTranslate("Yourdriverisarrivingnow", lang);
+                      let userids = [rides.user_id];
+                      let message = translatedstring;
+                      let data = {
+                        "ride_id": rides._id,
+                        "type": "ontheway",
+                        "message": message
+                      };
+                      userNotific(userids, message, data);
+                    }
+                  });
+                }
+                
+               
+                if (req.body.status == "onride") {
+                
+                NotifyDevices.findOne({
+                    user_id: rides.user_id
+                  }, function (err, userdevices) {
+                    console.log(userdevices);
+                     if (userdevices) {
+                    let lang = userdevices.lang_type;
+                    
+                  //translatedstring = translationServer.langTranslate("Yourdriverisarrivingnow",lang);
+                          
+                             
+                                 let userids = [rides.user_id];
+                                let message = "Your ride started";
+                                let data = {
+                                  "ride_id": rides._id,
+                                  "type": "onride",
+                                  "message": message
+                                };
+                                userNotific(userids, message, data);
+                    } 
+
+                  });
+               
+              }
+                res.json({
+                  status: "true",
+                  message: "Status changed successfully"
+                });
+              });
+            });
+          }
+        });
+      }
+    }
+  })(req, res);
+});
+
+/* driver accept status */
+router.post('/goride', function (req, res) {
+  passport.authenticate('jwt', { session: false }, function (err, driver) {
+    if (err === "AccountDeleted") {
+      res.json({
+        status: "error",
+        message: 'Account has been deleted successfully'
+      });
+    } 
+    else if (!driver) {
+      res.json({
+        status: "error",
+        message: 'Unauthorized access'
+      });
+    } 
+    else {
+      if (!req.body.user_id || !req.body.onride_id) {
+        senderr(res);
+      } else {
+        let querystring = {
+          _id: req.body.onride_id
+        };
+        Rides.findOne(querystring).populate('user_id').
+          exec(function (err, rides) {
+            if (!rides) {
+              senderr(res);
+            } else {
+              let rideresult = {};
+              console.log("goride_rides.ridestatus"+rides.ridestatus);
+             
+              if (rides.ridestatus == "requested" || rides.ridestatus == "scheduled" || rides.ridestatus == "ridenotaccepted" || rides.ridestatus == "scheduleridenotaccepted") {
+                rides.ridestatus = "accepted";
+                console.log("gorideddddd---------"+rides);
+                
+                rides.driver_id = req.body.user_id;
+                Vehicles.findOne({
+                  user_id: rides.driver_id
+                }).exec(function (err, vehicles) {
+                  if (!vehicles) {
+                    senderr(res);
+                  } else {
+                    rides.vehicle_no = vehicles.vehicle_number;
+                    rides.save(function (err) {
+                      if (err) {
+                        senderr(res);
+                      } else {
+                        Driver.findOne({
+                          _id: req.body.user_id
+                        }, function (err, driver) {
+                          if (!err) {
+                            driver.live_status = "2";
+                            driver.save();
+
+                            NotifyDevices.findOne({
+                              user_id: rides.user_id._id
+                            }, function (err, userdevices) {
+                               
+                              console.log("userdevices--------"+userdevices);
+                               if (userdevices) {
+                              let lang = userdevices.lang_type;
+                             
+                                       
+                                           let userids = [rides.user_id._id];
+                                          let message = "Your ride has been accepted";
+                                          let data = {
+                                            "ride_id": rides._id,
+                                            "type": "accepted",
+                                            "message": "Your ride has been accepted"
+                                          };
+                                          userNotific(userids, message, data);
+                              } 
+          
+                            });
+          
+                            rideresult.status = "true";
+                            rideresult.user_name = rides.user_id.full_name;
+                            rideresult.onride_otp = rides.onride_otp;
+                            rideresult.pickup_location = rides.pickup_location;
+                            rideresult.pickup_lat = rides.pickup_lat;
+                            rideresult.pickup_lng = rides.pickup_lng;
+                            rideresult.drop_location = rides.drop_location;
+                            rideresult.drop_lat = rides.drop_lat;
+                            rideresult.drop_lng = rides.drop_lng;
+                            rideresult.vehicle_no = rides.vehicle_no;
+                            res.json(rideresult);
+                          } else {
+                            senderr(res);
+                          }
+
+                        });
+
+                      }
+                    });
+                  }
+                });
+              } else {
+                res.json({
+                  status: "false",
+                  message: "This ride is unavailable now. Kindly look for another one."
+                });
+              }
+            }
+          });
+      }
+    }
+  })(req, res);
+});
+
+/* ride marked completed by driver */
+router.post('/completeride', function (req, res) {
+  passport.authenticate('jwt', { session: false }, function (err, driver) {
+    if (err === "AccountDeleted") {
+      res.json({
+        status: "error",
+        message: 'Account has been deleted successfully'
+      });
+    } else if (!driver) {
+      res.json({
+        status: "error",
+        message: 'Unauthorized access'
+      });
+    } else {
+      if (!req.body.user_id || !req.body.onride_id || !req.body.distance) {
+        
+        senderr(res);
+      } else {
+        let querystring = {
+          _id: req.body.onride_id
+        };
+        let timestamp = timeZone();
+        let distance = parseFloat(req.body.distance).toFixed(2);
+        Rides.findOne(querystring).populate('user_id').populate('category_id').
+          exec({
+            _id: req.body.onride_id
+          }, function (err, rides) {
+            if (!rides) {
+              
+              senderr(res);
+            } else {
+              Admin.findOne(function (err, admin) {
+                
+                if (rides.ridestatus == "onride" || rides.ridestatus == "ontheway") {
+                  rides.ridestatus = "completed";
+                  rides.ridestatusat = timestamp;
+                  rides.ride_completed_at = new Date();
+                  rides.ridedistance = distance;
+                  let distbycat = [];
+                  distbycat[rides.category_id._id] = distance;
+                  let fareamount = totalFare(rides.category_id, distbycat, admin.maxDistance);
+                  rides.baseprice = fareamount;
+                  rides.total = fareamount;
+                  // save the driver details
+                  rides.save(function (err) {
+                    if (err) {
+                      senderr(res);
+                    } else {
+                      let result = {
+                        live_status: "1"
+                      };
+                      Driver.findOneAndUpdate({
+                        _id: rides.driver_id
+                      }, {
+                        $set: result
+                      }).exec(function (err, driver) {
+                        if (err) {
+                          senderr(res);
+                        } else {
+                          /* let notifications = {
+                            user_id: req.body.user_id, notify_to: rides.user_id._id, title: "Ride Completed",
+                            message: "Your Ride has been completed."
+                          };
+                          notifyTo(notifications); */
+                          Commissions.find().exec(function (err, results) {
+                            let taxamount = 0,
+                              commissionamount = 0,
+                              tax;
+                            let resultcount = results.length;
+                            tax = admin.tax;
+                            taxamount = parseFloat(rides.baseprice) * (tax / 100);
+                            if (resultcount > 0) {
+                              results.forEach(function (d) {
+                                let dprice_from = parseFloat(d.price_from);
+                                let dprice_to = parseFloat(d.price_to);
+                                if (rides.baseprice >= dprice_from && rides.baseprice <= dprice_to) {
+                                  commissionamount = parseFloat(rides.baseprice) * (d.percentage / 100);
+                                }
+                              });
+                            }
+                            let basepricewithcommission = parseFloat(rides.baseprice) + parseFloat(commissionamount);
+                            rides.baseprice = basepricewithcommission.toFixed(2);
+                            rides.commissionamount = commissionamount.toFixed(2);
+                            rides.tax = taxamount.toFixed(2);
+                            rides.save(function (rideSaveError) {
+                              if (rideSaveError) {
+                                console.error("Unable to persist final ride totals for CeTS sync:", rideSaveError);
+                              } else {
+                                cetsSyncService.enqueueTripSync(rides._id, "ride_completed").catch(function (syncError) {
+                                  console.error("CeTS trip enqueue failed:", syncError);
+                                });
+                              }
+                            });
+
+                             NotifyDevices.findOne({
+                    user_id: rides.user_id._id
+                  }, function (err, userdevices) {
+                     
+                      
+                     if (userdevices) {
+                    let lang = userdevices.lang_type;
+                   
+                             
+                                 let userids = [rides.user_id._id];
+                                let message = "Your ride has been completed";
+                                let data = {
+                                  "ride_id": rides._id,
+                                  "type": "completed",
+                                  "message": "Your ride has been completed"
+                                };
+                                userNotific(userids, message, data);
+                    } 
+
+                  });
+
+                            res.json({
+                              status: "true",
+                              type: rides.payment_type,
+                              message: 'Your Ride has been marked as completed'
+                            });
+
+                          });
+
+                        }
+                      });
+
+                    }
+                  });
+                } else {
+                  
+                  senderr(res);
+                }
+              });
+            }
+          });
+      }
+    }
+  })(req, res);
+});
+
+/* complete ride details */
+router.post('/completeridedetails', function (req, res) {
+  passport.authenticate('jwt', { session: false }, function (err, driver) {
+    if (err === "AccountDeleted") {
+      res.json({
+        status: "error",
+        message: 'Account has been deleted successfully'
+      });
+    } else if (!driver) {
+      res.json({
+        status: "error",
+        message: 'Unauthorized access'
+      });
+    } else {
+      if (!req.body.user_id || !req.body.onride_id) {
+        senderr(res);
+      } else {
+        let querystring = {
+          _id: req.body.onride_id,
+          ridestatus: "completed"
+        };
+        let rideresult = {};
+        Rides.count(querystring, function (err, count) {
+          if (count > 0) {
+            Rides.findOne(querystring).populate('payment_id').populate('driver_id').populate('user_id').populate('category_id').
+              exec(function (err, rides) {
+                if (!err) {
+                  rideresult.status = "true";
+                  let profile_image = rides.category_id.image;
+                  if (typeof profile_image == 'undefined') {
+                    let profile_image = 'category.png';
+                  }
+                  rideresult.category_image = base_url + '/imagegallery/' + profile_image;
+                  rideresult.category_name = rides.category_id.category_name;
+                  rideresult.username = rides.user_id.full_name;
+                  rideresult.user_image = base_url + '/gallery/users/' + rides.user_id.profile_image;
+                  rideresult.driver_id = rides.driver_id._id;
+                  rideresult.pickup_location = rides.pickup_location;
+                  rideresult.pickup_lat = rides.pickup_lat;
+                  rideresult.pickup_lng = rides.pickup_lng;
+                  rideresult.drop_location = rides.drop_location;
+                  rideresult.drop_lat = rides.drop_lat;
+                  rideresult.drop_lng = rides.drop_lng;
+                  rideresult.driver_name = rides.driver_id.full_name;
+                  rideresult.driver_image = base_url + '/gallery/drivers/' + rides.driver_id.profile_image;
+                  rideresult.ride_fare = rides.baseprice; /* commission included */
+                  rideresult.basefare = rides.total; /* commission excluded */
+                  rideresult.commissionamount = rides.commissionamount;
+                  rideresult.ride_tax = rides.tax;
+                  let rideTotal = parseFloat(rides.baseprice) + parseFloat(rides.tax);
+                  rideresult.ride_total = roundCustomerPayableAmount(rideTotal);
+                  rideresult.payment_type = rides.payment_type;
+                  rideresult.pickup_time = parseInt(rides.ridestatusat);
+                  rideresult.walletmoney = 0;
+                  rideresult.vehicle_no = rides.vehicle_no;
+                  rideresult.distance = rides.ridedistance;
+                  rideresult.isreview = "false";
+                  rideresult.ispayment = "false";
+                  rideresult.drop_time = rides.ridestatusat;
+                  rideresult.rideuserid = rides.user_id._id;
+                  if (typeof rides.user_id.walletmoney != "undefined" && rides.user_id.walletmoney != null) {
+                    rideresult.walletmoney = Math.round(rides.user_id.walletmoney * 100) / 100;
+                  }
+                  Reviews.findOne({
+                    onride_id: req.body.onride_id
+                  }).exec(function (err, reviews) {
+                    if (!reviews) {
+                      Payments.findOne({
+                        onride_id: req.body.onride_id
+                      }).exec(function (err, payments) {
+                        if (!payments) {
+                          res.json(rideresult);
+                        } else {
+                          rideresult.ispayment = "true";
+                          res.json(rideresult);
+                        }
+                      });
+                    } else {
+                      rideresult.isreview = "true";
+                      rideresult.review_message = reviews.review_message;
+                      rideresult.rating = reviews.rating;
+                      Payments.findOne({
+                        onride_id: req.body.onride_id
+                      }).exec(function (err, payments) {
+                        if (!payments) {
+                          res.json(rideresult);
+                        } else {
+                          rideresult.ispayment = "true";
+                          res.json(rideresult);
+                        }
+                      });
+                    }
+                  });
+                } else {
+                  senderr(res);
+                }
+              });
+          } else {
+            senderr(res);
+          }
+        });
+      }
+    }
+  })(req, res);
+});
+
+/* user review a ride */
+router.post('/ridedetails', function (req, res) {
+  passport.authenticate('jwt', { session: false }, function (err, driver) {
+    if (err === "AccountDeleted") {
+      res.json({
+        status: "error",
+        message: 'Account has been deleted successfully'
+      });
+    } else if (!driver) {
+      res.json({
+        status: "error",
+        message: 'Unauthorized access'
+      });
+    } else {
+      if (!req.body.user_id || !req.body.onride_id || !req.body.type) {
+        senderr(res);
+      } else {
+        let querystring = {
+          _id: req.body.onride_id,
+          ridestatus: req.body.type
+        };
+        let rideresult = {};
+        Rides.count(querystring, function (err, count) {
+          if (count > 0) {
+            Rides.findOne(querystring).populate('category_id').populate('user_id').
+              exec(function (err, rides) {
+                if (!err) {
+                  rideresult.status = "true";
+                  rideresult.user_name = rides.user_id.full_name;
+                  rideresult.category_name = rides.category_id.category_name;
+                  let profile_image = rides.category_id.image;
+                  if (typeof profile_image == 'undefined') {
+                    let profile_image = 'category.png';
+                  }
+                  let categoryimage = base_url + '/imagegallery/' + profile_image;
+                  rideresult.category_image = categoryimage;
+                  rideresult.pickup_location = rides.pickup_location;
+                  rideresult.pickup_lat = rides.pickup_lat;
+                  rideresult.pickup_lng = rides.pickup_lng;
+                  rideresult.drop_location = rides.drop_location;
+                  rideresult.drop_lat = rides.drop_lat;
+                  rideresult.drop_lng = rides.drop_lng;
+                  rideresult.onride_otp = rides.onride_otp;
+                  rideresult.approx_price = rides.baseprice;
+                  res.json(rideresult);
+                } else {
+                  senderr(res);
+                }
+              });
+          } else {
+            senderr(res);
+          }
+        });
+      }
+    }
+  })(req, res);
+});
+
+/* user's rides (or) booking history */
+router.post('/ridehistory', function (req, res) {
+  passport.authenticate('jwt', { session: false }, function (err, driver) {
+    if (err === "AccountDeleted") {
+      res.json({
+        status: "error",
+        message: 'Account has been deleted successfully'
+      });
+    } else if (!driver) {
+      res.json({
+        status: "error",
+        message: 'Unauthorized access'
+      });
+    } else {
+      if (!req.body.user_id || !req.body.type) {
+        senderr(res);
+      } else {
+        let querystring = [{
+          ridestatus: 'onride'
+        }, {
+          ridestatus: 'ontheway'
+        }, {
+          ridestatus: 'scheduled'
+        }, {
+          ridestatus: 'accepted'
+        }];
+        let rideresult = [],
+          taxprice, statustime, vehicle_no;
+        if (req.body.type == "passed") {
+          querystring = [{
+            ridestatus: 'cancelled'
+          }, {
+            ridestatus: 'completed'
+          }];
+        }
+        Rides.find({
+          driver_id: req.body.user_id
+        }).or(querystring).populate('category_id').sort({
+          '_id': -1
+        }).
+          exec(function (err, rides) {
+            if (!err) {
+              if (rides.length == '0') {
+                res.json({
+                  status: "false",
+                  message: 'No rides found'
+                });
+              } else {
+                rides.forEach(function (c) {
+                  if (typeof c.tax == "undefined" || c.tax == null) {
+                    taxprice = 0;
+                  } else {
+                    taxprice = Math.round(c.tax * 100) / 100;
+                  }
+                  if (c.type == "schedule") {
+                    statustime = parseInt(c.schedule_time);
+                  } else {
+                    statustime = c.ridestatusat;
+                  }
+                  if (typeof c.vehicle_no == "undefined" || c.vehicle_no == null) {
+                    vehicle_no = "";
+                  } else {
+                    vehicle_no = c.vehicle_no;
+                  }
+                  let profile_image = c.category_id.image;
+                  if (typeof profile_image == 'undefined') {
+                    let profile_image = 'category.png';
+                  }
+                  let categoryimage = base_url + '/imagegallery/' + profile_image;
+                  let rideTotal = parseFloat(c.baseprice) + parseFloat(taxprice);
+                  rideresult.push({
+                    onride_id: c._id,
+                    category_image: categoryimage,
+                    category_name: c.category_id.category_name,
+                    ride_status: c.ridestatus,
+                    total_price: roundCustomerPayableAmount(rideTotal),
+                    vehicle_no: vehicle_no,
+                    pickup_time: statustime
+                  });
+                });
+                res.json({
+                  status: "true",
+                  result: rideresult
+                });
+              }
+            } else {
+              senderr(res);
+            }
+          });
+      }
+    }
+  })(req, res);
+});
+
+/* cancel a ride */
+router.post('/cancelride', function (req, res) {
+  passport.authenticate('jwt', { session: false }, function (err, driver) {
+    if (err === "AccountDeleted") {
+      res.json({
+        status: "error",
+        message: 'Account has been deleted successfully'
+      });
+    } else if (!driver) {
+      res.json({
+        status: "error",
+        message: 'Unauthorized access'
+      });
+    } else {
+      if (!req.body.user_id || !req.body.onride_id) {
+        senderr(res);
+      } else {
+        Rides.findOneAndUpdate({
+          _id: req.body.onride_id
+        }, {
+          "$set": {
+            ridestatus: "cancelled"
+          }
+        }).exec(function (err, reviews) {
+          if (err) {
+            senderr(res);
+          } else {
+            /*let notifications = {
+            user_id: req.body.user_id, notify_to: rides.user_id, title: "Ride Canceelled",
+            message: "Your Ride has been cancelled by the driver"
+            };
+            notifyTo(notifications);*/
+            res.json({
+              status: "true",
+              message: 'Your Ride has been cancelled'
+            });
+          }
+        });
+      }
+    }
+  })(req, res);
+});
+
+/* pay by cash or wallet */
+router.post('/paybycash', function (req, res) {
+  passport.authenticate('jwt', { session: false }, function (err, driver) {
+    if (err === "AccountDeleted") {
+      res.json({
+        status: "error",
+        message: 'Account has been deleted successfully'
+      });
+    } else if (!driver) {
+      res.json({
+        status: "error",
+        message: 'Unauthorized access'
+      });
+    } else {
+      let translatedstring = "";
+      if (!req.body.user_id || !req.body.amount || !req.body.onride_id || !req.body.iswallet || !req.body.basefare || !req.body.commissionamount || !req.body.tax || !req.body.rideuserid) {
+        senderr(res);
+      } else {
+        let paidby = "cash";
+        if (req.body.amount == 0) {
+          paidby = "wallet";
+        }
+        Payments.count({
+          onride_id: req.body.onride_id
+        }, function (err, count) {
+          if (count > 0) {
+            res.json({
+              status: "true",
+              message: 'Payment has been done successfully'
+            });
+          } else {
+            let payObject = {
+              user_id: req.body.rideuserid,
+              onride_id: req.body.onride_id,
+              payment_type: paidby,
+              ride_fare: req.body.amount,
+              baseprice: req.body.basefare,
+              commissionamount: req.body.commissionamount,
+              tax: req.body.tax,
+              driver_id: req.body.user_id
+            };
+            let newPayment = new Payments(payObject);
+            newPayment.save(function (err) {
+              if (!err) {
+                if (req.body.iswallet == "1") {
+                  let paywalletObject = {
+                    user_id: req.body.rideuserid,
+                    onride_id: req.body.onride_id,
+                    amount: req.body.walletamount,
+                    type: "debit",
+                    transaction: "payride",
+                    updated_at: timeZone()
+                  };
+                  let newWallet = new Wallet(paywalletObject);
+                  newWallet.save(function (err) {
+                    if (!err) {
+                      User.findOneAndUpdate({
+                        "_id": req.body.rideuserid
+                      }, {
+                        "$inc": {
+                          "walletmoney": -req.body.walletamount
+                        }
+                      }, {
+                        new: true
+                      }, function (err, doc) {
+                        if (!err) {
+                          let walletamount;
+                          if (typeof doc.walletmoney != 'undefined') {
+                            walletamount = Math.round(doc.walletmoney * 100) / 100;
+                          } else {
+                            walletamount = 0;
+                          }
+                          let message = "Payment has been done successfully";
+                          let notifications = {
+                            user_id: "0",
+                            notify_to: req.body.rideuserid,
+                            title: "Payment Completed",
+                            message: message
+                          };
+                          notifyTo(notifications);
+                          Rides.findOne({
+                            _id: req.body.onride_id
+                          }, function (err, rides) {
+                            if (!rides) {
+                              senderr(res);
+                            } else {
+                              let userids = [req.body.rideuserid];
+                              let driverids = [rides.driver_id];
+                              let drivernotifications = {
+                                user_id: "0",
+                                notify_to: rides.driver_id,
+                                title: "Payment Completed",
+                                message: message
+                              };
+                              notifyTo(drivernotifications);
+                              NotifyDevices.findOne({
+                                user_id: req.body.rideuserid
+                              }, function (err, userdevices) {
+                                if (userdevices) {
+                                  let lang = userdevices.lang_type;
+                                  
+                                  let message = translationServer.langTranslate("Paymenthasbeendonesuccessfully", lang);
+                                  let data = {
+                                    "type": "payment",
+                                    "message": message,
+                                    "ride_id": rides._id
+                                  };
+                                  translatedstring = translationServer.langTranslate("Paymenthasbeendonesuccessfully", lang);
+                                  userNotify(userids, translatedstring, data);
+                                }
+                              });
+                              UserDevices.findOne({
+                                user_id: rides.driver_id
+                              }, function (err, driverdevices) {
+                                if (driverdevices) {
+                                  let driverlang = driverdevices.lang_type;
+                                  
+                                  let message = translationServer.langTranslate("Paymenthasbeendonesuccessfully", driverlang);
+                                  let data = {
+                                    "type": "payment",
+                                    "message": message,
+                                    "ride_id": rides._id
+                                  };
+                                  translatedstring = translationServer.langTranslate("Paymenthasbeendonesuccessfully", driverlang);
+                                  driverNotify(driverids, translatedstring, data);
+                                }
+                              });
+                              res.json({
+                                status: "true",
+                                walletmoney: walletamount,
+                                message: message
+                              });
+                            }
+                          });
+                        } else {
+                          senderr(res);
+                        }
+                      });
+                    } else {
+                      senderr(res);
+                    }
+                  });
+                } else {
+                  let message = "Payment has been done successfully";
+                  let notifications = {
+                    user_id: "0",
+                    notify_to: req.body.rideuserid,
+                    title: "Payment Completed",
+                    message: message
+                  };
+                  notifyTo(notifications);
+                  Rides.findOne({
+                    _id: req.body.onride_id
+                  }, function (err, rides) {
+                    if (!rides) {
+                      senderr(res);
+                    } else {
+                      let userids = [req.body.rideuserid];
+                      let driverids = [rides.driver_id];
+                      let drivernotifications = {
+                        user_id: "0",
+                        notify_to: rides.driver_id,
+                        title: "Payment Completed",
+                        message: message
+                      };
+                      notifyTo(drivernotifications);
+                      NotifyDevices.findOne({
+                        user_id: req.body.rideuserid
+                      }, function (err, userdevices) {
+                        if (userdevices) {
+                          let lang = userdevices.lang_type;
+                          
+                          let message = translationServer.langTranslate("Paymenthasbeendonesuccessfully", lang);
+                          let data = {
+                            "type": "payment",
+                            "message": message,
+                            "ride_id": rides._id
+                          };
+                          translatedstring = translationServer.langTranslate("Paymenthasbeendonesuccessfully", lang);
+                          userNotify(userids, translatedstring, data);
+                        }
+                      });
+                      UserDevices.findOne({
+                        user_id: rides.driver_id
+                      }, function (err, driverdevices) {
+                        if (driverdevices) {
+                          let driverlang = driverdevices.lang_type;
+                          
+                          let message = translationServer.langTranslate("Paymenthasbeendonesuccessfully", driverlang);
+                          let data = {
+                            "type": "payment",
+                            "message": message,
+                            "ride_id": rides._id
+                          };
+                          translatedstring = translationServer.langTranslate("Paymenthasbeendonesuccessfully", "ar");
+                          driverNotify(driverids, translatedstring, data);
+                        }
+                      });
+                      res.json({
+                        status: "true",
+                        message: message
+                      });
+                    }
+                  });
+                }
+              } else {
+                senderr(res);
+              }
+            });
+          }
+        });
+      }
+    }
+  })(req, res);
+});
+
+/** message & contact admin */
+router.post('/contactus', function (req, res) {
+  passport.authenticate('jwt', { session: false }, function (err, driver) {
+    if (err === "AccountDeleted") {
+      res.json({
+        status: "error",
+        message: 'Account has been deleted successfully'
+      });
+    } else if (!driver) {
+      res.json({
+        status: "error",
+        message: 'Unauthorized access'
+      });
+    } else {
+      if (!req.body.user_id || !req.body.name || !req.body.email || !req.body.subject || !req.body.message) {
+        senderr(res);
+      } else {
+        Admin.findOne(function (err, admin) {
+          let message = "Mail From: " + req.body.email;
+          let mailOptions = {
+            to: admin.email,
+            subject: req.body.subject,
+            html: '<i>Mail From ' + req.body.name + '</i>' + '<br />' + req.body.message +
+              '<br /><br />' + 'you can contact him at this mail id ' + req.body.email,
+          };
+          let transporter = nodemailer.createTransport({
+            host: admin.smptHost,
+            port: admin.smtpPort,
+            secure: false,
+            auth: {
+              user: admin.smtpUsername,
+              pass: admin.smtpPassword
+            }
+          });
+          // send mail with defined transport object
+          transporter.sendMail(mailOptions, (error, info) => {
+            if (error) {
+              senderr(res);
+            } else {
+              res.json({
+                status: "true",
+                message: "Got your query. We will get back to you soon"
+              });
+            }
+          });
+        });
+      }
+    }
+  })(req, res);
+});
+
+/* register a user device */
+router.post('/pushsignin', function (req, res) {
+  passport.authenticate('jwt', { session: false }, function (err, driver) {
+    if (err === "AccountDeleted") {
+      res.json({
+        status: "error",
+        message: 'Account has been deleted successfully'
+      });
+    } else if (!driver) {
+      res.json({
+        status: "error",
+        message: 'Unauthorized access'
+      });
+    } else {
+      if (!req.body.user_id || !req.body.device_token || !req.body.device_type || !req.body.device_id) {
+        senderr(res);
+      } else {
+        console.log(req.body);
+        UserDevices.count({
+          device_id: req.body.device_id
+        }, function (err, count) {
+
+          if (count > 0) {
+            UserDevices.findOneAndUpdate({
+              device_id: req.body.device_id
+            }, {
+              "$set": req.body
+            }).exec(function (err, userdevices) {
+              console.log(" hjsaj " + userdevices);
+              if (err) {
+                senderr(res);
+              } else {
+                res.json({
+                  status: "true",
+                  message: 'Registered successfully'
+                });
+              }
+            });
+          } else {
+            let newDevices = new UserDevices(req.body);
+            newDevices.save();
+            res.json({
+              status: "true",
+              message: 'Registered successfully'
+            });
+          }
+        });
+      }
+    }
+  })(req, res);
+});
+
+/* unregister a user device */
+router.delete('/pushsignout', function (req, res) {
+  passport.authenticate('jwt', { session: false }, function (err, driver) {
+    if (err === "AccountDeleted") {
+      res.json({
+        status: "error",
+        message: 'Account has been deleted successfully',
+        deleted_type:"driver"
+      });
+    } else if (!driver) {
+      res.json({
+        status: "error",
+        message: 'Unauthorized access'
+      });
+    } else {
+      if (!req.body.device_id) {
+        senderr(res);
+      } else {
+        UserDevices.count({
+          device_id: req.body.device_id
+        }, function (err, count) {
+          if (count > 0) {
+            UserDevices.findOneAndRemove({
+              device_id: req.body.device_id
+            }, function (err, count) {
+              res.json({
+                status: "true",
+                message: 'Unregistered successfully'
+              });
+            });
+          } else {
+            senderr(res);
+          }
+        });
+      }
+    }
+  })(req, res);
+});
+
+/* send a test push to the authenticated driver's registered devices */
+router.post('/testpush', function (req, res) {
+  passport.authenticate('jwt', { session: false }, async function (err, driver) {
+    if (err === "AccountDeleted") {
+      return res.json({
+        status: "error",
+        message: 'Account has been deleted successfully'
+      });
+    } else if (!driver) {
+      return res.json({
+        status: "error",
+        message: 'Unauthorized access'
+      });
+    }
+
+    try {
+      const targetDriverId = String(driver._id);
+      const message = String(req.body.message || 'Test push notification from CABi driver API').trim();
+      const admin = await Admin.findOne({}).sort({ _id: -1 }).exec();
+      const devices = await UserDevices.find({ user_id: targetDriverId }).exec();
+      const tokens = devices.map(rec => rec.device_token).filter(Boolean);
+
+      if (!tokens.length) {
+        return res.json({
+          status: "false",
+          message: 'No registered device tokens found for this driver'
+        });
+      }
+
+      await pushService.sendNotification({
+        tokens: tokens,
+        message: message,
+        data: {
+          type: 'testpush',
+          message: message,
+          user_id: targetDriverId
+        },
+        mobile: true,
+        siteName: admin && admin.siteName
+      });
+
+      let newNotifications = new Notifications({
+        user_id: "0",
+        notify_to: targetDriverId,
+        title: admin && admin.siteName ? admin.siteName : "CABi",
+        message: message,
+        notified_at: timeZone()
+      });
+      newNotifications.save();
+
+      return res.json({
+        status: "true",
+        message: 'Test push notification queued successfully',
+        mobile_tokens: tokens.length
+      });
+    } catch (error) {
+      return res.json({
+        status: "false",
+        message: error && error.message ? error.message : 'Unable to send test push notification'
+      });
+    }
+  })(req, res);
+});
+
+/* delete account */
+router.post('/deleteaccount', function (req, res) {
+  passport.authenticate('jwt', { session: false }, function (err, driver) {
+    if (err === "AccountDeleted") {
+      res.json({
+        status: "error",
+        message: 'Account has been deleted successfully'
+      });
+    } else if (!driver) {
+      res.json({
+        status: "error",
+        message: 'Unauthorized access'
+      });
+    } else {
+
+      let querystring = [{
+        ridestatus: 'onride'
+      }, {
+        ridestatus: 'ontheway'
+      }, {
+        ridestatus: 'scheduled'
+      }, {
+        ridestatus: 'accepted'
+      }];
+
+      Rides.count({
+        driver_id: req.body.user_id
+      }).or(querystring).sort({
+        '_id': -1
+      }).
+        exec(function (err, totalRides) {
+          if (!err) {
+            if (totalRides > 0) {
+              res.json({
+                status: "false",
+                message: "You're in ride. You can't delete this account"
+              });
+            } else {
+              Driver.findOneAndUpdate({
+                _id: req.body.user_id
+              }, {
+                $set: { "deletion_status": 1 }
+              }).exec(function (err, driver) {
+                if (err) {
+                  res.json({
+                    status: "false",
+                    message: "Something went to be wrong"
+                  });
+                } else {
+                  res.json({
+                    status: "true",
+                    message: "Account has been deleted successfully"
+                  });
+                }
+              });
+            }
+          } else {
+            senderr(res);
+          }
+        });
+
+    }
+  })(req, res);
+});
+
+/* Pushnotify */
+userNotific = function (driverIds, message, data) {
+  NotifyDevices.find({
+    device_type: "0"
+  })
+    .where('user_id')
+    .in(driverIds)
+    .exec(function (err, records) {
+      let sendnotifications = [];
+      records.forEach(function (rec) {
+        sendnotifications.push(rec.device_token);
+      });
+      fireBase(sendnotifications, message, data);
+    });
+
+  /** ios pushnotifications */
+  NotifyDevices.find({
+    device_type: "1"
+  })
+    .where('user_id')
+    .in(driverIds)
+    .exec(function (err, records) {
+      let sendnotifications = [];
+      records.forEach(function (rec) {
+        sendnotifications.push(rec.device_token);
+      });
+      fireBaseAndroid(sendnotifications, message, data);
+    });
+};
+
+fireBase = function (devicetokens, messagetext, data) {
+  Admin.findOne(function (err, admin) {
+    pushService
+      .sendNotification({
+        tokens: devicetokens,
+        message: messagetext,
+        data: data,
+        mobile: true,
+        siteName: admin && admin.siteName
+      })
+      .catch(function (_error) {});
+  });
+};
+
+fireBaseAndroid = function (devicetokens, messagetext, data) {
+  Admin.findOne(function (err, admin) {
+    pushService
+      .sendNotification({
+        tokens: devicetokens,
+        message: messagetext,
+        data: data,
+        mobile: true,
+        siteName: admin && admin.siteName
+      })
+      .catch(function (_error) {});
+  });
+};
+
+
+riderNotific = function (userIds, message, data) {
+  NotifyDevices.find({
+    device_type: "0"
+  })
+    .where('user_id')
+    .in(userIds)
+    .exec(function (err, records) {
+      let sendnotifications = [];
+      records.forEach(function (rec) {
+        sendnotifications.push(rec.device_token);
+      });
+      fireBase(sendnotifications, message, data);
+    });
+
+  /** ios pushnotifications */
+  NotifyDevices.find({
+    device_type: "1"
+  })
+    .where('user_id')
+    .in(userIds)
+    .exec(function (err, records) {
+      let sendnotifications = [];
+      records.forEach(function (rec) {
+        sendnotifications.push(rec.device_token);
+      });
+      fireBaseAndroid(sendnotifications, message, data);
+    });
+};
+
+module.exports = router;

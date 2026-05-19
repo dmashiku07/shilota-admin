@@ -1,0 +1,64 @@
+<section id="extended">
+  <div class="row">
+    <div class="col-sm-12">
+      <div class="card">
+
+        <div class="card-header">
+          <div class="actions float-right" *ngIf="(count?.count || 0) < 2">
+            <a [routerLink]="['/admin/banner/add']">
+              <span data-i18n="" class="btn btn-raised btn-dark btn-sm">
+                <i class="fa fa-plus"></i>&nbsp;Add Banner</span></a>
+          </div>
+          <h4 class="card-title">Banner Management</h4>
+
+        </div>
+
+
+        <div class="card-body">
+          <div class="card-block">
+            <table class="table table-responsive-md table-striped table-bordered table-responsive-md-md ">
+              <thead>
+                <tr>
+                  <th style="width:5%">#</th>
+                  <th>Title</th>
+                  <th>Image</th>
+                  <th>Type</th>
+                  <th style="width:20%">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngIf="loading">
+                  <td colspan="5" style="text-align:center;">
+                    <i class="fa fa-spinner fa-spin mr-2"></i>
+                    Loading banners...
+                  </td>
+                </tr>
+                <tr *ngFor="let page of banners; let i = index">
+                  <td>{{i + 1}}</td>
+
+                  <td>{{page.title}}</td>
+                  <td><img src="{{this.url}}/assets/banner/{{page.image}}" width="50" height="50"></td>
+                  <td>{{page.type}}</td>
+                  <td>
+
+                    <a class="btn btn-raised btn-icon btn-success mr-1" [routerLink]="['/admin/banner/edit',page._id]">
+                      <i class="fa fa-pencil"></i>
+                    </a>
+
+                    <a class="btn btn-raised btn-icon btn-danger mr-1 white" (click)="deleteBanner(page._id)">
+                      <i class="fa fa-trash-o"></i>
+                    </a>
+                  </td>
+                </tr>
+                <tr *ngIf="!loading && banners.length === 0">
+                  <td colspan="5" style="text-align:center;">No result found</td>
+                </tr>
+
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>

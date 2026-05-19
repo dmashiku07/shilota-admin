@@ -1,0 +1,78 @@
+<section id="base-style">
+  <div class="row">
+    <div class="col-12">
+      <div class="card">
+        <div class="card-header">
+          <h4 class="card-title">Rides Management</h4>
+        </div>
+        <div class="card-body collapse show">
+          <div class="card-block card-dashboard">
+            <div class="actions float-left dataTables_filter">
+              
+              <select class='form-control' (change)="onChange($event)" placeholder="Select ride status">
+                <option [value]="0">Select all rides</option>
+                <option *ngFor='let status of status' [value]="status">{{status}}</option>
+              </select>
+              <br>
+            </div>
+            <table class="table table-striped table-responsive-md table-bordered base-style">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Ride&nbsp;Status</th>
+                  <th>Date</th>
+                  <th>Total Fare</th>
+                  <th>Tax</th>
+                  <th>Commission</th>
+                  <th>Vehicle</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngIf="loading">
+                  <td colspan="8" style="text-align:center;">
+                    <i class="fa fa-spinner fa-spin mr-2"></i>
+                    Loading rides...
+                  </td>
+                </tr>
+                <tr *ngFor="let page of rides; let i = index">
+                  <td>{{rowNumber(i)}}</td>
+                  <td>
+                    <span class="badge badge-success" *ngIf="page.ridestatus=='accepted'">Accepted</span>
+                    <span class="badge badge-danger" *ngIf="page.ridestatus=='cancelled'">Cancelled</span>
+                    <span class="badge badge-primary" *ngIf="page.ridestatus=='scheduled'">Scheduled</span>
+                    <span class="badge badge-info" *ngIf="((page.ridestatus=='ridenotaccepted') || (page.ridestatus=='scheduleridenotaccepted') || (page.ridestatus=='requested'))">Ride
+                      Not Accepted</span>
+                    <span class="badge badge-secondary" *ngIf="page.ridestatus=='ontheway'">On the way</span>
+                    <span class="badge badge-warning" *ngIf="page.ridestatus=='onride'">Onride</span>
+                    <span class="badge badge-dark" *ngIf="page.ridestatus=='completed'">Completed</span>
+                  </td>
+                  <td>{{page.created_at | date}}</td>
+                  <td>{{this.user.currencySymbol}}&nbsp;&nbsp;{{page.baseprice}}</td>
+                  <td> {{this.user.currencySymbol}}&nbsp;&nbsp;{{page.tax}}</td>
+                  <td> {{this.user.currencySymbol}}&nbsp;&nbsp;{{page.commissionamount}}</td>
+                  <td>{{page.category_id.category_name}}</td>
+                  <td>
+                    <a class="btn btn-raised btn-icon btn-info mr-1" [routerLink]="['/admin/management/ridesdetails',page._id]">
+                      <i class="fa fa-eye"></i>
+                    </a>
+                  </td>
+                </tr>
+                <tr *ngIf="!loading && rides.length === 0 ">
+                  <td colspan="8" style="text-align:center;">No result found</td>
+                </tr>
+              </tbody>
+            </table>
+            <app-server-pagination
+              [page]="pagination.page"
+              [pageSize]="pagination.pageSize"
+              [totalPages]="pagination.totalPages"
+              [totalItems]="pagination.totalItems"
+              (pageChange)="onPageChange($event)">
+            </app-server-pagination>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>

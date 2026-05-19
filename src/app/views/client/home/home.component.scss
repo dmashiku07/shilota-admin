@@ -1,0 +1,31 @@
+.vehicle_slider .swiper-container {
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+.vehicle_slider .swiper-wrapper {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 18px;
+  min-width: max-content;
+  padding-bottom: 12px;
+}
+
+.vehicle_slider .swiper-slide {
+  flex: 0 0 110px;
+  max-width: 110px;
+}
+
+.vehicle_slider .swiper-slide li {
+  list-style: none;
+  text-align: center;
+}
+
+.vehicle_slider .swiper-slide img {
+  width: 75px;
+  height: 75px;
+  object-fit: cover;
+  border-radius: 50%;
+  background-color: #dadfe5;
+}

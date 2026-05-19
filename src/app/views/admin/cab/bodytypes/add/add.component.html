@@ -1,0 +1,55 @@
+<div class="row">
+  <div class="col-md-12">
+    <div class="card">
+      <div class="card-header">
+        <h4 class="card-title" id="basic-layout-form">Add Bodytype</h4>
+      </div>
+      <div class="card-body">
+        <div class="px-3">
+
+          <form class="form" [formGroup]="Form" novalidate (ngSubmit)="add(Form.value)">
+
+
+
+            <div class="col-md-12">
+              <div class="form-group">
+                <label for="projectinput3">Bodytype Name</label>
+
+                <input type="text" class="form-control" formControlName="name" #name [maxlength]="30">
+                <p *ngIf="Form.controls['name'].touched && !Form.controls['name'].valid" class="error-msg">
+                  <span *ngIf="Form.controls['name'].hasError('required') ">
+                    Bodytype Name is required
+                  </span>
+                  <span *ngIf="Form.controls['name'].hasError('minlength') ">
+                    Bodytype Name must have 3 characters length.
+                  </span>
+                  <span *ngIf="Form.controls['name'].hasError('maxlength') ">
+                    Bodytype with in 30 characters length.
+                  </span>
+
+                </p>
+              </div>
+            </div>
+
+
+            <div class="form-actions">
+
+              <button type="submit" class="btn btn-raised btn-raised btn-primary">
+                <i class="fa fa-check-square-o"></i> Save
+              </button>
+            </div>
+
+
+
+
+
+
+
+          </form>
+        </div>
+      </div>
+
+
+    </div>
+  </div>
+</div>

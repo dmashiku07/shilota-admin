@@ -1,0 +1,90 @@
+<div class="row">
+  <div class="col-md-12">
+    <div class="card">
+      <div class="card-header">
+        <h4 class="card-title" id="basic-layout-form">Add Driver Pages</h4>
+      </div>
+      <div class="card-body">
+        <div class="px-3">
+          <form class="form" [formGroup]="Form" novalidate (ngSubmit)="addPage(Form.value)">
+
+
+
+            <div class="col-md-12">
+              <div class="form-group">
+                <label for="projectinput3">Title</label>
+
+                <input type="text" class="form-control" formControlName="title" #title [maxlength]="30">
+                <p *ngIf="Form.controls['title'].touched && !Form.controls['title'].valid">
+                  <span *ngIf="Form.controls['title'].hasError('required') " style="color:red">
+                    Title is required
+                  </span>
+                  <span *ngIf="Form.controls['title'].hasError('minlength') " style="color:red">
+                    Title must have 3 characters length.
+                  </span>
+
+                  <span *ngIf="Form.controls['title'].hasError('maxlength') " style="color:red">
+                    Title must have 30 characters length.
+                  </span>
+
+
+
+                </p>
+              </div>
+            </div>
+
+            <div class="col-md-12">
+              <div class="form-group">
+                <label for="projectinput4">Content</label>
+                <ckeditor #content formControlName="content" [readonly]="false" debounce="500">
+                </ckeditor>
+
+                <p *ngIf="Form.controls['content'].touched && !Form.controls['content'].valid">
+                  <span *ngIf="Form.controls['content'].hasError('required') " style="color:red">
+                    Content is required
+                  </span>
+
+
+                </p>
+              </div>
+            </div>
+
+            <div class="col-md-12">
+              <div class="form-group">
+                <label for="projectinput3">Image</label>
+
+                <input type="file" id="image" name="image" formControlName="image" #image class="form-control browse_btnn" />
+                <p *ngIf="Form.controls['image'].touched && !Form.controls['image'].valid">
+                  <span *ngIf="Form.controls['image'].hasError('required') " style="color:red">
+                    Image is required
+                  </span>
+
+
+                </p>
+              </div>
+            </div>
+
+
+
+
+            <div class="form-actions">
+
+              <button type="submit" class="btn btn-raised btn-raised btn-primary">
+                <i class="fa fa-check-square-o"></i> Save
+              </button>
+            </div>
+
+
+
+
+
+
+
+          </form>
+        </div>
+      </div>
+
+
+    </div>
+  </div>
+</div>

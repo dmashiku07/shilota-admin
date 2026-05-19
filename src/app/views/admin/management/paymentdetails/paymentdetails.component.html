@@ -1,0 +1,113 @@
+<section id="striped-row-form-layouts">
+  
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card">
+                 
+                <div class="card-header">
+
+                        <div class="actions float-right">
+                                <a [routerLink]="['/admin/management/ridesdetails/',this.payment.onride_id._id]">
+                                    <span class="btn btn-raised btn-info btn-sm ">View Ride Info</span>
+                                </a>
+        
+                                <a [routerLink]="['/admin/management/view/',this.payment.user_id._id]">
+                                    <span class="btn btn-raised btn-danger btn-sm ">View User Info</span>
+                                </a>
+        
+        
+                                <a [routerLink]="['/admin/management/payment']" >
+                                    <span data-i18n="" class="btn btn-raised btn-dark btn-sm ">
+                                        <i class="fa fa-angle-double-left"></i>&nbsp;back</span></a>
+        
+                            </div>
+
+
+                    
+                       
+                    <h4 class="card-title" id="striped-row-layout-basic">Payment Information</h4>
+                </div>
+                <div class="card-body">
+                    <div class="px-3">
+                        <form class="form form-horizontal striped-rows form-bordered">
+                            <div class="form-body">
+      
+                                    
+                                <div class="form-group row">
+                                    <label class="col-md-3 label-control" for="projectinput1">Payment Type</label>
+                                    <div class="col-md-9">
+                                 {{payment.payment_type}}
+                                    </div>
+                                </div>
+
+                                <div class="form-group row last">
+                                        <label class="col-md-3 label-control" for="projectinput4">Ride Distance</label>
+                                        <div class="col-md-9">
+                                          {{this.payment.onride_id.ridedistance}}&nbsp;&nbsp;KM
+                                        </div>
+                                    </div>
+
+                                    
+                                <div class="form-group row">
+                                    <label class="col-md-3 label-control" for="projectinput2">Ride Fare</label>
+                                    <div class="col-md-9">{{this.user.currencySymbol}}&nbsp;&nbsp;{{payment.ride_fare}}
+                                    </div>
+                                </div>
+  
+                                <div class="form-group row">
+                                    <label class="col-md-3 label-control" for="projectinput3">User Name</label>
+                                    <div class="col-md-9">
+                                            <a [routerLink]="['/admin/management/view/',this.payment.user_id._id]" target="_blank"  >  {{this.payment.user_id.full_name}}</a>
+
+                                    </div>
+                                </div>
+  
+                                <div class="form-group row">
+                                    <label class="col-md-3 label-control" for="projectinput3">User Email</label>
+                                    <div class="col-md-9">
+                                        {{this.payment.user_id.email}}
+                                    </div>
+                                </div>
+
+                                <div class="form-group row">
+                                    <label class="col-md-3 label-control" for="projectinput3">Contact Number</label>
+                                    <div class="col-md-9">
+                                        {{this.payment.user_id.phone_number}}
+                                    </div>
+                                </div>
+
+                               
+
+
+                                <div class="form-group row last">
+                                    <label class="col-md-3 label-control" for="projectinput4">Pickup Location</label>
+                                    <div class="col-md-9">
+                                      {{this.payment.onride_id.pickup_location}}
+                                    </div>
+                                </div>
+                           
+                                <div class="form-group row last">
+                                    <label class="col-md-3 label-control" for="projectinput4">Drop Location</label>
+                                    <div class="col-md-9">
+                                      {{this.payment.onride_id.drop_location}}
+                                    </div>
+                                </div>
+  
+                               
+                           
+                            </div>
+  
+                      
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+  
+  
+  
+  </section> 
+  
+  
+  

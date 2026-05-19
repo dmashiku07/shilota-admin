@@ -1,0 +1,20 @@
+.server-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 1rem;
+  flex-wrap: wrap;
+}
+
+.server-pagination__summary {
+  font-size: 0.875rem;
+  color: #6b6f82;
+}
+
+.server-pagination__controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}

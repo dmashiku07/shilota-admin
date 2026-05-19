@@ -1,0 +1,78 @@
+<div class="profile-view pt-3">
+  <form [formGroup]="profileForm" class="form-profile" novalidate (ngSubmit)="onProfileSubmit(profileForm.value)">
+    <div class="">
+      <div class="">
+        <div class="hor_padding20">
+          <a routerLink="/">
+            <div class="back_arrow align-middle padding_left15" id="backLink"></div>
+          </a>
+        </div>
+        <h5 class="profile-heading pt-2">{{ 'Profile' | translate }}</h5>
+      </div>
+    </div>
+    <div class="hor_padding20  ride-review height-80vh e90vh">
+      <div class="row">
+        <div class="col-6">
+          <div class="profile_pic profile_pic_edit pos_rel margin_top10"
+            [ngStyle]="{'background-image': 'url(' + profilePhoto + ')'}">
+            <div class="input-file-container">
+              <input type="file" accept="image/*" class="input-file dis_none" id="my-file" name="logo"
+                (change)="onPicUpload($event)" #logo required>
+              <label tabindex="0" for="my-file" class="input-file-trigger"><i
+                  class="edit-icon fa fa-pencil edit-icon-pos"></i></label>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="profile-form form-design">
+        <div class="relPos upInputs">
+          <input type="text" formControlName='firstname' id="firstname" (keypress)="charOnly($event)" [maxLength]="30"
+            #firstname required />
+          <label class="upLabel mt-2 ">{{ 'Name' | translate }}</label>
+        </div>
+        <small class="text-danger"
+          *ngIf="profileForm.controls['firstname'].touched && !profileForm.controls['firstname'].valid">
+          {{ 'Name is required' | translate }}
+        </small>
+        <div class="border_bottom margin_top20 pos_rel">
+          <span class="font_size12">{{ 'Email' | translate }}</span>
+          <h6>{{ profileinfo?.email }}</h6>
+        </div>
+        <a routerLink="/change-password" class="clr_black">
+          <div class="relPos upInputs">
+            <input type="password" name="password" value="*******" required />
+            <label class="upLabel mt-2">{{ 'Password' | translate }}</label>
+          </div>
+        </a>
+        <div class="pos_rel">
+          <span class="font_size12">{{ 'Mobile' | translate }}</span>
+          <div class="mobileread">
+            <span class="border_bottom std-code">+ {{ profileinfo?.country_code }}</span>
+            <span class="mobile-number border_bottom">{{ profileinfo?.phone_number }}
+              <a routerLink="/change-phone-number" class="clr_black"><span
+                  class="font_size12 float-right">{{ 'Update' | translate }}</span></a>
+            </span>
+          </div>
+        </div>
+        
+        <a routerLink="/emergency-contacts" class="clr_black">
+          <div class="border_bottom margin_top20 pos_rel">
+            <!-- <span class="font_size12">SOS Alert</span> -->
+            <h6>{{ 'Emergency Contact' | translate }}</h6>
+            <div class="call_icon call_icon_pos"></div>
+          </div>
+        </a>
+      </div>
+    </div>
+    <div class="white-bg-btn btn_div col-12 col-sm-12 col-md-12 col-lg-12 col-xl-4 margin_top20">
+    <button type="submit" class="btn btn_border full_width">{{ 'Submit' | translate }}</button>
+    </div>
+  </form>
+  <ng-adsense *ngIf="admin_enable_ads == 'true'"
+        [adClient]=ad_unit_id
+        [adSlot]="63009781110"
+        [display]="'inline-block'"
+        [width]="320"
+        [height]="108"
+      ></ng-adsense>
+</div>

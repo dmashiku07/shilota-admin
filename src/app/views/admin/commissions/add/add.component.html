@@ -1,0 +1,82 @@
+<div class="row">
+  <div class="col-md-12">
+    <div class="card">
+      <div class="card-header">
+        <h4 class="card-title" id="basic-layout-form">Add Commission</h4>
+      </div>
+      <div class="card-body">
+        <div class="px-3">
+
+
+          <form class="form" [formGroup]="Form" novalidate (ngSubmit)="add(Form.value)">
+
+            <div class="col-md-12">
+              <div class="form-group">
+                <label for="projectinput3">Commission Price From</label>
+
+                <input type="number" class="form-control" formControlName="price_from" #price_from [min]="1">
+
+                <p *ngIf="Form.controls['price_from'].touched && !Form.controls['price_from'].valid" class="error-msg">
+                  <span *ngIf="Form.controls['price_from'].hasError('required') ">
+                    This field Must be in numeric
+                  </span>
+
+                </p>
+              </div>
+            </div>
+            <div class="col-md-12">
+              <div class="form-group">
+                <label for="projectinput3">Commission Price to</label>
+
+                <input type="number" class="form-control" formControlName="price_to" #price_to [min]="1">
+
+                <p *ngIf="Form.controls['price_to'].touched && !Form.controls['price_to'].valid" class="error-msg">
+                  <span *ngIf="Form.controls['price_to'].hasError('required') ">
+                    This field Must be in numeric
+                  </span>
+
+                </p>
+              </div>
+            </div>
+            <div class="col-md-12">
+              <div class="form-group ">
+                <label for="projectinput4">Commission (percentage)</label>
+                <div class="position-relative has-icon-left">
+                  <input type="number" formControlName="percentage" #percentage class="form-control" [min]="1" [max]="99">
+                  <div class="form-control-position">
+                    <i class="ft-percent"></i>
+                  </div>
+                </div>
+                <p *ngIf="Form.controls['percentage'].touched && !Form.controls['percentage'].valid" class="error-msg">
+                  <span *ngIf="Form.controls['percentage'].hasError('required') ">
+                    This field Must be in numeric
+                  </span>
+
+
+                </p>
+              </div>
+            </div>
+
+
+
+            <div class="form-actions">
+
+              <button type="submit" class="btn btn-raised btn-raised btn-primary">
+                <i class="fa fa-check-square-o"></i> Save
+              </button>
+            </div>
+
+
+
+
+
+
+
+          </form>
+        </div>
+      </div>
+
+
+    </div>
+  </div>
+</div>

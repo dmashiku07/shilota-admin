@@ -1,0 +1,37 @@
+<section class="overall_home">
+  <div class="help_banner">
+    <div class="container">
+      <div class="">
+        <h1 class="help_txt text-center">{{users.helppagesheader}}</h1>
+      </div>
+    </div>
+  </div>
+  <div class="help_content margin_top80 margin_bottom80">
+    <div class="container">
+      <div class="row">
+        <div class="col-12 col-sm-12 col-md-4 col-lg-3">
+          <button type="button" class="btn btn_default full_width primary_clr_bg help_mobile" (click)="isCollapsed = !isCollapsed"
+            [attr.aria-expanded]="!isCollapsed" aria-controls="collapseExample">
+            {{ 'Menu' | translate }}
+          </button>
+          <div class="help_menu collapse" id="collapseExample" [ngbCollapse]="isCollapsed">
+            <div class="">
+              <div class="help_div ">
+                <h6 routerLinkActive="active" *ngFor="let page of pages">
+                  <a [routerLink]="['/helpDriver', hyphenateUrlParams(page.title)]" class="clr_black">{{ page.title }}</a>
+                </h6>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="col-12 col-sm-12 col-md-8 col-lg-9">
+          <div class="help_details">
+            <h4> {{page.title}}</h4>
+            <div class="terms_details margin_top30" [innerHTML]="page.content">
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>

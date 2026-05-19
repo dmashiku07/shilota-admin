@@ -1,0 +1,96 @@
+<div class="profile-view pt-3">
+  <div class="">
+    <div class="">
+      <div class="hor_padding20">
+        <a routerLink="/">
+          <div class="back_arrow align-middle padding_left15" id="backLink"></div>
+        </a>
+      </div>
+      <h5 class="heading pt-2">{{ 'Create Account' | translate }}</h5>
+    </div>
+  </div>
+  <div class="hor_padding20 ride-review heightt-80vh e90vh">
+    <div [ngClass]="(!InfoIsValid)?'social_login margin_top30 visible':'social_login margin_top30 invisible'">
+      <h6 class="margin_bottom10 font_size13">{{ 'Sign up Using' | translate }}</h6>
+      <div class="row justify-content-center">
+        <div id="googleSignUp"></div> 
+     </div>
+    </div>
+    <div
+      [ngClass]="(!InfoIsValid)?'or margin_top30 margin_bottom20 visible':'or margin_top30 margin_bottom20 invisible'">
+      <span>{{ 'or' | translate }}</span></div>
+    <div [ngClass]="(!InfoIsValid)?'profile-form form-design visible':'profile-form form-design invisible'">
+      <form [formGroup]="signupForm" novalidate (ngSubmit)="onSignupSubmit(signupForm.value)">
+        <div class="relPos upInputs">
+          <input type="text" formControlName='firstname' id="firstname" (keypress)="charOnly($event)"
+            [(ngModel)]="social_name" [maxLength]="30" #firstname required />
+          <label class="upLabel mt-2">{{ 'Name' | translate }}</label>
+        </div>
+        <small class="text-danger"
+          *ngIf="signupForm.controls['firstname'].touched && signupForm.controls['firstname'].hasError('required')">
+          {{ 'Name is required' | translate }}
+        </small>
+        <small class="text-danger"
+          *ngIf="signupForm.controls['firstname'].touched && signupForm.controls['firstname'].hasError('minlength')">
+          {{ 'Name must be at least 3 characters long' | translate }}
+        </small>
+        <div [ngClass]="(socialsignin)?'relPos upInputs invisible':'relPos upInputs visible'">
+          <input type="text" formControlName='username' autocomplete="off" id="username" [(ngModel)]="social_email"
+            #username required />
+          <label class="upLabel mt-2">{{ 'Email' | translate }}</label>
+        </div>
+        <div
+          [ngClass]="(socialsignin)?'border_bottom margin_top20 pos_rel visible':'border_bottom margin_top20 pos_rel invisible'">
+          <span class="font_size12">{{ 'Email' | translate }}</span>
+          <h6>{{ social_email }}</h6>
+          <input type="hidden" formControlName='username' id="username" [(ngModel)]="social_email" #username />
+        </div>
+        <small class="text-danger"
+          *ngIf="signupForm.controls['username'].touched && signupForm.controls['username'].hasError('required')">
+          {{ 'Email is required' | translate }}
+        </small>
+        <small class="text-danger"
+          *ngIf="signupForm.controls['username'].touched && !signupForm.controls['username'].hasError('required') && signupForm.controls['username'].hasError('email')">
+          {{ 'Valid Email is required' | translate }}
+        </small>
+        <div class="relPos upInputs">
+          <input type="password" formControlName='password' id="password" [maxLength]="30" #password required />
+          <label class="upLabel mt-2">{{ 'Password' | translate }}</label>
+        </div>
+        <small class="text-danger"
+          *ngIf="signupForm.controls['password'].touched && signupForm.controls['password'].hasError('required')">
+          {{ 'Password is required' | translate }}
+        </small>
+        <small class="text-danger"
+          *ngIf="signupForm.controls['password'].touched && signupForm.controls['password'].hasError('minlength')">
+          {{ 'Password must be at least 6 characters long' | translate }}
+        </small>
+        <div class="relPos upInputs">
+          <input type="password" formControlName='cpassword' id="cpassword" [maxLength]="30" #cpassword required />
+          <label class="upLabel mt-2">{{ 'Re-enter Password' | translate }}</label>
+        </div>
+        <small class="text-danger"
+          *ngIf="signupForm.controls['cpassword'].touched && signupForm.controls['cpassword'].hasError('required')">
+          {{ 'Re-enter Password is required' | translate }}
+        </small>
+        <small class="text-danger"
+          *ngIf="signupForm.controls['cpassword'].touched && signupForm.controls['cpassword'].hasError('minlength')">
+          {{ 'Re-enter Password must be at least 6 characters long' | translate }}
+        </small>
+        <small class="text-danger"
+          *ngIf="signupForm.controls['cpassword'].touched && signupForm.hasError('mismatchedPasswords') && !signupForm.controls['cpassword'].hasError('required') && !signupForm.controls['cpassword'].hasError('minlength')">
+          {{ 'Password and Re-enter password does not match' | translate }}
+        </small>
+        <div class="">
+          <div class="margin_top30">
+            <input type="submit" class="btn btn_default full_width primary_clr_bg" value="{{ 'Sign up' | translate }}">
+            <div class="text-center margin_top10">{{ 'Already a User?' | translate }} <a routerLink="/signin" class="d-inline-block">{{ 'Sign in' | translate }}</a></div>
+          </div>
+        </div>
+      </form>
+    </div>
+    <div [ngClass]="(InfoIsValid)?'profile-form form-design visible':'profile-form form-design invisible'">
+      <div class="pos_rel form-group change-mobile-numbertxt"><div id="firebaseui-auth-container" class="auth-containter"></div></div>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,30 @@
+{
+  "compileOnSave": false,
+  "compilerOptions": {
+    "downlevelIteration": true,
+    "importHelpers": true,
+    "outDir": "./dist/out-tsc",
+    "baseUrl": "src",
+    "sourceMap": true,
+    "declaration": false,
+    "moduleResolution": "bundler",
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "target": "es2022",
+    "types": [
+      "googlemaps"
+    ],
+    "typeRoots": [
+      "node_modules/@types",
+    ],
+    "skipLibCheck": true,
+    "lib": [
+      "es2022",
+      "dom"
+    ],
+    "module": "esnext"
+  },
+  "angularCompilerOptions": {
+    "preserveWhitespaces": false
+  }
+}

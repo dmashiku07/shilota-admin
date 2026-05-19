@@ -1,0 +1,92 @@
+<div class="main-review ride-view pt-3">
+  <div class="border_bottom">
+    <a routerLink="/your-rides">
+      <div class="back_arrow cursor_ptr align-middle margin_left15" id=""></div>
+    </a>
+    <h5 class="hor_padding20 pt-3"> {{ rideDetails.drop_time * 1000 | date:'EEE, MMMM d, h:mm a':"GMT" }} <br><span
+        class="font_size16">{{ rideDetails.vehicle_no}}</span></h5>
+  </div>
+  <div class="ride-review pt-3 height-70vh">
+    <div class="ride-review-map">
+      <agm-map>
+        <agm-direction [origin]="origin" [destination]="destination">
+        </agm-direction>
+      </agm-map>
+    </div>
+    <div class="ride-list-review">
+      <div class="ride-list list-profile-ride full_width hor_padding20">
+        <div class="profile_pic pos_rel margin_right10" [style.background-image]="'url(' + this.rideDetails.driver_image + ')'"></div>
+        <div class="rider-name">
+          <div class="ride-prf-name driver_name font_size16"><span
+              class="align-middle">{{ rideDetails.driver_name }}</span></div>
+              <span class="write-review float-right" *ngIf="this.rideDetails.isreview ==='false'"> 
+                  <a (click)="reviewaride(ride_id);" >{{ 'Write a Review' | translate }}</a>
+                </span>
+        </div>
+        <div class="full_width height_25" *ngIf="this.rideDetails.isreview ==='true'">
+          <a (click)="reviewaride(ride_id);" style="color: #292929;"><small class="">{{ 'You Rated' | translate }} </small>
+            <div class="rating-stars constatnt-rate">
+              <star-rating value="{{this.rating}}" checkedcolor="#f04e29" uncheckedcolor="#cdcdcd" size="24px"
+                readonly="true"></star-rating>
+            </div>
+          </a>
+        </div>
+      </div>
+      <div class="ride-list full_width hor_padding20">
+        <div class="rider-listing-view"><span class="car-type float-left" [ngStyle]="{'background': 'url(' + this.rideDetails.category_image + ') no-repeat center'}"></span><span
+            class="ride-tab font_size16">{{ rideDetails.category_name }}
+          </span></div>
+      </div>
+      <div class="ride-list full_width hor_padding20">
+        <div class="rider-listing-view"><span class="car-rent-price float-left"></span><span
+            class="ride-tab font_size16">{{ this.rideDetails.distance }} KM</span></div>
+      </div>
+      <div class="ride-list full_width hor_padding20 padding_bottom0">
+        <div class="row">
+          <div class="time-sesion">
+            <div class="ride-time">
+              <div class="animated-background-xs"></div>
+              <span class="ride-start">{{ rideDetails.pickup_time * 1000 | date:"h:mm a":'GMT' }} </span>
+              <span class="ride-end">{{ rideDetails.drop_time * 1000 | date:"h:mm a":'GMT' }}
+                <div class="animated-background-xs"></div>
+              </span>
+            </div>
+            <div class="ride-points">
+              <span class="point-start"></span>
+              <span class="point-distance"></span>
+              <span class="point-end"></span>
+            </div>
+          </div>
+          <div class="place-sesion">
+            <div class="pickup-area margin_bottom15">
+              <p class="m-0"><small>{{ 'PICK UP FROM' | translate }}</small></p>
+              <p class="extra_hide_twolines">{{ rideDetails.pickup_location }}</p>
+            </div>
+            <div class="pickup-area margin_bottom15">
+              <p class="m-0"><small>{{ 'DROP LOCATION' | translate }}</small></p>
+              <p class="extra_hide_twolines">{{ rideDetails.drop_location }}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="ride-list full_width hor_padding20">
+        <h5 class="margin_bottom20">{{ 'Bill Details' | translate }}</h5>
+        <div class="rider-listing-view padding_top20 padding_bottom20"><span class="">{{ 'Ride Fare' | translate }}</span><span
+            class="float-right"> {{this.currencySymbol}}‎{{ rideDetails.ride_fare }}</span></div>
+        <div class="rider-listing-view border_bottom padding_top20 padding_bottom20"><span class="">{{ 'Tax' | translate }}</span><span
+            class="float-right"> {{this.currencySymbol}}‎{{ rideDetails.ride_tax }}</span></div>
+        <div class="rider-listing-view padding_top20"><span class="">{{ 'Total Bill' | translate }}</span><span
+            class="float-right"> {{this.currencySymbol}}‎{{ rideDetails.ride_total }}</span></div>
+      </div>
+      <div class="ride-list full_width hor_padding20">
+        <h5 class="margin_bottom20">{{ 'Payment' | translate }}</h5>
+        <div class="rider-listing-view"><span class="">{{ rideDetails.payment_type | translate }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class=" btn_div col-12 col-sm-12 col-md-12 col-lg-12 col-xl-4 hor_padding20">
+    <button class="btn btn_default full_width primary_clr_bg" (click)="rideAgain();" *ngIf="this.rideDetails.ispayment ==='true'">{{ 'Ride Again' | translate }}</button>
+    <button class="btn btn_default full_width primary_clr_bg" (click)="payRide();" *ngIf="this.rideDetails.ispayment ==='false'">{{ 'Pay' | translate }}</button>
+  </div>
+</div>

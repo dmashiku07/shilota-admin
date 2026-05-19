@@ -1,0 +1,201 @@
+<section id="striped-row-form-layouts">
+  <div class="row">
+    <div class="col-md-12">
+      <div class="card">
+        <div class="card-header">
+          <button (click)="goBack()" class="float-right btn btn-raised btn-dark btn-sm">
+            <i class="fa fa-angle-double-left"></i>&nbsp;back
+          </button>
+          <h4 class="card-title" id="striped-row-layout-basic">Vehicle Information</h4>
+        </div>
+        <div class="card-body">
+          <div class="px-3">
+            <form *ngIf="Form" class="form form-horizontal striped-rows form-bordered" [formGroup]="Form" novalidate (ngSubmit)="update(Form.value)">
+              <div class="form-body">
+                <div class="form-group row" *ngIf="loading">
+                  <div class="col-md-12 text-center">
+                    <i class="fa fa-spinner fa-spin mr-2"></i>
+                    Loading vehicle details...
+                  </div>
+                </div>
+
+                <ng-container *ngIf="!loading">
+                  <div class="form-group row">
+                    <label class="col-md-3 label-control" for="projectinput2">Vehicle Name</label>
+                    <div class="col-md-9">{{ details?.vehicle_name || '-' }}</div>
+                  </div>
+
+                  <div class="form-group row">
+                    <label class="col-md-3 label-control" for="projectinput1">Vehicle Owner Name</label>
+                    <div class="col-md-9">
+                      <a *ngIf="details?.user_id?._id" [routerLink]="['/admin/management/details', details.user_id._id]" target="_blank">
+                        {{ details?.user_id?.full_name }}
+                      </a>
+                      <span *ngIf="!details?.user_id?._id">{{ details?.user_id?.full_name || '-' }}</span>
+                    </div>
+                  </div>
+
+                  <div class="form-group row">
+                    <label class="col-md-3 label-control" for="projectinput3">Vehicle Number</label>
+                    <div class="col-md-9">{{ details?.vehicle_number || '-' }}</div>
+                  </div>
+
+                  <div class="form-group row last">
+                    <label class="col-md-3 label-control" for="projectinput4">Body Type</label>
+                    <div class="col-md-9">{{ details?.body_type || '-' }}</div>
+                  </div>
+
+                  <div class="form-group row last">
+                    <label class="col-md-3 label-control" for="projectinput4">Amenities</label>
+                    <div class="col-md-9">
+                      <p *ngFor="let amenitie of details?.amenities">{{ amenitie?.name }}</p>
+                      <span *ngIf="!details?.amenities?.length">-</span>
+                    </div>
+                  </div>
+
+                  <div class="form-group row last">
+                    <label class="col-md-3 label-control" for="projectinput4">Available Seats</label>
+                    <div class="col-md-9">{{ details?.available_seats || '-' }}</div>
+                  </div>
+
+                  <div class="form-group row last">
+                    <label class="col-md-3 label-control" for="projectinput4">Vehicle Book Date</label>
+                    <div class="col-md-9">{{ details?.book_date || '-' }}</div>
+                  </div>
+
+                  <div class="form-group row last">
+                    <label class="col-md-3 label-control" for="projectinput4">Vehicle Book Number</label>
+                    <div class="col-md-9">{{ details?.book_no || '-' }}</div>
+                  </div>
+
+                  <div class="form-group row last">
+                    <label class="col-md-3 label-control" for="projectinput4">Insurance Date</label>
+                    <div class="col-md-9">{{ details?.insurance_date || '-' }}</div>
+                  </div>
+
+                  <div class="form-group row last">
+                    <label class="col-md-3 label-control" for="projectinput4">Insurance Number</label>
+                    <div class="col-md-9">{{ details?.insurance_no || '-' }}</div>
+                  </div>
+
+                  <div class="form-group row last">
+                    <label class="col-md-3 label-control" for="projectinput4">Licence Date</label>
+                    <div class="col-md-9">{{ details?.licence_date || '-' }}</div>
+                  </div>
+
+                  <div class="form-group row last">
+                    <label class="col-md-3 label-control" for="projectinput4">Licence Number</label>
+                    <div class="col-md-9">{{ details?.licence_no || '-' }}</div>
+                  </div>
+
+                  <div class="form-group row last">
+                    <label class="col-md-3 label-control" for="projectinput4">Insurance Document</label>
+                    <div class="col-md-9">
+                      Insurance Document
+                      <a
+                        *ngIf="details?.insurancedoc"
+                        [href]="url + '/assets/media/drivers/' + details.insurancedoc"
+                        target="_blank"
+                        class="btn btn-round btn-raised btn-icon btn-info mr-1"
+                        data-toggle="tooltip"
+                        data-placement="bottom"
+                        title="Download"
+                      >
+                        <i class="fa fa-download" aria-hidden="true"></i>
+                      </a>
+                    </div>
+                  </div>
+
+                  <div class="form-group row last">
+                    <label class="col-md-3 label-control" for="projectinput4">Book Document</label>
+                    <div class="col-md-9">
+                      Book Document
+                      <a
+                        *ngIf="details?.bookdoc"
+                        [href]="url + '/assets/media/drivers/' + details.bookdoc"
+                        target="_blank"
+                        class="btn btn-round btn-raised btn-icon btn-info mr-1"
+                        data-toggle="tooltip"
+                        data-placement="bottom"
+                        title="Download"
+                      >
+                        <i class="fa fa-download" aria-hidden="true"></i>
+                      </a>
+                    </div>
+                  </div>
+
+                  <div class="form-group row last">
+                    <label class="col-md-3 label-control" for="projectinput4">License Document</label>
+                    <div class="col-md-9">
+                      License Document
+                      <a
+                        *ngIf="details?.licensedoc"
+                        [href]="url + '/assets/media/drivers/' + details.licensedoc"
+                        target="_blank"
+                        class="btn btn-round btn-raised btn-icon btn-info mr-1"
+                        data-toggle="tooltip"
+                        data-placement="bottom"
+                        title="Download"
+                      >
+                        <i class="fa fa-download" aria-hidden="true"></i>
+                      </a>
+                    </div>
+                  </div>
+
+                  <div class="form-group row last">
+                    <label class="col-md-3 label-control" for="projectinput4">Choose Category</label>
+                    <div class="col-md-9">
+                      <select formControlName="category" #category>
+                        <option *ngFor="let option of options" [value]="option._id">{{ option.category_name }}</option>
+                      </select>
+                      <p *ngIf="Form.controls['category'].touched && !Form.controls['category'].valid" class="error-msg">
+                        <span *ngIf="Form.controls['category'].hasError('required')">Category required</span>
+                      </p>
+                    </div>
+                  </div>
+
+                  <div class="form-group row" *ngIf="inspectiontime >= currenttime && details?.user_id?.inspectionon">
+                    <label class="col-md-3 label-control" for="projectinput1">Inspection Date</label>
+                    <div class="col-md-9">{{ details?.user_id?.inspectionon | date:'dd/MM/yyyy' }}</div>
+                    <input type="hidden" formControlName="datepicker" class="form-control">
+                  </div>
+
+                  <div class="form-group row" *ngIf="currenttime > inspectiontime && details?.user_id?.inspectionon">
+                    <label class="col-md-3 label-control" for="projectinput1">Inspection date</label>
+                    <div class="col-md-9">
+                      <span class="badge badge-danger">Inspection out of date</span>
+                      <input type="hidden" formControlName="datepicker" class="form-control">
+                    </div>
+                  </div>
+
+                  <div class="form-group row last">
+                    <label class="col-md-3 label-control" for="projectinput4">Vehicle Status</label>
+                    <div class="col-md-9">
+                      <select formControlName="status" #status>
+                        <option class="select2-dropdown" value="1">Approved</option>
+                        <option class="select2-dropdown" value="0">Rejected</option>
+                      </select>
+                      <p *ngIf="Form.controls['status'].touched && !Form.controls['status'].valid" class="error-msg">
+                        <span *ngIf="Form.controls['status'].hasError('required')">Vehicle status required</span>
+                      </p>
+                    </div>
+                  </div>
+
+                  <input type="hidden" formControlName="user_id">
+
+                  <div class="form-actions">
+                    <button type="submit" class="btn btn-raised btn-primary" [disabled]="isLoading">
+                      <i *ngIf="!isLoading" class="fa fa-check-square-o"></i>
+                      <i *ngIf="isLoading" class="fa fa-spinner fa-spin"></i>
+                      {{ isLoading ? 'Saving...' : 'Save' }}
+                    </button>
+                  </div>
+                </ng-container>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>

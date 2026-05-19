@@ -1,0 +1,65 @@
+<div class="invite-earn-view pt-3">
+  <h5 class="hor_padding15 pt-0">
+    <a [routerLink]="['/index']">
+      <div class="back_arrow align-middle margin_right10" id="backLink"></div>
+    </a>{{ 'Invite Friends' | translate }}
+  </h5>
+  <div class="card">
+    <div class="heading padding_bottom10">
+      <ul class="nav nav-tabs card-header-tabs" id="outerTab" role="tablist">
+        <li class="nav-item tab_heading" style="width: 100%;">
+          <a class="nav-link active" data-toggle="tab" href="#tabc" aria-controls="tabc" role="tab"
+            aria-expanded="true">
+            <h5>{{ 'Invite' | translate }}</h5>
+          </a>
+        </li>
+      </ul>
+    </div>
+    <div class="card-body tab-content pr-0 pl-0 pt-0">
+      <div class="tab-pane active" id="tabc" role="tabpanel">
+        <div class="">
+          <div class="invite-earn ride-review d-table full_width height-80vh e90vh">
+            <div class="hor_padding20 d-table-cell align-middle">
+              <div class="text-center">
+                <div class="invite_icon invite-img"></div>
+              </div>
+              <div class="margin_top20 hor_padding20">
+                <p class="text-center">{{ 'Share the app link externally to make your friends join' | translate }}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="btn_div col-12 col-sm-12 col-md-12 col-lg-12 col-xl-4 hor_padding20">
+          <button type="button" class="btn btn_default full_width primary_clr_bg" (click)="open(content);">{{ 'Invite your friends' | translate }}</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<ng-template #content let-modal>
+  <div class="modal-header">
+    <h4 class="modal-title" id="modal-basic-title">{{ 'Invite Friends' | translate }}</h4>
+    <button type="button" class="close" aria-label="Close" (click)="modal.dismiss('Cross click')">
+      <span aria-hidden="true">&times;</span>
+    </button>
+  </div>
+  <div class="modal-body">
+    <div class="social_icons margin_top30 text-center">
+      <!-- <a class="pl-0" (click)="shareWithFb();"><i class="fa fa-facebook" aria-hidden="true"></i></a> -->
+      <a (click)="shareWithTwitter();"><i class="fa fa-twitter" aria-hidden="true" title="{{ 'Share on Twitter' | translate }}"></i>
+      </a>
+      <a (click)="shareWithLinkedIn();"><i class="fa fa-linkedin" aria-hidden="true"></i></a>
+    </div>
+  </div>
+  <div class="modal-footer">
+    <p class="text-center">{{ 'By clicking the icon,you can share the app link with friends to make them join' | translate }}</p>
+  </div>
+</ng-template>
+<ng-adsense *ngIf="admin_enable_ads == 'true'"
+        [adClient]=ad_unit_id
+        [adSlot]="63009781110"
+        [display]="'inline-block'"
+        [width]="320"
+        [height]="108"
+      ></ng-adsense>

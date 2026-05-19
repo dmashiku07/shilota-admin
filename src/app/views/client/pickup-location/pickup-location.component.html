@@ -1,0 +1,37 @@
+<div class="pt-3">
+  <div class="hor_padding15">
+    <a routerLink="/search">
+      <div class="back_arrow align-middle" id="backLink"></div>
+    </a>
+  </div>
+  <h5 class="heading pt-2">{{ 'Pickup Location' | translate }}</h5>
+</div>
+<form [formGroup]="pickupForm" novalidate (ngSubmit)="confirmLocation(pickupForm.value)">
+  <div class=" hor_padding15">
+    <div class="current_location1">
+      <div class="d-flex pos_rel">
+        <input type="text" (keydown.enter)="$event.preventDefault()" (keyup)="clearPickup();" name="pickup_field"
+          formControlName="pickup_field" [(ngModel)]="pickup_location" autocorrect="off" autocapitalize="off"
+          spellcheck="off" class="enter_current padding_bottom10 login_form" placeholder="{{ 'PICKUP FROM' | translate }}" #pickup_field>
+
+        <div class="align-self-end"><img class="cursor-pointer" src="assets/images/gps.png"
+            (click)="fetchMyLocation();"></div>
+      </div>
+      <small class="text-danger"
+        *ngIf="pickupForm.controls['pickup_field'].touched && !pickupForm.controls['pickup_field'].valid">
+        {{ 'Pickup Location is required' | translate }}
+      </small>
+      <div>
+        <div class="height-75vh pt-3" width="600">
+          <agm-map [latitude]="latitude" [longitude]="longitude" [zoom]="zoom" [usePanning]="true">
+            <agm-marker [latitude]="latitude" [longitude]="longitude" [markerDraggable]="true"
+              (dragEnd)="markerDragEnd($event)"></agm-marker>
+          </agm-map>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="hor_padding15 btn_div col-12 col-sm-12 col-md-12 col-lg-12 col-xl-4" id="btn_bottom">
+    <button type="submit" [disabled]="pickupSelected" class="btn btn_default full_width primary_clr_bg">{{ 'Confirm Location' | translate }}</button>
+  </div>
+</form>

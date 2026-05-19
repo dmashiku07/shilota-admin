@@ -1,0 +1,91 @@
+<div class="main-review ride-view pt-3">
+  <div class="border_bottom">
+    <a routerLink="/your-rides">
+      <div class="back_arrow cursor_ptr align-middle margin_left15" id=""></div>
+    </a>
+    <h5 class="hor_padding20 pt-3"> {{ this.rideTime * 1000 | date:"EEE, MMMM d, h:mm a":'GMT' }} <br>
+      <span class="font_size16" *ngIf="this.rideDetails.ridestatus ==='cancelled'">{{ rideDetails.vehicle_no}}</span>
+    </h5>
+  </div>
+  <div class="ride-review pt-3 height-70vh">
+    <div class="ride-review-map">
+      <agm-map>
+        <agm-direction [origin]="origin" [destination]="destination">
+        </agm-direction>
+      </agm-map>
+    </div>
+    <div class="ride-list-review">
+      <!-- <div class="ride-list list-profile-ride full_width hor_padding20"
+        *ngIf="this.rideDetails.ridestatus ==='cancelled'">
+        <div class="profile_pic pos_rel margin_right10"></div>
+        <div class="rider-name">
+          <div class="ride-prf-name driver_name font_size16"><span
+              class="align-middle">{{ this.rideDetails.driver_id.full_name }}</span></div>
+        </div>
+      </div> -->
+      <div class="ride-list full_width hor_padding20">
+        <div class="rider-listing-view"><span class="car-type float-left" [ngStyle]="{'background': 'url(' + this.categoryImage + ') no-repeat center'}"></span><span
+            class="ride-tab font_size16">{{ this.rideDetails.category_id.category_name }}
+          </span></div>
+      </div>
+      <div class="ride-list full_width hor_padding20">
+        <div class="rider-listing-view"><span class="car-rent-price float-left"></span><span
+            class="ride-tab font_size16">{{ this.rideDetails.ridedistance }} KM</span>
+        </div>
+      </div>
+      <div class="ride-list full_width hor_padding20 padding_bottom0">
+        <div class="row">
+          <div class="time-sesion">
+            <div class="ride-time">
+              <div class="animated-background-xs"></div>
+              <span class="ride-start"></span>
+              <span class="ride-end">
+                <div class="animated-background-xs"></div>
+              </span>
+            </div>
+            <div class="ride-points">
+              <span class="point-start"></span>
+              <span class="point-distance"></span>
+              <span class="point-end"></span>
+            </div>
+          </div>
+          <div class="place-sesion">
+            <div class="pickup-area margin_bottom15">
+              <p class="m-0"><small>{{ 'PICK UP FROM' | translate }}</small></p>
+              <p class="extra_hide_twolines">{{ this.rideDetails.pickup_location }}</p>
+            </div>
+            <div class="pickup-area margin_bottom15">
+              <p class="m-0"><small>{{ 'DROP LOCATION' | translate }}</small></p>
+              <p class="extra_hide_twolines">{{ this.rideDetails.drop_location }}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="ride-list full_width hor_padding20">
+        <h5 class="margin_bottom20">{{ 'Bill Details' | translate }}</h5>
+        <div class="rider-listing-view padding_top20 padding_bottom20"><span class=""> {{ 'Ride Fare' | translate }}</span><span
+            class="float-right"> {{this.currencySymbol}}{{ this.rideDetails.baseprice }}</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="btn_div col-12 col-sm-12 col-md-12 col-lg-12 col-xl-4 hor_padding20">
+    <button class="btn btn_default full_width primary_clr_bg" (click)="rideAgain();">{{ 'Ride Again' | translate }}</button>
+  </div>
+  <div class="btn_div col-12 col-sm-12 col-md-12 col-lg-12 col-xl-4 hor_padding20" *ngIf="this.rideDetails.ridestatus ==='scheduled'">
+    <button (click)="open(content);" class="btn btn_default full_width primary_clr_bg">{{ 'Cancel' | translate }}</button>
+  </div>
+</div>
+<ng-template #content let-modal>
+  <div class="modal-header">
+    <h4 class="modal-title" id="modal-basic-title">{{ 'Ride Cancellation' | translate }}</h4>
+    <button type="button" class="close" aria-label="Close" (click)="modal.dismiss('Cross click')">
+      <span aria-hidden="true">&times;</span>
+    </button>
+  </div>
+  <div class="modal-body">
+    <p>{{ 'Are you sure want to cancel this ride?' | translate }}</p>
+  </div>
+  <div class="modal-footer"><button class="btn btn-outline-secondary" (click)="modal.dismiss('Cross click')"
+      type="button">{{ 'Cancel' | translate }}</button><button class="btn btn-primary" type="button" (click)="confirmCancel();">{{ 'Ok' | translate }}</button>
+  </div>
+</ng-template>

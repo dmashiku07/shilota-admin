@@ -1,0 +1,92 @@
+<div class="row">
+  <div class="col-md-12">
+    <div class="card">
+      <div class="card-header">
+        <h4 class="card-title" id="basic-layout-form">App store Setting</h4>
+      </div>
+      <div class="card-body">
+        <div class="px-3">
+
+
+          <div *ngIf="loading" class="text-center py-4">
+            <i class="fa fa-spinner fa-spin mr-2"></i>
+            Loading app settings...
+          </div>
+          <form *ngIf="!loading && userForm" class="form" [formGroup]="userForm" novalidate (ngSubmit)="updateApp(userForm.value)">
+            <div class="col-md-12">
+              <div class="form-group">
+                <label for="projectinput3">IOS User App URL</label>
+                <input type="text" class="form-control" formControlName="iosUser" #iosUser>
+                <p *ngIf="userForm.controls['iosUser'].touched && !userForm.controls['iosUser'].valid" class="error-msg">
+                  <span *ngIf="userForm.controls['iosUser'].hasError('required') ">
+                    IOS user app URL is required
+                  </span>
+
+
+                </p>
+
+              </div>
+            </div>
+
+            <div class="col-md-12">
+              <div class="form-group">
+                <label for="projectinput4">IOS Driver App URL</label>
+                <input type="text" formControlName="iosDriver" #iosDriver class="form-control">
+                <p *ngIf="userForm.controls['iosDriver'].touched && !userForm.controls['iosDriver'].valid" class="error-msg">
+                  <span *ngIf="userForm.controls['iosDriver'].hasError('required') ">
+                    IOS driver app URL is required
+                  </span>
+
+
+                </p>
+              </div>
+            </div>
+
+
+            <div class="col-md-12">
+              <div class="form-group">
+                <label for="projectinput4">Android User App URL</label>
+                <input type="text" formControlName="androidUser" #androidUser class="form-control">
+                <p *ngIf="userForm.controls['androidUser'].touched && !userForm.controls['androidUser'].valid" class="error-msg">
+                  <span *ngIf="userForm.controls['androidUser'].hasError('required') ">
+                    Android User app URL is required
+                  </span>
+
+
+                </p>
+              </div>
+            </div>
+
+
+            <div class="col-md-12">
+              <div class="form-group">
+                <label for="projectinput4">Android Driver App URL</label>
+                <input type="text" formControlName="androidDriver" #androidDriver
+                  class="form-control">
+                <p *ngIf="userForm.controls['androidUser'].touched && !userForm.controls['androidUser'].valid" class="error-msg">
+                  <span *ngIf="userForm.controls['androidUser'].hasError('required') ">
+                    Android Driver app URL is required
+                  </span>
+
+
+                </p>
+              </div>
+            </div>
+
+
+
+            <div class="form-actions">
+              <button type="submit" class="btn btn-raised btn-raised btn-primary" [disabled]="isLoading">
+                <i *ngIf="!isLoading" class="fa fa-check-square-o"></i>
+                <i *ngIf="isLoading" class="fa fa-spinner fa-spin"></i>
+                {{ isLoading ? 'Saving...' : 'Save' }}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+
+    </div>
+  </div>
+</div>

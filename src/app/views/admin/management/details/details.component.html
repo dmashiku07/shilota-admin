@@ -1,0 +1,157 @@
+<section id="striped-row-form-layouts">
+  <div class="row">
+    <div class="col-md-12">
+      <div class="card">
+        <div class="card-header">
+          <div class="actions float-right">
+            <a [routerLink]="['/admin/management/ridehistory',user._id]" *ngIf="rides != 0">
+              <span class="btn btn-raised btn-info btn-sm">View Ride history</span>
+            </a>
+            <a [routerLink]="['/admin/management/vehicledetails',user.vehicle_id]">
+              <span class="btn btn-raised btn-danger btn-sm ">View Vehicle Info</span>
+            </a>
+            <button (click)="goBack()" class="btn btn-raised btn-dark btn-sm ">
+              <i class="fa fa-angle-double-left"></i>&nbsp;back</button>
+          </div>
+          <h4 class="card-title" id="striped-row-layout-basic">Driver Information</h4>
+        </div>
+        <div class="card-body">
+          <div class="px-3">
+            <div class="text-center py-4" *ngIf="loading">
+              <i class="fa fa-spinner fa-spin mr-2"></i>
+              Loading driver details...
+            </div>
+            <form class="form form-horizontal striped-rows form-bordered">
+              <div class="form-body" *ngIf="!loading">
+                <div class="form-group row">
+                  <label class="col-md-3 label-control" for="projectinput1">Name</label>
+                  <div class="col-md-9">
+                    {{user.full_name}}
+                  </div>
+                </div>
+                <div class="form-group row">
+                  <label class="col-md-3 label-control" for="projectinput1">Category</label>
+                  <div class="col-md-9">
+                    <span _ngcontent-c9="" class="btn mr-1 mb-1 btn-outline-dark btn-sm" *ngIf="user.category_id;">{{user.category_id.category_name}}</span>
+                  </div>
+                </div>
+                <div class="form-group row">
+                  <label class="col-md-3 label-control" for="projectinput2">Email</label>
+                  <div class="col-md-9"> {{user.email}}
+                  </div>
+                </div>
+                <div class="form-group row">
+                  <label class="col-md-3 label-control" for="projectinput3">Phone Number</label>
+                  <div class="col-md-9">
+                    {{user.phone_number}}
+                  </div>
+                </div>
+                <div class="form-group row last">
+                  <label class="col-md-3 label-control" for="projectinput4">Country Code</label>
+                  <div class="col-md-9">
+                    {{user.country_code}}
+                  </div>
+                </div>
+                <div class="form-group row last">
+                  <label class="col-md-3 label-control" for="projectinput4">Latitude</label>
+                  <div class="col-md-9">
+                    {{user.lat}}
+                  </div>
+                </div>
+                <div class="form-group row last">
+                  <label class="col-md-3 label-control" for="projectinput4">Longitude</label>
+                  <div class="col-md-9">
+                    {{user.lon}}
+                  </div>
+                </div>
+                <div class="form-group row last">
+                  <label class="col-md-3 label-control" for="projectinput4">Location</label>
+                  <div class="col-md-9">
+                    {{user.location}}
+                  </div>
+                </div>
+                <div class="form-group row last">
+                  <label class="col-md-3 label-control" for="projectinput4">Vehicle Inspection</label>
+                  <div class="col-md-9">
+                    {{user.vehicle_inspection}}
+                  </div>
+                </div>
+                <div class="form-group row last">
+                  <label class="col-md-3 label-control" for="projectinput4">Security Deposit</label>
+                  <div class="col-md-9">
+                    {{user.security_deposit}}
+                  </div>
+                </div>
+                <div class="form-group row last">
+                  <label class="col-md-3 label-control" for="projectinput4">Vehicle Details</label>
+                  <div class="col-md-9">
+                    {{user.vehicle_details}}
+                  </div>
+                </div>
+                <div class="form-group row last">
+                  <label class="col-md-3 label-control" for="projectinput4">Payment Details</label>
+                  <div class="col-md-9">
+                    {{user.payment_details}}
+                  </div>
+                </div>
+                <div class="form-group row last">
+                  <label class="col-md-3 label-control" for="projectinput4">Instant Location</label>
+                  <div class="col-md-9">
+                    {{user.instant_location}}
+                  </div>
+                </div>
+                <div class="form-group row last">
+                  <label class="col-md-3 label-control" for="projectinput4">Location</label>
+                  <div class="col-md-9">
+                    {{user.loc}}
+                  </div>
+                </div>
+                <div class="form-group row last">
+                  <label class="col-md-3 label-control" for="projectinput4">Status</label>
+                  <div class="col-md-9">
+                    <button class="btn btn-raised btn-success" *ngIf="user.approval==1">
+                      Active</button>
+                    <button class="btn btn-raised btn-danger" *ngIf="user.approval==0">
+                      Deactive</button>
+                  </div>
+                </div>
+                <h4 class="form-section" *ngIf="user.payment_account && user.payment_account.type=='bankaccount'">
+                  <i class="ft-file-text"></i> Bank Account</h4>
+                <div class="form-group row last" *ngIf="user.payment_account &&  user.payment_account.type=='bankaccount'">
+                  <label class="col-md-3 label-control" for="projectinput4">Bank Name</label>
+                  <div class="col-md-9">
+                    {{user.payment_account.name}}
+                  </div>
+                </div>
+                <div class="form-group row last" *ngIf="user.payment_account &&  user.payment_account.type=='bankaccount'">
+                  <label class="col-md-3 label-control" for="projectinput4">Bank Address</label>
+                  <div class="col-md-9">
+                    {{user.payment_account.address}}
+                  </div>
+                </div>
+                <div class="form-group row last" *ngIf="user.payment_account &&  user.payment_account.type=='bankaccount'">
+                  <label class="col-md-3 label-control" for="projectinput4">Routing Number</label>
+                  <div class="col-md-9">
+                    {{user.payment_account.routingno}}
+                  </div>
+                </div>
+                <div class="form-group row last" *ngIf="user.payment_account &&  user.payment_account.type=='bankaccount'">
+                  <label class="col-md-3 label-control" for="projectinput4">Bank Account Number</label>
+                  <div class="col-md-9">
+                    {{user.payment_account.bankaccountno}}
+                  </div>
+                </div>
+                <div class="form-group row last" *ngIf="user.payment_account &&  user.payment_account.type=='cash'">
+                  <label class="col-md-3 label-control" for="projectinput4">Payment Type</label>
+                  <div class="col-md-9">
+                    Cash
+                  </div>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>

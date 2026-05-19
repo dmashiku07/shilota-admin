@@ -1,0 +1,19 @@
+<div class="homepage overlay_div" (click)="closeNav()"></div>
+<header>
+  <nav class="navbar header_bg padding15 web_menu fixed-top zindex66 border_bottom" id="custom-nav" role="navigation">
+    <div class="container width_header">
+      <a routerLink="/" class="clr_black">
+        <div class="back_arrow align-middle"></div>&nbsp;&nbsp;<span class="dis_none_mobile dis_none_tab">{{ 'Back to home' | translate }}</span>
+      </a>
+      <div class="navbar-header mx-auto pos_rel">
+        <a class="navbar-brand logo_wdth" [routerLink]="['/']" *ngIf="user">
+          <img [src]="getUploadUrl(user?.logo)" class="img-fluid" alt="Logo" *ngIf="user.logo">
+        </a>
+      </div>
+      <!-- <ul class="nav navbar-nav ml-auto" *ngFor="let page of pages">
+        <li><a [routerLink]="['/helpDriver', hyphenateUrlParams(page.title)]" class="clr_black"
+            *ngIf="count != 0">Help</a></li>
+      </ul> -->
+    </div>
+  </nav>
+</header>

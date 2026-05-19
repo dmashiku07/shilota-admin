@@ -1,0 +1,66 @@
+<section id="base-style">
+  <div class="row">
+    <div class="col-12">
+      <div class="card">
+        <div class="card-header">
+          <h4 class="card-title">Vehicle Management</h4>
+        </div>
+        <div class="card-body collapse show">
+          <div class="card-block card-dashboard">
+            <div class="actions float-left dataTables_filter">
+              
+              <input class="form-control form-control-sm" type="text" name="search" [(ngModel)]="filter" (ngModelChange)="onFilterChange()" placeholder="Search"><br />
+
+            </div>
+            <table class="table table-responsive-md table-striped table-bordered base-style">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th (click)="sort('vehicle_name')">Vehicle Name</th>
+                  <th>Vehicle Number</th>
+                  <!-- <th>Category</th> -->
+                  <th>Status</th>
+                  <th>View</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngIf="loading">
+                  <td colspan="5" style="text-align:center;">
+                    <i class="fa fa-spinner fa-spin mr-2"></i>
+                    Loading vehicles...
+                  </td>
+                </tr>
+                <tr *ngFor="let page of vehicle; let i = index">
+                  <td>{{rowNumber(i)}}</td>
+                  <td> {{page.vehicle_name}}</td>
+                  <td>{{page.vehicle_number}}</td>
+                  <!-- <td >{{page.category._id}}</td> -->
+                  <td>
+                    <span class="badge badge-success" *ngIf="page.status==1">Approved</span>
+                    <span class="badge badge-danger" *ngIf="page.category && page.status==0 ">Rejected</span>
+                    <span class="badge badge-warning white" *ngIf="!page.category">Pending</span>
+                  </td>
+                  <td>
+                    <a class="btn btn-raised btn-icon btn-info mr-1" [routerLink]="['/admin/management/vehicledetails',page._id]">
+                      <i class="fa fa-eye"></i>
+                    </a>
+                  </td>
+                </tr>
+                <tr *ngIf="!loading && vehicle.length === 0 ">
+                  <td colspan="5" style="text-align:center;">No result found</td>
+                </tr>
+              </tbody>
+            </table>
+            <app-server-pagination
+              [page]="pagination.page"
+              [pageSize]="pagination.pageSize"
+              [totalPages]="pagination.totalPages"
+              [totalItems]="pagination.totalItems"
+              (pageChange)="onPageChange($event)">
+            </app-server-pagination>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>

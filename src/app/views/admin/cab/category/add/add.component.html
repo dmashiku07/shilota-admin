@@ -1,0 +1,132 @@
+<div class="row">
+  <div class="col-md-12">
+    <div class="card">
+      <div class="card-header">
+        <h4 class="card-title" id="basic-layout-form">Add Category</h4>
+      </div>
+      <div class="card-body">
+        <div class="px-3">
+          <form class="form" [formGroup]="Form" novalidate (ngSubmit)="add(Form.value)">
+            <div class="col-md-12">
+              <div class="form-group">
+                <label for="projectinput3">Category Name</label>
+                <input type="text" class="form-control" formControlName="category_name" #category_name />
+                <p *ngIf="Form.controls['category_name'].touched && !Form.controls['category_name'].valid" class="error-msg">
+                  <span *ngIf="Form.controls['category_name'].hasError('required') ">
+                    Category Name is required
+                  </span>
+                  <span *ngIf="Form.controls['category_name'].hasError('minlength') ">
+                    Category Name must have 3 characters length.
+                  </span>
+                  <span *ngIf="Form.controls['category_name'].hasError('maxlength') ">
+                    Category with in 30 characters length.
+                  </span>
+                </p>
+              </div>
+            </div>
+            <div class="col-md-12">
+              <div class="form-group">
+                <label for="projectinput4">Category Description</label>
+                <textarea formControlName="category_desc" #category_desc class="form-control"></textarea>
+                <p *ngIf="Form.controls['category_desc'].touched && !Form.controls['category_desc'].valid" class="error-msg">
+                  <span *ngIf="Form.controls['category_desc'].hasError('required') ">
+                    Category Description is required
+                  </span>
+
+                </p>
+              </div>
+            </div>
+            <div class="col-md-12">
+              <div class="form-group">
+                <label for="projectinput3">Body Type</label>
+                <select class='form-control' required formControlName="bodytypes" #bodytypes>
+                  <option *ngFor='let option of types' [value]="option._id">{{option.name}}</option>
+                </select>
+                <p *ngIf="Form.controls['bodytypes'].touched && !Form.controls['bodytypes'].valid" class="error-msg">
+                  <span *ngIf="Form.controls['bodytypes'].hasError('required') ">
+                    Body Type is required
+                  </span>
+                </p>
+              </div>
+            </div>
+            <div class="col-md-12">
+              <div class="form-group">
+                <label for="projectinput3">Amenities</label>
+                <div class="form-control d-flex flex-wrap align-items-center" style="min-height: 46px; gap: 6px; cursor: pointer;" (click)="toggleAmenitiesDropdown()">
+                  <ng-container *ngIf="selectedAmenities.length; else amenitiesPlaceholder">
+                    <span class="badge badge-primary" *ngFor="let item of selectedAmenities">{{item}}</span>
+                  </ng-container>
+                  <ng-template #amenitiesPlaceholder>
+                    <span class="text-muted">Select amenities</span>
+                  </ng-template>
+                </div>
+                <div class="card mt-1 mb-0" *ngIf="amenitiesDropdownOpen">
+                  <div class="card-body py-2">
+                    <div class="custom-control custom-checkbox mb-1" *ngFor="let topic of facility">
+                      <input
+                        type="checkbox"
+                        class="custom-control-input"
+                        [id]="'add-amenity-' + topic._id"
+                        [checked]="isAmenitySelected(topic.name)"
+                        (change)="toggleAmenity(topic.name)">
+                      <label class="custom-control-label" [for]="'add-amenity-' + topic._id">{{topic.name}}</label>
+                    </div>
+                  </div>
+                </div>
+                <p *ngIf="Form.controls['amenities'].touched && !Form.controls['amenities'].valid" class="error-msg">
+                  <span *ngIf="Form.controls['amenities'].hasError('required') ">
+                    Amenities is required
+                  </span>
+                </p>
+              </div>
+            </div>
+            <div class="col-md-12">
+              <div class="form-group">
+                <label for="projectinput3">Unit Price</label>
+                <input type="number" class="form-control" formControlName="unitprice" #unitprice [min]="1" />
+                <p class="error-msg">
+                  <span *ngIf="Form.controls['unitprice'].touched && Form.controls['unitprice'].hasError('required') ">
+                    Unit Price Must be in numeric
+                  </span>
+                  <span *ngIf="Form.controls['unitprice'].touched && Form.hasError('unitPriceError') && !Form.controls['unitprice'].hasError('required') ">
+                    Unit Price must be greater than 0
+                  </span>
+                </p>
+              </div>
+            </div>
+            <div class="col-md-12">
+              <div class="form-group">
+                <label for="projectinput3">Base Price</label>
+                <input type="number" class="form-control" formControlName="baseprice" #baseprice [min]="1" />
+                <p class="error-msg">
+                  <span *ngIf="Form.controls['baseprice'].touched && Form.controls['baseprice'].hasError('required') ">
+                    Base Price Must be in numeric
+                  </span>
+                  <span *ngIf="Form.controls['baseprice'].touched && Form.hasError('basePriceError') && !Form.controls['baseprice'].hasError('required') ">
+                    Base Price must be greater than 0
+                  </span>
+                </p>
+              </div>
+            </div>
+            <div class="col-md-12">
+              <div class="form-group">
+                <label for="projectinput3">Category Image</label>
+                <input type="file" id="image" name="image" class="form-control browse_btnn" formControlName="image" #image />
+                <p *ngIf="Form.controls['image'].touched && !Form.controls['image'].valid" class="error-msg">
+                  <span *ngIf="Form.controls['image'].hasError('required') ">
+                    Category Image is required
+                  </span>
+                </p>
+              </div>
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn btn-raised btn-raised btn-primary">
+                <i class="fa fa-check-square-o"></i> Save
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

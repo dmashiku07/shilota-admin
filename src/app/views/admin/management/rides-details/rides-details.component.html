@@ -1,0 +1,133 @@
+<section id="striped-row-form-layouts">
+  <div class="row">
+    <div class="col-md-12">
+      <div class="card">
+        <div class="card-header">
+          <div class="actions float-right" *ngIf="this.rides.driver_id && this.rides.user_id">
+            <a [routerLink]="['/admin/management/details/',this.rides.driver_id._id]">
+              <span class="btn btn-raised btn-info btn-sm ">View Driver Info</span>
+            </a>
+            <a [routerLink]="['/admin/management/view/',this.rides.user_id._id]">
+              <span class="btn btn-raised btn-danger btn-sm ">View User Info</span>
+            </a>
+            <a (click)="goBack()">
+              <span class="btn btn-raised btn-dark btn-sm ">
+                <i class="fa fa-angle-double-left"></i>&nbsp;back</span>
+            </a>
+          </div>
+          <h4 class="card-title" id="striped-row-layout-basic">Ride Information</h4>
+        </div>
+        <div class="card-body">
+          <div class="px-3">
+            <form class="form form-horizontal striped-rows form-bordered">
+              <div class="form-body">
+                <div class="form-group row last">
+                  <label class="col-md-3 label-control" for="projectinput4">Ride Status</label>
+                  <div class="col-md-9">
+                    <span class="badge badge-success" *ngIf="rides.ridestatus=='accepted'">Accepted</span>
+                    <span class="badge badge-danger" *ngIf="rides.ridestatus=='cancelled'">Cancelled</span>
+                    <span class="badge badge-primary" *ngIf="rides.ridestatus=='scheduled'">Scheduled</span>
+                    <span class="badge badge-info" *ngIf="((rides.ridestatus=='ridenotaccepted') || (rides.ridestatus=='scheduleridenotaccepted') || (rides.ridestatus=='requested'))">Ride
+                      not accepted</span>
+                    <span class="badge badge-secondary" *ngIf="rides.ridestatus=='ontheway'">On the way</span>
+                    <span class="badge badge-warning" *ngIf="rides.ridestatus=='onride'">Onride</span>
+                    <span class="badge badge-dark" *ngIf="rides.ridestatus=='completed'">Completed</span>
+                  </div>
+                </div>
+                <div class="form-group row last">
+                  <label class="col-md-3 label-control" for="projectinput4">Ride Date</label>
+                  <div class="col-md-9">
+                    {{rides.created_at | date}}
+                  </div>
+                </div>
+                <div class="form-group row last">
+                  <label class="col-md-3 label-control" for="projectinput4">Ride Distance</label>
+                  <div class="col-md-9">
+                    {{rides.ridedistance}}&nbsp;&nbsp;KM
+                  </div>
+                </div>
+                <div class="form-group row last">
+                  <label class="col-md-3 label-control" for="projectinput4">Ride Price</label>
+                  <div class="col-md-9">
+                    {{this.user.currencySymbol}}&nbsp;&nbsp; {{rides.baseprice }}
+                  </div>
+                </div>
+                <div class="form-group row last">
+                  <label class="col-md-3 label-control" for="projectinput4">Tax</label>
+                  <div class="col-md-9">
+                    {{this.user.currencySymbol}}&nbsp;&nbsp; {{rides.tax }}
+                  </div>
+                </div>
+                <div class="form-group row last">
+                  <label class="col-md-3 label-control" for="projectinput4">Commission</label>
+                  <div class="col-md-9">
+                    {{this.user.currencySymbol}}&nbsp;&nbsp; {{rides.commissionamount }}
+                  </div>
+                </div>
+                <div class="form-group row">
+                  <label class="col-md-3 label-control" for="projectinput1">Category Name</label>
+                  <div class="col-md-9">
+                    {{this.rides.category_id.category_name}}
+                  </div>
+                </div>
+                <div class="form-group row">
+                  <label class="col-md-3 label-control" for="projectinput2">Pickup Location</label>
+                  <div class="col-md-9"> {{rides.pickup_location}}
+                  </div>
+                </div>
+                <div class="form-group row">
+                  <label class="col-md-3 label-control" for="projectinput3">Pickup Latitude</label>
+                  <div class="col-md-9">
+                    {{rides.pickup_lat}}
+                  </div>
+                </div>
+                <div class="form-group row last">
+                  <label class="col-md-3 label-control" for="projectinput4">Pickup Longitude</label>
+                  <div class="col-md-9">
+                    {{rides.pickup_lng}}
+                  </div>
+                </div>
+                <div class="form-group row last">
+                  <label class="col-md-3 label-control" for="projectinput4">Drop Location</label>
+                  <div class="col-md-9">
+                    {{rides.drop_location}}
+                  </div>
+                </div>
+                <div class="form-group row last">
+                  <label class="col-md-3 label-control" for="projectinput4">Drop Latitude</label>
+                  <div class="col-md-9">
+                    {{rides.drop_lat}}
+                  </div>
+                </div>
+                <div class="form-group row last">
+                  <label class="col-md-3 label-control" for="projectinput4">Drop Longitude</label>
+                  <div class="col-md-9">
+                    {{rides.drop_lng}}
+                  </div>
+                </div>
+                <div class="form-group row last" *ngIf="(this.ridePayments!='')">
+                  <label class="col-md-3 label-control" for="projectinput4">Payment Type</label>
+                  <div class="col-md-9">
+                    {{this.ridePayments}}
+                  </div>
+                </div>
+                <div class="form-group row last" *ngIf="(this.ridePayments =='')">
+                    <label class="col-md-3 label-control" for="projectinput4">Payment Type</label>
+                    <div class="col-md-9">
+                      {{rides.payment_type}}
+                    </div>
+                  </div>
+                <div class="form-group row last">
+                  <label class="col-md-3 label-control" for="projectinput4">Schedule Time</label>
+                  <div class="col-md-9">
+                    {{rides.schedule_time * 1000 | date:"EEE, MMMM d, h:mm a":'GMT' }}
+                  </div>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>

@@ -1,0 +1,25 @@
+module.exports = {
+  // Legacy fallback only. Prefer .env / .env.local instead.
+  database: "mongodb://127.0.0.1:27017/cabi_db",
+  secret: "CHANGE_ME",
+  apiPort: 3000,
+  socketPort: 8081,
+  httpsMode: "disable",
+  baseUrl: "http://localhost:3000",
+  cetsEnabled: false,
+  cetsBaseUrl: "http://41.59.57.164:8080",
+  cetsAudience: "http://41.59.57.164:8080",
+  cetsIssuer: "http://localhost:3000",
+  cetsSubject: "http://localhost:3000",
+  cetsKeyId: "REPLACE_CETS_KEY_ID",
+  cetsPrivateKey: "REPLACE_CETS_PRIVATE_KEY",
+  cetsPublicKey: "REPLACE_CETS_PUBLIC_KEY",
+  cetsDiscoveryPath: "/.well-known/tz-e-ticketing-server",
+  cetsJwksPath: "/cets/jwks",
+  cetsSubmitDriverPath: "/api/v1/ticket-engine/rideDriver/submitDriver",
+  cetsSubmitVehiclePath: "/api/v1/ticket-engine/rideVehicle/submitVehicle",
+  cetsSubmitTripPath: "/api/v1/ticket-engine/rideHailing/submitTrip",
+  cetsSubmitReportPath: "/api/v1/ticket-engine/rideReport/submitReport",
+  cetsBackgroundSyncEnabled: true,
+  cetsDefaultRating: 0
+};

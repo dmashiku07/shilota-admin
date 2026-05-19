@@ -1,0 +1,45 @@
+<footer class="container-fluid footer_section" id="footer">
+    <div class="container">
+      <div class="row">
+        <div class="col-12 col-sm-4 col-md-4 col-lg-4">
+          <ul class="list_style padding_lft0_992 pl-0">
+            <li class="footer_links"><a [routerLink]="['/driver']" class="text_decoration">{{ 'Become a Driver' | translate }}</a></li>
+            <li class="footer_links" *ngFor="let privacyPolicy of privacy">
+              <a [routerLink]="['/help', hyphenateUrlParams(privacyPolicy.title)]" class="text_decoration">{{privacyPolicy.title}}</a>
+            </li>
+            <li class="footer_links" *ngFor="let page of pages">
+              <a [routerLink]="['/help', hyphenateUrlParams(page.title)]" class="text_decoration">{{page.title}}</a></li>
+            <!-- <li class="footer_links" *ngFor="let pageLink of helpContent">
+              <a [routerLink]="['/help', hyphenateUrlParams(pageLink.title)]" class="text_decoration d-block d-md-none">{{pageLink.title}}</a></li> -->
+          </ul>
+        </div>
+        <div class="col-12 col-sm-3 col-md-4 col-lg-4">
+          <ul class="list_style padding_lft0_992 pl-0">
+            <li class="footer_links"><a [routerLink]="['/faq']" class="text_decoration" *ngIf="faqCount != 0">{{ 'Help' | translate }}</a></li>
+            <li class="footer_links"><a [routerLink]="['/contact']" class="text_decoration">{{ 'Contact Us' | translate }}</a></li>
+          </ul>
+        </div>
+        <div class="col-12 col-sm-5 col-md-4 col-lg-4 review_website" *ngIf="users">
+          <div class="icons_fb">
+            <h2 class="font_size16" *ngIf="users.facebook || users.twitter || users.googleplus ||users.instagram || users.linkedin">{{ 'Social Links' | translate }}</h2>
+            <div class="social_icons margin_top30">
+              <a *ngIf="users.facebook" href="{{users.facebook}}" target="_blank" class="pl-0"><i class="fa fa-facebook"
+                  aria-hidden="true"></i></a>
+              <a *ngIf="users.twitter" href="{{users.twitter}}" target="_blank"><i class="fa fa-twitter" aria-hidden="true"></i></a>
+              <a *ngIf="users.googleplus" href="{{users.googleplus}}" target="_blank"><i class="fa fa-google-plus"
+                  aria-hidden="true"></i></a>
+              <a *ngIf="users.instagram" href="{{users.instagram}}" target="_blank"><i class="fa fa-instagram"
+                  aria-hidden="true"></i></a>
+              <a *ngIf="users.linkedin" href="{{users.linkedin}}" target="_blank"><i class="fa fa-linkedin" aria-hidden="true"></i></a>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="copy_rights margin_top30 row">
+        <div class="col-12 col-sm-12 col-md-6">
+          <p class="mbt0" *ngIf="users?.footer">{{ users?.footer }}</p>
+        </div>
+      </div>
+    </div>
+  </footer>
+  
