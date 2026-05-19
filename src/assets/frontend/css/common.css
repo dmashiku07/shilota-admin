@@ -1129,7 +1129,7 @@ button {
   color: #fff;
   text-align: center;
   cursor: pointer;
-  font-family: "regular-font";
+  font-family: "Poppins", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
 
 .calendar-7 .calendar-7-hour:hover,

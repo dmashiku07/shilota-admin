@@ -467,7 +467,7 @@ app-completed-rides-details .time-sesion {
 .nav-tabs .nav-item.show .nav-link,
 .nav-tabs .nav-link:focus,
 .nav-tabs .nav-link:hover {
-  border-bottom: 3px solid #CE403C !important;
+  border-bottom: 3px solid var(--brand-primary) !important;
 }
 .current_location1 {
   margin-top: 5px;
