@@ -10,9 +10,9 @@ let server;
 const httpsMode = config.httpsMode;
 server = require("http").createServer(app);
 if (httpsMode === "enable") {
-  const privateKey = fs.readFileSync("/etc/letsencrypt/live/cabi.co.tz/privkey.pem");
-  const certificate = fs.readFileSync("/etc/letsencrypt/live/cabi.co.tz/fullchain.pem");
-  const ca = fs.readFileSync("/etc/letsencrypt/live/cabi.co.tz/fullchain.pem");
+  const privateKey = fs.readFileSync("/etc/letsencrypt/live/shilota.tz/privkey.pem");
+  const certificate = fs.readFileSync("/etc/letsencrypt/live/shilota.tz/fullchain.pem");
+  const ca = fs.readFileSync("/etc/letsencrypt/live/shilota.tz/fullchain.pem");
   /* SSL CERTIFICATES */
   const sslOptions = {
     key: privateKey,

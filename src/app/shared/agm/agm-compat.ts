@@ -34,7 +34,7 @@ export class MapsAPILoader {
     }
 
     this.loadingPromise = new Promise<void>((resolve, reject) => {
-      const callbackName = "__cabiGoogleMapsInit";
+      const callbackName = "__shilotaGoogleMapsInit";
       (window as any)[callbackName] = () => resolve();
 
       const script = this.document.createElement("script");

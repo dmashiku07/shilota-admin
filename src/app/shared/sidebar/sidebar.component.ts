@@ -15,7 +15,7 @@ import { Subscription } from 'rxjs';
 export class SidebarComponent implements OnInit, OnDestroy {
     public menuItems: any[];
     userinfo: any = {};
-    site_title = 'CABi';
+    site_title = 'Shilota';
     openMenus = new Set<string>();
     private routerEventsSub?: Subscription;
 
@@ -28,7 +28,7 @@ export class SidebarComponent implements OnInit, OnDestroy {
         this.authService.getProfile().subscribe(res => {
             const profile: any = res || {};
             this.userinfo = profile;
-            this.site_title = profile.siteName || 'CABi';
+            this.site_title = profile.siteName || 'Shilota';
         });
         this.syncOpenMenusWithRoute();
         this.routerEventsSub = this.router.events.subscribe(event => {

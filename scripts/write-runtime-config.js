@@ -75,5 +75,5 @@ const runtimeConfig = {
 };
 
 const outputPath = path.join(rootDir, "src", "assets", "runtime-config.local.js");
-fs.writeFileSync(outputPath, `window.__cabiConfig = ${JSON.stringify(runtimeConfig, null, 2)};\n`, "utf8");
+fs.writeFileSync(outputPath, `window.__shilotaConfig = ${JSON.stringify(runtimeConfig, null, 2)};\n`, "utf8");
 console.log(`Wrote runtime config to ${outputPath}`);

@@ -5,15 +5,15 @@
 
 declare const window: any;
 
-const runtimeConfig = window.__cabiConfig || {};
+const runtimeConfig = window.__shilotaConfig || {};
 const runtimeFirebase = runtimeConfig.firebase || {};
 
 export const environment = {
   production: true,
   enablePhoneVerification: String(runtimeConfig.enablePhoneVerification || "true") === "true",
   domain: "",
-  apiUrl: runtimeConfig.apiUrl || "https://cabi.co.tz:3000",
-  socketUrl: runtimeConfig.socketUrl || "https://cabi.co.tz:8081",
+  apiUrl: runtimeConfig.apiUrl || "https://shilota.tz:3000",
+  socketUrl: runtimeConfig.socketUrl || "https://shilota.tz:8081",
   googleapiKey: runtimeConfig.googleapiKey || "REPLACE_GOOGLE_MAPS_API_KEY",
   googleloginClientid: runtimeConfig.googleloginClientid || "REPLACE_GOOGLE_LOGIN_CLIENT_ID",
   facebookloginClientid: "",

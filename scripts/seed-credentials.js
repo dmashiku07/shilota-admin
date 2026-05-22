@@ -45,7 +45,7 @@ async function seedAdmin(adminConfig) {
     password,
     currencyCode: "TZS",
     currencySymbol: "TSh",
-    siteName: "CABi"
+    siteName: "Shilota"
   });
 
   return { status: "created", type: "admin", id: String(admin._id) };
@@ -134,7 +134,7 @@ async function seedDriver(driverConfig) {
 
   const vehicle = await Vehicle.create({
     user_id: String(driver._id),
-    vehicle_name: driverConfig.vehicle_name || "Demo CABi",
+    vehicle_name: driverConfig.vehicle_name || "Demo Shilota",
     vehicle_number: driverConfig.vehicle_number || "T123 DEM",
     available_seats: driverConfig.available_seats || 4,
     status: "1",

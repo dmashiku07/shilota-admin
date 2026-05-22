@@ -1,4 +1,4 @@
-window.__cabiConfig = {
+window.__shilotaConfig = {
   apiUrl: "http://localhost:3000",
   socketUrl: "http://localhost:8081",
   googleapiKey: "REPLACE_GOOGLE_MAPS_API_KEY",

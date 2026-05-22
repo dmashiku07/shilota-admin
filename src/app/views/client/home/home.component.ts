@@ -157,4 +157,16 @@ export class HomeComponent implements OnInit {
     const uploadUrl = this.getUploadUrl(filename);
     return uploadUrl ? `url('${uploadUrl}')` : "";
   }
+
+  get heroTitle(): string {
+    return this.bannerTitle || "Move through the city with Shilota";
+  }
+
+  get heroSubtitle(): string {
+    return this.users?.appcontent || "Fast pickups, cleaner pricing, and city rides that feel current instead of generic.";
+  }
+
+  get topCategories(): any[] {
+    return (this.categorydata || []).slice(0, 4);
+  }
 }

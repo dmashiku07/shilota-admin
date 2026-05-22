@@ -5,7 +5,7 @@
 
 declare const window: any;
 
-const runtimeConfig = window.__cabiConfig || {};
+const runtimeConfig = window.__shilotaConfig || {};
 const runtimeFirebase = runtimeConfig.firebase || {};
 
 export const environment = {

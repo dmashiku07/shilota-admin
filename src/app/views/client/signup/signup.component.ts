@@ -158,14 +158,14 @@ export class SignupComponent implements OnInit {
     if (!googleAccounts || !googleButton || !environment.googleloginClientid) {
       return;
     }
-    if (!globalWindow.__cabiGoogleAccountsInitialized) {
+    if (!globalWindow.__shilotaGoogleAccountsInitialized) {
       googleAccounts.initialize({
         client_id: environment.googleloginClientid,
         callback: this.handleCredentialResponse.bind(this),
         auto_select: false,
         cancel_on_tap_outside: true
       });
-      globalWindow.__cabiGoogleAccountsInitialized = true;
+      globalWindow.__shilotaGoogleAccountsInitialized = true;
     }
     googleButton.innerHTML = "";
     googleAccounts.renderButton(

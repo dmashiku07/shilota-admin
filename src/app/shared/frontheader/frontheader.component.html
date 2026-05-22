@@ -1,23 +1,27 @@
 <div class="homepage overlay_div" (click)="closeNav()"></div>
-<header>
-  <nav class="navbar header_bg padding15 web_menu fixed-top zindex66 border_bottom" id="custom-nav" role="navigation">
-    <div class="container width_header">
-      <div class="navbar-header pos_rel">
-        <span class="menu_img" (click)="openNav()"><img src="assets/img/nav.png" class="img-fluid" /></span>
-        <a class="navbar-brand logo_wdth ml-3" [routerLink]="['/home']" *ngIf="logo">
-          <img [src]="getUploadUrl(logo)" class="img-fluid" alt="Logo" />
+<header class="front-shell">
+  <nav class="front-nav" id="custom-nav" role="navigation">
+    <div class="container front-nav__inner">
+      <div class="front-nav__brand">
+        <button type="button" class="menu_img front-nav__menu" (click)="openNav()" aria-label="Open menu">
+          <img src="assets/img/nav.png" class="img-fluid" />
+        </button>
+        <a class="front-nav__logo" [routerLink]="['/']" *ngIf="logo; else textBrand">
+          <img [src]="getUploadUrl(logo)" class="img-fluid" alt="Shilota logo" />
+        </a>
+        <ng-template #textBrand>
+          <a class="front-nav__wordmark" [routerLink]="['/']">Shilota</a>
+        </ng-template>
+      </div>
+
+      <div class="front-nav__links">
+        <a routerLink="/search" class="front-nav__link front-nav__link--primary">{{ 'Book a Ride' | translate }}</a>
+        <a routerLink="/faq" class="front-nav__link" *ngIf="faqCount != 0">{{ 'Help' | translate }}</a>
+        <a routerLink="/signin" class="front-nav__link">{{ 'Sign In' | translate }}</a>
+        <a routerLink="/notifications" class="front-nav__icon" aria-label="Notifications">
+          <div class="notification nav_icons"></div>
         </a>
       </div>
-      <ul class="nav navbar-nav ml-auto front_nav_li">
-        <li>
-          <a routerLink="/faq" class="clr_black dis_none_mobile" *ngIf="faqCount != 0">{{ 'Help' | translate }}</a>
-        </li>
-        <li class="pos_rel notifi margin_right15min"><a routerLink="/notifications" class="clr_black">
-            <div class="notification nav_icons "></div>
-          </a></li>
-      </ul>
-      <!--/.nav-collapse -->
     </div>
-    <!--/.container-fluid -->
   </nav>
 </header>

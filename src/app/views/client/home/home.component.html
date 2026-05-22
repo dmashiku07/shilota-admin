@@ -1,132 +1,127 @@
-<section class="overall_home">
-	<div class="banner-videio margin_bottom40">
-		<div class="banner" *ngIf="showUserBanner; else defaultHomeBanner" [style.background-image]="'url(' + backgroundUrl + ')'">
-			<div class="container">
-				<h1 class="banner_txt">{{ bannerTitle }}</h1>
-				<a routerLink="/search"><input type="button" readonly
-						class="half_width home_search cursor_ptr text-left" value="{{ 'Where to?' | translate }}" /></a>
-			</div>
-		</div>
-		<ng-template #defaultHomeBanner>
-			<div class="banner" [style.background-image]="'url(' + (backgroundUrl || 'assets/frontend/images/driver/driver_banner.jpg') + ')'">
-				<div class="container">
-					<h1 class="banner_txt">{{ bannerTitle }}</h1>
-					<a routerLink="/search"><input type="button" readonly
-							class="half_width home_search cursor_ptr text-left" value="{{ 'Where to?' | translate }}" /></a>
-				</div>
-			</div>
-		</ng-template>
-	</div>
-	<div class="features">
-		<div class="container">
-			<div class="feature_list" *ngFor="let page of home; let index=index; let odd=odd; let even=even; ">
-				<div class="row" *ngIf="even">
-					<div class="col-12 col-sm-12 col-md-5 col-lg-5 dis_none_mobile home-page-image">
-						<div class="feature_img img1">
-							<img class="bg-image" [src]="getUploadUrl(page.image)" alt="images">
-						</div>
-					</div>
-					<div class="col-12 col-sm-12 col-md-7 col-lg-7 padding50">
-						<h2 class="feature_title">{{page.title}}</h2>
-						<p class="feature_desc" [innerHTML]="page.content"></p>
-					</div>
-				</div>
-				<div class="row" *ngIf="odd">
-					<div class="col-12 col-sm-12 col-md-7 col-lg-7 padding50">
-						<h2 class="feature_title">{{page.title}}</h2>
-						<p class="feature_desc" [innerHTML]="page.content"></p>
-					</div>
-					<div class="col-12 col-sm-12 col-md-5 col-lg-5 dis_none_mobile home-page-image">
-						<div class="feature_img img2">
-							<img class="bg-image" [src]="getUploadUrl(page.image)" alt="images">
-						</div>
-					</div>
-				</div>
-			</div>
-		</div>
-	</div>
-	<div class="vehicle_slider margin_top80">
-		<div class="container">
-			<h2 class="text-uppercase font_size18 extra_text_hide">{{ 'Meet our Awesome Fleet' | translate }}</h2>
-			<h2 class="type_title margin_bottom80">{{ 'The widest variety of cars to choose from' | translate }}</h2>
-			<div class="swiper-container swiper1 nav nav-tabs" role="tablist">
-				<div class="swiper-wrapper">
-					<div class="swiper-slide" *ngFor="let categoryindex=index; let category of categorydata;">
-						<li role="presentation" id="tab1"
-							(click)="chooseCategory(categoryindex,category.category_name)"><a>
-								<img [src]="getUploadUrl(category.image)">
-								<div class="veh_name text-center">{{ category.category_name }}</div>
-							</a>
-						</li>
-					</div>
-				</div>
-				<div class="swiper-button-prev">
-					<i class="fa fa-chevron-left" aria-hidden="true"></i>
-				</div>
-				<div class="swiper-button-next">
-					<i class="fa fa-chevron-right" aria-hidden="true"></i>
-				</div>
-			</div>
-			<div class="slider-for">
-				<div *ngFor="let category of categorydata;">
-					<h2 class="veh_title" *ngIf="selectedCategory===category.category_name">{{ category.category_name }}
-					</h2>
-					<p class="car_desc" *ngIf="selectedCategory===category.category_name">{{ category.category_desc }}
-					</p>
-					<!-- <div class="ac comforts_available" data-toggle="tooltip" data-placement="bottom"
-					title="Air Conditioner Available"></div>
-					<div class="ac comforts_available" data-toggle="tooltip" data-placement="bottom"
-					title="Air Conditioner Available"></div>
-					<div class="ac comforts_available" data-toggle="tooltip" data-placement="bottom"
-					title="Air Conditioner Available"></div>
-					<div class="ac comforts_available" data-toggle="tooltip" data-placement="bottom"
-					title="Air Conditioner Available"></div>
-					<div class="ac comforts_available" data-toggle="tooltip" data-placement="bottom"
-					title="Air Conditioner Available"></div>
-					<div class="ac comforts_available" data-toggle="tooltip" data-placement="bottom"
-					title="Air Conditioner Available"></div>
-					<div class="ac comforts_available" data-toggle="tooltip" data-placement="bottom"
-					title="Air Conditioner Available"></div>
-					<div class="ac comforts_available" data-toggle="tooltip" data-placement="bottom"
-					title="Air Conditioner Available"></div>
-					<div class="ac comforts_available" data-toggle="tooltip" data-placement="bottom"
-					title="Air Conditioner Available"></div> -->
-				</div>
-			</div>
-			<div class="padding_bottom40">
-			<div class="amenities_block" *ngFor="let amenitity of selectedCategoryamenities;">
-				<div [style.background-image]="getUploadBackgroundUrl(amenitity)" class="comforts_available"
-					data-toggle="tooltip" data-placement="bottom" title="{{amenitity}}"></div>
-			</div>
-		  </div>
-		</div>
-	</div>
-</section>
-<section>
-	<div class="download_app">
-		<div class="container">
-			<div class="row">
-				<div class="col-12 col-sm-12 col-md-5 col-lg-5">
-					<div class="book_app padding_top50">
-						<h2>{{ users?.apptitle }}</h2>
-						<p>{{ users?.appcontent }}</p>
-					</div>
-					<div class="row">
-						<div class="col-6">
-							<a *ngIf="users?.androidUser" href="{{users?.androidUser}}" target="_blank">
-								<img src="{{this.url}}/assets/frontend/images/playstore.png" class="img-fluid" /></a>
-						</div>
-						<div class="col-6">
-							<a *ngIf="users?.iosUser" href="{{users?.iosUser}}" target="_blank">
-								<img src="{{this.url}}/assets/frontend/images/appstore.png" class="img-fluid" /></a>
-						</div>
-					</div>
-				</div>
-				<div class="col-12 col-sm-12 col-md-1 col-lg-1"></div>
-				<div class="col-12 col-sm-12 col-md-6 col-lg-6 dis_none_mobile">
-					<img src="{{this.url}}/assets/frontend/images/home/app_modal.png" class="img-fluid" />
-				</div>
-			</div>
-		</div>
-	</div>
+<section class="home-shell">
+  <div class="container">
+    <section class="hero-panel">
+      <div class="hero-copy">
+        <span class="hero-kicker">Shilota Ride Hailing</span>
+        <h1>{{ heroTitle }}</h1>
+        <p>{{ heroSubtitle }}</p>
+
+        <div class="hero-actions">
+          <a routerLink="/search" class="hero-search">
+            <span class="hero-search__label">{{ 'Where to?' | translate }}</span>
+            <span class="hero-search__cta">Start booking</span>
+          </a>
+          <a routerLink="/driver" class="hero-secondary">{{ 'Become a Driver' | translate }}</a>
+        </div>
+
+        <div class="hero-stats">
+          <div class="hero-stat">
+            <strong>{{ categorydata.length || 0 }}</strong>
+            <span>Ride types</span>
+          </div>
+          <div class="hero-stat">
+            <strong>{{ amenitiesdata.length || 0 }}</strong>
+            <span>Comfort options</span>
+          </div>
+          <div class="hero-stat">
+            <strong>24/7</strong>
+            <span>Trip access</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="hero-visual">
+        <div class="hero-card hero-card--map">
+          <div class="hero-card__eyebrow">Live demand</div>
+          <div class="hero-card__title">Built for quick city trips</div>
+          <div class="hero-route">
+            <span class="hero-route__dot hero-route__dot--start"></span>
+            <span class="hero-route__line"></span>
+            <span class="hero-route__dot hero-route__dot--end"></span>
+          </div>
+          <div class="hero-card__chips">
+            <span *ngFor="let category of topCategories">{{ category.category_name }}</span>
+          </div>
+        </div>
+
+        <div class="hero-card hero-card--image" [style.background-image]="'url(' + (backgroundUrl || 'assets/frontend/images/driver/driver_banner.jpg') + ')'">
+          <div class="hero-card__overlay">
+            <span>City-ready rides</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="home-features" *ngIf="home?.length">
+      <div class="section-heading">
+        <span>Why Shilota</span>
+        <h2>Sharper than a template ride app</h2>
+      </div>
+
+      <div class="feature-grid">
+        <article class="feature-card" *ngFor="let page of home">
+          <div class="feature-card__media" *ngIf="page.image">
+            <img [src]="getUploadUrl(page.image)" alt="Feature image" />
+          </div>
+          <h3>{{ page.title }}</h3>
+          <p [innerHTML]="page.content"></p>
+        </article>
+      </div>
+    </section>
+
+    <section class="fleet-panel">
+      <div class="section-heading">
+        <span>Fleet</span>
+        <h2>{{ 'The widest variety of cars to choose from' | translate }}</h2>
+      </div>
+
+      <div class="fleet-selector">
+        <button
+          type="button"
+          class="fleet-chip"
+          *ngFor="let categoryindex = index; let category of categorydata"
+          [class.is-active]="selectedCategory === category.category_name"
+          (click)="chooseCategory(categoryindex, category.category_name)">
+          <img [src]="getUploadUrl(category.image)" alt="" />
+          <span>{{ category.category_name }}</span>
+        </button>
+      </div>
+
+      <div class="fleet-details" *ngFor="let category of categorydata">
+        <ng-container *ngIf="selectedCategory === category.category_name">
+          <h3>{{ category.category_name }}</h3>
+          <p>{{ category.category_desc }}</p>
+        </ng-container>
+      </div>
+
+      <div class="fleet-amenities" *ngIf="selectedCategoryamenities?.length">
+        <div
+          class="fleet-amenity"
+          *ngFor="let amenitity of selectedCategoryamenities"
+          [style.background-image]="getUploadBackgroundUrl(amenitity)"
+          [attr.title]="amenitity">
+        </div>
+      </div>
+    </section>
+
+    <section class="download-panel">
+      <div class="download-copy">
+        <span>Get the app</span>
+        <h2>{{ users?.apptitle || 'Keep Shilota in your pocket' }}</h2>
+        <p>{{ users?.appcontent || 'Book, track, and manage rides from mobile with the same cleaner experience.' }}</p>
+        <div class="download-links">
+          <a *ngIf="users?.androidUser" href="{{users?.androidUser}}" target="_blank">
+            <img src="{{this.url}}/assets/frontend/images/playstore.png" class="img-fluid" />
+          </a>
+          <a *ngIf="users?.iosUser" href="{{users?.iosUser}}" target="_blank">
+            <img src="{{this.url}}/assets/frontend/images/appstore.png" class="img-fluid" />
+          </a>
+        </div>
+      </div>
+
+      <div class="download-visual dis_none_mobile">
+        <img src="{{this.url}}/assets/frontend/images/home/app_modal.png" class="img-fluid" />
+      </div>
+    </section>
+  </div>
 </section>

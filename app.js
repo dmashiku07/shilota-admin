@@ -39,9 +39,9 @@ var logger = require('morgan');
 
 const app = express();
 const distRoot = path.join(__dirname, 'dist');
-const distCabsoRoot = path.join(__dirname, 'dist', 'cabso');
+const distShilotaRoot = path.join(__dirname, 'dist', 'shilota');
 const distIndex = path.join(distRoot, 'index.html');
-const distCabsoIndex = path.join(distCabsoRoot, 'index.html');
+const distShilotaIndex = path.join(distShilotaRoot, 'index.html');
 const srcIndex = path.join(__dirname, 'src', 'index.html');
 const noCachePrefixes = [
   '/admin',
@@ -115,7 +115,7 @@ app.use('/settlement', settlement);
 app.use('/', cetsRoutes);
 cetsSyncService.initializeSchedulers();
 app.use(express.static(distRoot));
-app.use(express.static(distCabsoRoot));
+app.use(express.static(distShilotaRoot));
 app.use(express.static(__dirname + '/src'));
 
 // app.set('view engine', 'ejs');
@@ -133,8 +133,8 @@ app.get('*', (req, res) => {
   if (fs.existsSync(distIndex)) {
     return res.sendFile(distIndex);
   }
-  if (fs.existsSync(distCabsoIndex)) {
-    return res.sendFile(distCabsoIndex);
+  if (fs.existsSync(distShilotaIndex)) {
+    return res.sendFile(distShilotaIndex);
   }
   if (fs.existsSync(srcIndex)) {
     return res.sendFile(srcIndex);
@@ -186,9 +186,9 @@ if (httpsMode === "disable") {
   server.listen(port, () => console.log(`API Server is running on :${port}`));
 } else {
   /* SSL CERTIFICATES */
-  const privateKey = fs.readFileSync("/etc/letsencrypt/live/cabi.co.tz/privkey.pem");
-  const certificate = fs.readFileSync("/etc/letsencrypt/live/cabi.co.tz/fullchain.pem");
-  const ca = fs.readFileSync("/etc/letsencrypt/live/cabi.co.tz/fullchain.pem");
+  const privateKey = fs.readFileSync("/etc/letsencrypt/live/shilota.tz/privkey.pem");
+  const certificate = fs.readFileSync("/etc/letsencrypt/live/shilota.tz/fullchain.pem");
+  const ca = fs.readFileSync("/etc/letsencrypt/live/shilota.tz/fullchain.pem");
   const sslOptions = {
     key: privateKey,
     cert: certificate,
