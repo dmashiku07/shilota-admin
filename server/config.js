@@ -67,7 +67,7 @@ const localConfig = readLegacyLocalConfig();
 const resolvedApiPort = asNumber(process.env.API_PORT || process.env.PORT || localConfig.apiPort, 3000);
 
 module.exports = {
-  database: process.env.MONGO_URL || localConfig.database || "mongodb://127.0.0.1:27017/cabi_db",
+  database: process.env.MONGO_URL || localConfig.database || "mongodb://127.0.0.1:27017/shilota_db",
   secret: process.env.JWT_SECRET || localConfig.secret || "CHANGE_ME",
   apiPort: resolvedApiPort,
   socketPort: asNumber(process.env.SOCKET_PORT || localConfig.socketPort, 8081),

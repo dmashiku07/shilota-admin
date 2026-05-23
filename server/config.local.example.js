@@ -1,6 +1,6 @@
 module.exports = {
   // Legacy fallback only. Prefer .env / .env.local instead.
-  database: "mongodb://127.0.0.1:27017/cabi_db",
+  database: "mongodb://127.0.0.1:27017/shilota_db",
   secret: "CHANGE_ME",
   apiPort: 3000,
   socketPort: 8081,
