@@ -33,6 +33,7 @@ let Admin = require("../models/admin");
 let Categories = require("../schema/categories");
 let Commissions = require("../schema/commissions");
 const googledistance = require('google-distance');
+const socketRegistry = require("../socketRegistry");
 
 /* check nodejs working*/
 server.listen(port, function () {
@@ -41,6 +42,23 @@ server.listen(port, function () {
 
 /* socket connection */
 io.sockets.on('connection', function (socket) {
+  let registeredUserId = String(socket.handshake.query.user_id || "").trim();
+
+  if (registeredUserId) {
+    socketRegistry.registerSocket(registeredUserId, socket);
+  }
+
+  socket.on("register-user", function (data) {
+    let nextUserId = String(data && data.user_id ? data.user_id : "").trim();
+    if (!nextUserId) {
+      return;
+    }
+    if (registeredUserId && registeredUserId !== nextUserId) {
+      socketRegistry.unregisterSocket(registeredUserId, socket);
+    }
+    registeredUserId = nextUserId;
+    socketRegistry.registerSocket(registeredUserId, socket);
+  });
 
   console.log("user Connected");
   /* share driver instant location */
@@ -134,6 +152,58 @@ io.sockets.on('connection', function (socket) {
         }
       });
     });
+  });
+
+  socket.on("join-call", function (data) {
+    let roomId = String(data && data.room_id ? data.room_id : "").trim();
+    if (!roomId) {
+      return;
+    }
+    socket.join(roomId);
+    let room = io.sockets.adapter.rooms.get(roomId);
+    if (room && room.size > 1) {
+      io.to(roomId).emit("call-ready", {
+        room_id: roomId
+      });
+    }
+  });
+
+  socket.on("ready-call", function (data) {
+    let roomId = String(data && data.room_id ? data.room_id : "").trim();
+    if (!roomId) {
+      return;
+    }
+    socket.to(roomId).emit("call-ready", data || {});
+  });
+
+  socket.on("rtcmessage", function (data) {
+    let roomId = String(data && data.room_id ? data.room_id : "").trim();
+    if (!roomId) {
+      return;
+    }
+    socket.to(roomId).emit("rtcmessage", data || {});
+  });
+
+  socket.on("bye", function (data) {
+    let roomId = "";
+    if (typeof data === "string") {
+      roomId = data.trim();
+    } else {
+      roomId = String(data && data.room_id ? data.room_id : "").trim();
+    }
+    if (!roomId) {
+      return;
+    }
+    io.to(roomId).emit("bye", {
+      room_id: roomId
+    });
+    socket.leave(roomId);
+  });
+
+  socket.on("disconnect", function () {
+    if (registeredUserId) {
+      socketRegistry.unregisterSocket(registeredUserId, socket);
+    }
   });
 });
 

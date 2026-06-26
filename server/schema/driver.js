@@ -94,6 +94,14 @@ var DriverSchema = new Schema({
     type: String,
     ref: 'Categories'
   },
+  service_types: {
+    type: [String],
+    default: ["ride"]
+  },
+  acceptance_settings: {
+    type: Object,
+    default: {}
+  },
   live_status: {
     type: String,
     default: 0

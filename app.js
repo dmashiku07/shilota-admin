@@ -25,7 +25,8 @@ var express = require('express'),
   vehicle = require('./server/routes/vehicleManagement'),
   rides = require('./server/routes/ridesManagement'),
   settlement = require('./server/routes/settlementRoutes'),
-  cetsRoutes = require('./server/routes/cetsRoutes');
+  cetsRoutes = require('./server/routes/cetsRoutes'),
+  safetyRoutes = require('./server/routes/safetyRoutes');
 
 var api = require('./server/apiroutes/api');
 var driverapi = require('./server/apiroutes/driverapi');
@@ -62,7 +63,8 @@ const noCachePrefixes = [
   '/tax',
   '/payment',
   '/settlement',
-  '/cets'
+  '/cets',
+  '/safety'
 ];
 
 app.disable('etag');
@@ -112,6 +114,7 @@ app.use('/chat', chat);
 app.use('/tax', tax);
 app.use('/payment', payment);
 app.use('/settlement', settlement);
+app.use('/safety', safetyRoutes);
 app.use('/', cetsRoutes);
 cetsSyncService.initializeSchedulers();
 app.use(express.static(distRoot));

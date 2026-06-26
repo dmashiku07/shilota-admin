@@ -11,6 +11,8 @@ const router = express.Router();
 const path = require("path");
 const moment = require("moment");
 const googledistance = require("google-distance");
+const timezone = require("../utils/timezone");
+const socketRegistry = require("../socketRegistry");
 /* image downloader */
 const download = require("image-downloader");
 /* cron */
@@ -35,6 +37,13 @@ let SelcomPaymentSession = require("../schema/selcompaymentsession");
 let DriverDevices = require("../schema/driverdevices");
 let Vehicles = require("../schema/vehicles");
 let Places = require("../schema/places");
+let SosAlerts = require("../schema/sosalerts");
+let LostItems = require("../schema/lostitems");
+let LostItemMessages = require("../schema/lostitemmessages");
+let RideChatMessages = require("../schema/ridechatmessages");
+let RiderBlocks = require("../schema/riderblocks");
+let CallLogs = require("../schema/calllogs");
+let PoolSettings = require("../schema/poolsettings");
 let Admin = require("../models/admin");
 let WebUsers = require("../schema/webusers");
 let OtpVerification = require("../schema/otpverification");
@@ -59,6 +68,577 @@ const { roundCustomerPayableAmount } = require("../utils/pricing");
 const OTP_EXPIRY_MINUTES = 5;
 const OTP_MAX_ATTEMPTS = 5;
 const FORGOT_PASSWORD_OTP_PURPOSE = "forgot_password";
+const SCHEDULE_MAX_DAYS = 7;
+const SCHEDULE_DISPATCH_LEAD_MINUTES = 30;
+const SCHEDULE_REMINDER_LEAD_MINUTES = 60;
+
+function normalizeSavedPlaceType(value) {
+  value = String(value || "").trim();
+  if (/^home$/i.test(value)) {
+    return "Home";
+  }
+  if (/^(work|office)$/i.test(value)) {
+    return "Office";
+  }
+  return value;
+}
+
+function savedPlaceTypeQuery(placeType) {
+  const normalizedType = normalizeSavedPlaceType(placeType);
+  if (normalizedType === "Home") {
+    return ["Home"];
+  }
+  if (normalizedType === "Office") {
+    return ["Office", "Work"];
+  }
+  return [normalizedType];
+}
+
+function savedPlaceSortWeight(placeType) {
+  const normalizedType = normalizeSavedPlaceType(placeType);
+  if (normalizedType === "Home") {
+    return 0;
+  }
+  if (normalizedType === "Office") {
+    return 1;
+  }
+  return 2;
+}
+
+function normalizeRideServiceType(value) {
+  value = String(value || "ride").trim().toLowerCase();
+  if (value === "package" || value === "courier") {
+    return "delivery";
+  }
+  return value === "delivery" ? "delivery" : "ride";
+}
+
+function parseScheduleMoment(scheduleTime) {
+  if (!scheduleTime) {
+    return null;
+  }
+
+  const scheduleTimestamp = Number(scheduleTime);
+  if (!Number.isFinite(scheduleTimestamp)) {
+    return null;
+  }
+
+  const scheduleMoment = moment.unix(scheduleTimestamp);
+  return scheduleMoment.isValid() ? scheduleMoment : null;
+}
+
+function validateScheduleMoment(scheduleMoment) {
+  if (!scheduleMoment || !scheduleMoment.isValid()) {
+    return "Please select a valid schedule time";
+  }
+
+  const now = moment();
+  if (scheduleMoment.isSameOrBefore(now)) {
+    return "Schedule time must be in the future";
+  }
+
+  if (scheduleMoment.isAfter(now.clone().add(SCHEDULE_MAX_DAYS, "days"))) {
+    return "Scheduled rides can be booked up to 7 days in advance";
+  }
+
+  return "";
+}
+
+function buildNearbyDriverQuery(lon, lat, maxdistcoverage, ride) {
+  return Driver.aggregate([
+    {
+      $geoNear: {
+        near: {
+          type: "Point",
+          coordinates: [lon, lat]
+        },
+        maxDistance: maxdistcoverage * 1000,
+        spherical: true,
+        distanceField: "distance",
+        query: {
+          live_status: "1",
+          approval: "1",
+          category_id: ride.category_id,
+          ...buildDriverServiceTypeMatch(ride.service_type)
+        }
+      }
+    },
+    {
+      $sort: {
+        distance: 1
+      }
+    }
+  ]);
+}
+
+function reachPickupLabel(distanceMeters) {
+  let meters = Number(distanceMeters || 0);
+  if (!meters || isNaN(meters)) {
+    return "";
+  }
+  let minutes = Math.max(Math.ceil((meters / 1000) / 25 * 60), 1);
+  return minutes + " mins";
+}
+
+function buildDriverServiceTypeMatch(serviceType) {
+  serviceType = normalizeRideServiceType(serviceType);
+  if (serviceType === "delivery") {
+    return {
+      service_types: "delivery"
+    };
+  }
+
+  return {
+    $or: [
+      { service_types: "ride" },
+      { service_types: { $exists: false } },
+      { service_types: { $size: 0 } }
+    ]
+  };
+}
+
+function filterBlockedDriversForRide(drivers, ride, callback) {
+  if (!Array.isArray(drivers) || drivers.length === 0 || !ride || !ride.user_id) {
+    return callback([]);
+  }
+
+  let driverIds = drivers.map(function (driver) {
+    return String(driver._id);
+  });
+
+  RiderBlocks.find({
+    user_id: String(ride.user_id),
+    driver_id: {
+      $in: driverIds
+    },
+    status: "active"
+  }).exec(function (_err, blocks) {
+    if (!Array.isArray(blocks) || blocks.length === 0) {
+      return callback(drivers);
+    }
+
+    let blockedDriverIds = blocks.reduce(function (result, block) {
+      result[String(block.driver_id)] = true;
+      return result;
+    }, {});
+
+    callback(drivers.filter(function (driver) {
+      return !blockedDriverIds[String(driver._id)];
+    }));
+  });
+}
+
+function normalizeRideStops(value) {
+  let stops = value;
+  if (typeof stops === "string") {
+    try {
+      stops = JSON.parse(stops);
+    } catch (_error) {
+      stops = [];
+    }
+  }
+  if (!Array.isArray(stops)) {
+    return [];
+  }
+  return stops
+    .slice(0, 4)
+    .map(function (stop, index) {
+      return {
+        location: stop.location || stop.place_full_address || "",
+        lat: String(stop.lat || stop.latitude || ""),
+        lng: String(stop.lng || stop.lon || stop.longitude || ""),
+        sequence: Number(stop.sequence || index + 1),
+        fare_increment: Math.max(Number(stop.fare_increment || 0), 0)
+      };
+    })
+    .filter(function (stop) {
+      return stop.location;
+    });
+}
+
+function normalizeBoolean(value) {
+  return value === true || value === "true" || value === "1" || value === 1;
+}
+
+function normalizeDeliveryDetails(value) {
+  let details = value;
+  if (typeof details === "string") {
+    try {
+      details = JSON.parse(details);
+    } catch (_error) {
+      details = {};
+    }
+  }
+  if (!details || typeof details !== "object" || Array.isArray(details)) {
+    details = {};
+  }
+  return {
+    parcel_type: String(details.parcel_type || details.parcelType || "").trim(),
+    parcel_size: String(details.parcel_size || details.parcelSize || "").trim(),
+    recipient_name: String(details.recipient_name || details.recipientName || "").trim(),
+    recipient_phone: String(details.recipient_phone || details.recipientPhone || "").trim(),
+    sender_note: String(details.sender_note || details.senderNote || "").trim(),
+    handoff_code: String(details.handoff_code || details.handoffCode || "").trim(),
+    proof_required: normalizeBoolean(
+      details.proof_required || details.proofRequired,
+    ),
+  };
+}
+
+function trimChatPreview(message) {
+  message = String(message || "").trim();
+  if (message.length <= 160) {
+    return message;
+  }
+  return message.substr(0, 157) + "...";
+}
+
+function saveRideChatMessage(options, callback) {
+  let payload = options || {};
+  let messageText = String(payload.message || "").trim();
+  if (!payload.onride_id || !messageText) {
+    return callback(new Error("Invalid ride chat payload"));
+  }
+
+  let newMessage = new RideChatMessages({
+    onride_id: String(payload.onride_id),
+    user_id: payload.user_id ? String(payload.user_id) : "",
+    driver_id: payload.driver_id ? String(payload.driver_id) : "",
+    sender_type: payload.sender_type || "user",
+    sender_id: payload.sender_id ? String(payload.sender_id) : "",
+    message: messageText
+  });
+
+  newMessage.save(callback);
+}
+
+function filterDriversByAcceptanceSettings(drivers, ride) {
+  if (!Array.isArray(drivers)) {
+    return [];
+  }
+  return drivers.filter(function (driver) {
+    let settings = driver.acceptance_settings || {};
+    let maxPickupDistance = Number(settings.max_pickup_distance_km || 0);
+    let minFare = Number(settings.min_fare || 0);
+    let supportedRideTypes = Array.isArray(settings.ride_types) && settings.ride_types.length > 0
+      ? settings.ride_types
+      : ["ride", "delivery", "pool"];
+    let requestedRideType = ride.pooling_opt_in ? "pool" : normalizeRideServiceType(ride.service_type);
+
+    if (maxPickupDistance > 0 && Number(driver.distance || 0) / 1000 > maxPickupDistance) {
+      return false;
+    }
+    if (minFare > 0 && Number(ride.baseprice || 0) < minFare) {
+      return false;
+    }
+    return supportedRideTypes.indexOf(requestedRideType) !== -1;
+  });
+}
+
+function buildPoolZoneKey(lat, lng) {
+  let latNumber = Number(lat || 0);
+  let lngNumber = Number(lng || 0);
+  if (!Number.isFinite(latNumber) || !Number.isFinite(lngNumber)) {
+    return "";
+  }
+  return latNumber.toFixed(2) + "," + lngNumber.toFixed(2);
+}
+
+function findPoolSettings(callback) {
+  PoolSettings.findOne().sort({ updated_at: -1 }).exec(function (_err, settings) {
+    callback(settings || {
+      enabled: true,
+      discount_percent: 15,
+      max_passengers: 3,
+      max_detour_km: 3,
+      max_pickup_gap_km: 2,
+      max_drop_gap_km: 3,
+      zone_overrides: []
+    });
+  });
+}
+
+function isPoolZoneEnabled(settings, ride) {
+  if (!settings || settings.enabled === false) {
+    return false;
+  }
+  let zoneKey = buildPoolZoneKey(ride.pickup_lat, ride.pickup_lng);
+  let overrides = Array.isArray(settings.zone_overrides) ? settings.zone_overrides : [];
+  let matchedOverride = overrides.find(function (item) {
+    return String(item && (item.zone_key || item.zoneKey) || "").trim() === zoneKey;
+  });
+  if (!matchedOverride) {
+    return true;
+  }
+  return !(matchedOverride.enabled === false || matchedOverride.enabled === "false" || matchedOverride.enabled === 0 || matchedOverride.enabled === "0");
+}
+
+function discountedPoolFare(basePrice, discountPercent) {
+  let base = Number(basePrice || 0);
+  let discount = Math.max(Number(discountPercent || 0), 0);
+  if (!Number.isFinite(base) || base <= 0 || discount <= 0) {
+    return basePrice;
+  }
+  return roundCustomerPayableAmount(base - (base * discount / 100));
+}
+
+function attemptMatchPoolRide(ride, callback) {
+  if (!ride || !ride.pooling_opt_in) {
+    return callback(ride);
+  }
+
+  findPoolSettings(function (settings) {
+    if (!isPoolZoneEnabled(settings, ride)) {
+      ride.pool_status = "zone_unavailable";
+      ride.pool_zone_key = buildPoolZoneKey(ride.pickup_lat, ride.pickup_lng);
+      ride.pool_discount_percent = 0;
+      return callback(ride);
+    }
+
+    ride.pool_zone_key = buildPoolZoneKey(ride.pickup_lat, ride.pickup_lng);
+    ride.pool_discount_percent = Number(settings.discount_percent || 0);
+    ride.baseprice = discountedPoolFare(ride.baseprice, ride.pool_discount_percent);
+
+    Rides.find({
+      _id: { $ne: ride._id },
+      ridestatus: "requested",
+      pooling_opt_in: true,
+      category_id: ride.category_id,
+      service_type: ride.service_type,
+      pool_zone_key: ride.pool_zone_key,
+      type: { $ne: "schedule" }
+    })
+      .sort({ created_at: 1 })
+      .limit(10)
+      .exec(function (_err, candidates) {
+        let match = (candidates || []).find(function (candidate) {
+          let totalSeats = Number(candidate.seats_requested || 1) + Number(ride.seats_requested || 1);
+          let pickupGap = getDistance(
+            Number(candidate.pickup_lat || 0),
+            Number(candidate.pickup_lng || 0),
+            Number(ride.pickup_lat || 0),
+            Number(ride.pickup_lng || 0),
+            "K"
+          );
+          let dropGap = getDistance(
+            Number(candidate.drop_lat || 0),
+            Number(candidate.drop_lng || 0),
+            Number(ride.drop_lat || 0),
+            Number(ride.drop_lng || 0),
+            "K"
+          );
+          return totalSeats <= Number(settings.max_passengers || 3) &&
+            pickupGap <= Number(settings.max_pickup_gap_km || 2) &&
+            dropGap <= Number(settings.max_drop_gap_km || 3);
+        });
+
+        if (!match) {
+          ride.pool_group_id = "pool_" + String(ride._id);
+          ride.pool_group_size = 1;
+          ride.matched_pool_ride_ids = [];
+          ride.pool_status = "pool_requested";
+          return callback(ride);
+        }
+
+        let groupId = match.pool_group_id || ("pool_" + String(match._id));
+        let matchedIds = [String(match._id), String(ride._id)];
+        ride.pool_group_id = groupId;
+        ride.pool_group_size = matchedIds.length;
+        ride.matched_pool_ride_ids = [String(match._id)];
+        ride.pool_status = "matched";
+
+        Rides.updateOne(
+          { _id: match._id },
+          {
+            $set: {
+              pool_group_id: groupId,
+              pool_group_size: matchedIds.length,
+              pool_status: "matched",
+              pool_discount_percent: Number(settings.discount_percent || 0),
+              matched_pool_ride_ids: [String(ride._id)],
+              baseprice: discountedPoolFare(match.baseprice, settings.discount_percent)
+            }
+          }
+        ).exec(function () {});
+
+        return callback(ride);
+      });
+  });
+}
+
+function resolveCallReceiverType(receiverId, callback) {
+  Driver.findById(receiverId).select("_id").exec(function (_driverErr, driver) {
+    if (driver) {
+      return callback("driver");
+    }
+    User.findById(receiverId).select("_id").exec(function (_userErr, user) {
+      if (user) {
+        return callback("user");
+      }
+      return callback("unknown");
+    });
+  });
+}
+
+function saveOrUpdateCallLog(payload, callback) {
+  let roomId = String(payload.room_id || "").trim();
+  if (!roomId) {
+    return callback && callback();
+  }
+
+  if (payload.ended_at) {
+    return CallLogs.findOne({ room_id: roomId })
+      .sort({ created_at: -1 })
+      .exec(function (_err, log) {
+        if (!log) {
+          return callback && callback();
+        }
+        let endedAt = payload.ended_at;
+        let durationSeconds = Math.max(
+          0,
+          Math.round((endedAt.getTime() - new Date(log.started_at || log.created_at || endedAt).getTime()) / 1000)
+        );
+        CallLogs.updateOne(
+          { _id: log._id },
+          {
+            $set: {
+              status: payload.status || "ended",
+              ended_at: endedAt,
+              duration_seconds: durationSeconds
+            }
+          }
+        ).exec(function () {
+          if (callback) {
+            callback();
+          }
+        });
+      });
+  }
+
+  resolveCallReceiverType(payload.receiver_id, function (receiverType) {
+    let log = new CallLogs({
+      room_id: roomId,
+      sender_id: String(payload.sender_id || ""),
+      sender_type: String(payload.user_type || payload.sender_type || "user"),
+      receiver_id: String(payload.receiver_id || ""),
+      receiver_type: receiverType,
+      onride_id: String(payload.onride_id || ""),
+      call_type: String(payload.type || "audio"),
+      platform: String(payload.platform || ""),
+      status: payload.status || "started",
+      started_at: payload.started_at || new Date()
+    });
+    log.save(function () {
+      if (callback) {
+        callback();
+      }
+    });
+  });
+}
+
+function emergencyContactsFromProfile(profile) {
+  let contacts = profile && profile.emergency_contact;
+  if (!contacts) {
+    return [];
+  }
+  if (!Array.isArray(contacts)) {
+    contacts = [contacts];
+  }
+  return contacts
+    .map(function (contact) {
+      return contact && (contact.phone_no || contact.phone_number || contact.phone);
+    })
+    .filter(Boolean);
+}
+
+function sendEmergencySmsToContacts(contacts, message, callback) {
+  contacts = Array.isArray(contacts) ? contacts : [];
+  if (contacts.length === 0) {
+    return callback(0);
+  }
+
+  let completed = 0;
+  let sent = 0;
+  contacts.forEach(function (phoneNumber) {
+    smsService.sendSms(phoneNumber, message).then(function (result) {
+      if (result && result.success) {
+        sent += 1;
+      }
+    }).catch(function () {}).then(function () {
+      completed += 1;
+      if (completed === contacts.length) {
+        callback(sent);
+      }
+    });
+  });
+}
+
+function trimPreview(message) {
+  message = String(message || "").trim();
+  if (message.length <= 160) {
+    return message;
+  }
+  return message.substr(0, 157) + "...";
+}
+
+function saveLostItemMessage(options, callback) {
+  let payload = options || {};
+  let messageText = String(payload.message || "").trim();
+  if (!payload.lost_item_id || !messageText) {
+    return callback(new Error("Invalid lost item message payload"));
+  }
+
+  let newMessage = new LostItemMessages({
+    lost_item_id: String(payload.lost_item_id),
+    ride_id: payload.ride_id ? String(payload.ride_id) : "",
+    user_id: payload.user_id ? String(payload.user_id) : "",
+    driver_id: payload.driver_id ? String(payload.driver_id) : "",
+    sender_type: payload.sender_type || "user",
+    sender_id: payload.sender_id ? String(payload.sender_id) : "",
+    message: messageText
+  });
+
+  newMessage.save(function (messageErr, savedMessage) {
+    if (messageErr) {
+      return callback(messageErr);
+    }
+
+    let counterUpdate = {
+      last_message_at: savedMessage.created_at,
+      last_message_preview: trimPreview(savedMessage.message),
+      last_message_sender: payload.sender_type || "user"
+    };
+
+    if (payload.sender_type === "user") {
+      counterUpdate.unread_admin_count = Number(payload.increment_admin_unread || 1);
+      counterUpdate.unread_driver_count = Number(payload.increment_driver_unread || 1);
+      counterUpdate.unread_user_count = 0;
+    } else if (payload.sender_type === "admin") {
+      counterUpdate.unread_user_count = Number(payload.increment_user_unread || 1);
+      counterUpdate.unread_driver_count = Number(payload.increment_driver_unread || 0);
+      counterUpdate.unread_admin_count = 0;
+    } else if (payload.sender_type === "driver") {
+      counterUpdate.unread_user_count = Number(payload.increment_user_unread || 1);
+      counterUpdate.unread_admin_count = Number(payload.increment_admin_unread || 1);
+      counterUpdate.unread_driver_count = 0;
+    } else {
+      counterUpdate.unread_admin_count = 0;
+      counterUpdate.unread_driver_count = 0;
+      counterUpdate.unread_user_count = 0;
+    }
+
+    LostItems.updateOne(
+      {
+        _id: payload.lost_item_id
+      },
+      {
+        $set: counterUpdate
+      }
+    ).exec(function () {
+      callback(null, savedMessage);
+    });
+  });
+}
 
 function mapSelcomSessionStatus(payload) {
   const paymentStatus = String(payload && payload.payment_status || "").trim().toUpperCase();
@@ -1281,7 +1861,8 @@ router.post("/grabrides" /* , passport.authenticate('jwt', {
           let lon = parseFloat(req.body.pickup_lng);
           let lat = parseFloat(req.body.pickup_lat);
           /* mongo geonear api */
-          let query = Driver.aggregate([
+          let buildCategoryAvailabilityQuery = function (serviceType) {
+            return Driver.aggregate([
             {
               $geoNear: {
                 near: {
@@ -1293,7 +1874,8 @@ router.post("/grabrides" /* , passport.authenticate('jwt', {
                 distanceField: "distance",
                 query: {
                   live_status: "1",
-                  approval: "1"
+                  approval: "1",
+                  ...buildDriverServiceTypeMatch(serviceType)
                 }
               }
             },
@@ -1316,20 +1898,30 @@ router.post("/grabrides" /* , passport.authenticate('jwt', {
                 distance: 1
               }
             }
-          ]);
+            ]);
+          };
+          let query = buildCategoryAvailabilityQuery("ride");
           query.exec(function (err, driver) {
             if (err) {
               senderr(res);
             } else {
+              let deliveryQuery = buildCategoryAvailabilityQuery("delivery");
+              deliveryQuery.exec(function (deliveryErr, deliveryDriver) {
+                if (deliveryErr) {
+                  senderr(res);
+                  return;
+                }
               console.log(driver);
-              if (driver.length == 0) {
+              if (driver.length == 0 && deliveryDriver.length == 0) {
                 res.json({
                   status: "false",
                   message: "Sorry! Service not available in this location"
                 });
               } else {
                 let availcat = [""];
+                let deliveryAvailcat = [""];
                 let distbycat = [];
+                let reachbycat = [];
                 let instanthere = []; /* drivers instant location array  */
                 for (let k = 0; k < driver.length; k++) {
                   let driverId = driver[k]._id;
@@ -1338,10 +1930,23 @@ router.post("/grabrides" /* , passport.authenticate('jwt', {
                     availcat.push(driverId);
                   }
                   distbycat[driverId] = distance;
+                  reachbycat[driverId] = reachPickupLabel(driver[k].distance);
                   instanthere.push(instant);
                 }
+                for (let k = 0; k < deliveryDriver.length; k++) {
+                  let deliveryCategoryId = deliveryDriver[k]._id;
+                  if (deliveryCategoryId != null) {
+                    deliveryAvailcat.push(deliveryCategoryId);
+                    if (!distbycat[deliveryCategoryId]) {
+                      distbycat[deliveryCategoryId] = distance;
+                    }
+                    if (!reachbycat[deliveryCategoryId]) {
+                      reachbycat[deliveryCategoryId] = reachPickupLabel(deliveryDriver[k].distance);
+                    }
+                  }
+                }
                 
-                if (availcat.length > 0) {
+                if (availcat.length > 0 || deliveryAvailcat.length > 0) {
                   Categories.find()
                     // .where('_id')
                     // .in(availcat)
@@ -1382,7 +1987,8 @@ router.post("/grabrides" /* , passport.authenticate('jwt', {
                                 category_name: c.category_name,
                                 image: categoryimage,
                                 baseprice: basePrice,
-                                reach_pickup: "2 mins",
+                                reach_pickup: reachbycat[c._id] || "",
+                                service_type: "ride",
                                 available: "1"
                               });
                               available_rides_count++;
@@ -1392,15 +1998,41 @@ router.post("/grabrides" /* , passport.authenticate('jwt', {
                                 category_name: c.category_name,
                                 image: categoryimage,
                                 baseprice: "-",
-                                reach_pickup: "2 mins",
+                                reach_pickup: "",
+                                service_type: "ride",
                                 available: "0"
                               });
                             }
+                            if (deliveryAvailcat.indexOf(String(c._id)) > 0 && available_rides.filter(function (ride) {
+                              return ride.service_type === "delivery";
+                            }).length === 0) {
+                              available_rides.push({
+                                _id: c._id,
+                                category_name: "Package Delivery",
+                                image: categoryimage,
+                                baseprice: basePrice,
+                                reach_pickup: reachbycat[c._id] || "",
+                                service_type: "delivery",
+                                available: "1"
+                              });
+                              available_rides_count++;
+                            }
                           });
-                          categoryresult.status = "true";
-                          categoryresult.count = available_rides_count;
-                          categoryresult.available_ride = available_rides;
-                          res.json(categoryresult);
+                          findPoolSettings(function (poolSettings) {
+                            categoryresult.status = "true";
+                            categoryresult.count = available_rides_count;
+                            categoryresult.available_ride = available_rides;
+                            categoryresult.pooling = {
+                              enabled: isPoolZoneEnabled(poolSettings, {
+                                pickup_lat: req.body.pickup_lat,
+                                pickup_lng: req.body.pickup_lng
+                              }),
+                              discount_percent: Number(poolSettings.discount_percent || 0),
+                              max_passengers: Number(poolSettings.max_passengers || 3),
+                              zone_key: buildPoolZoneKey(req.body.pickup_lat, req.body.pickup_lng)
+                            };
+                            res.json(categoryresult);
+                          });
 
                         });
                       } else {
@@ -1414,12 +2046,72 @@ router.post("/grabrides" /* , passport.authenticate('jwt', {
                   });
                 }
               }
+              });
             }
           });
         }
       });
     }
   });
+
+router.get("/poolsettings", function (req, res) {
+  findPoolSettings(function (settings) {
+    return res.json({
+      status: "true",
+      enabled: isPoolZoneEnabled(settings, {
+        pickup_lat: req.query.pickup_lat,
+        pickup_lng: req.query.pickup_lng
+      }),
+      discount_percent: Number(settings.discount_percent || 0),
+      max_passengers: Number(settings.max_passengers || 3),
+      max_detour_km: Number(settings.max_detour_km || 3),
+      max_pickup_gap_km: Number(settings.max_pickup_gap_km || 2),
+      max_drop_gap_km: Number(settings.max_drop_gap_km || 3),
+      zone_key: buildPoolZoneKey(req.query.pickup_lat, req.query.pickup_lng)
+    });
+  });
+});
+
+router.get("/riderblockstatus/:user_id", function (req, res) {
+  passport.authenticate("jwt", { session: false }, function (err, user) {
+    if (err === "AccountDeleted") {
+      return res.json({
+        status: "error",
+        message: "Account has been deleted successfully"
+      });
+    }
+    if (!user || String(user._id) !== String(req.params.user_id)) {
+      return res.json({
+        status: "error",
+        message: "Unauthorized access"
+      });
+    }
+
+    RiderBlocks.find({
+      user_id: req.params.user_id,
+      status: "active"
+    }).sort({ created_at: -1 }).exec(function (blockErr, blocks) {
+      if (blockErr) {
+        return res.json({
+          status: "false",
+          message: "Unable to load rider block status"
+        });
+      }
+
+      let pendingReview = (blocks || []).some(function (block) {
+        return String(block.admin_review_status || "").toLowerCase() === "pending";
+      });
+      let activeBlockCount = (blocks || []).length;
+
+      return res.json({
+        status: "true",
+        active_block_count: activeBlockCount,
+        pending_review: pendingReview,
+        latest_block: blocks && blocks[0] ? blocks[0] : null
+      });
+    });
+  })(req, res);
+});
 
 /* request a ride */
 router.post(
@@ -1457,29 +2149,214 @@ router.post(
             charset: "numeric"
           });
           req.body.onride_otp = randomnumber.substr(0, 4);
+          req.body.service_type = normalizeRideServiceType(req.body.service_type);
+          req.body.ride_stops = normalizeRideStops(req.body.ride_stops);
+          req.body.pooling_opt_in = normalizeBoolean(req.body.pooling_opt_in);
+          req.body.seats_requested = Math.max(Number(req.body.seats_requested || 1), 1);
+          req.body.pool_status = req.body.pooling_opt_in ? "pool_requested" : "solo";
+          req.body.delivery_details = normalizeDeliveryDetails(req.body.delivery_details);
           if (req.body.type == "schedule") {
+            const scheduleMoment = parseScheduleMoment(req.body.schedule_time);
+            const scheduleError = validateScheduleMoment(scheduleMoment);
+            if (scheduleError) {
+              return res.json({
+                status: "false",
+                message: scheduleError
+              });
+            }
             req.body.ridestatus = "scheduled";
+            req.body.schedule_utc_time = scheduleMoment.toISOString();
           } else {
             req.body.ridestatus = "requested";
           }
           /* schedule utc time */
-          if (req.body.schedule_time) {
-            let scheduleTime = req.body.schedule_time - 19800;
-            let dateString = moment.unix(scheduleTime).format("MM/DD/YYYY HH:mm:ss");
-            req.body.schedule_utc_time = moment(dateString).toISOString();
+          if (req.body.schedule_time && req.body.type != "schedule") {
+            const scheduleMoment = parseScheduleMoment(req.body.schedule_time);
+            if (scheduleMoment) {
+              req.body.schedule_utc_time = scheduleMoment.toISOString();
+            }
           }
           req.body.ridestatusat = timestamp;
-          let newRides = new Rides(req.body);
-          newRides.save(function (err, rides) {
-            if (!err) {
-              res.json({
-                status: "true",
-                onride_id: newRides._id,
-                onride_type: newRides.type
+          const saveRide = function () {
+            let newRides = new Rides(req.body);
+            attemptMatchPoolRide(newRides, function (preparedRide) {
+              preparedRide.save(function (err, rides) {
+                if (!err) {
+                  res.json({
+                    status: "true",
+                    onride_id: preparedRide._id,
+                    onride_type: preparedRide.type,
+                    seats_requested: preparedRide.seats_requested,
+                    pool_status: preparedRide.pool_status,
+                    pool_group_size: preparedRide.pool_group_size,
+                    pool_discount_percent: preparedRide.pool_discount_percent
+                  });
+                } else {
+                  senderr(res);
+                }
               });
-            } else {
-              senderr(res);
+            });
+          };
+          if (req.body.type == "schedule") {
+            saveRide();
+          } else {
+            Rides.findOne({
+              user_id: req.body.user_id,
+              ridestatus: { $in: ["requested", "accepted", "ontheway", "onride"] }
+            }).exec(function (err, activeRide) {
+              if (err) {
+                senderr(res);
+              } else if (activeRide) {
+                Payments.count({
+                  onride_id: activeRide._id
+                }, function (paymentErr, paymentCount) {
+                  if (paymentErr) {
+                    senderr(res);
+                  } else if (paymentCount > 0) {
+                    Rides.updateMany({
+                      user_id: req.body.user_id,
+                      ridestatus: { $in: ["requested", "accepted", "ontheway", "onride"] }
+                    }, {
+                      $set: {
+                        ridestatus: "completed",
+                        ridestatusat: timeZone(),
+                        ride_completed_at: new Date()
+                      }
+                    }).exec(function (updateErr) {
+                      if (updateErr) {
+                        senderr(res);
+                      } else {
+                        if (activeRide.driver_id) {
+                          Driver.updateOne({
+                            _id: activeRide.driver_id
+                          }, {
+                            $set: {
+                              live_status: "1"
+                            }
+                          }).exec(function () {});
+                        }
+                        saveRide();
+                      }
+                    });
+                  } else {
+                    res.json({
+                      status: "false",
+                      message: "You already have an active ride"
+                    });
+                  }
+                });
+              } else {
+                saveRide();
+              }
+            });
+          }
+        }
+      }
+    })(req, res);
+  }
+);
+
+router.post(
+  "/updatescheduledride",
+  function (req, res) {
+    passport.authenticate('jwt', { session: false }, function (err, user) {
+      if (err === "AccountDeleted") {
+        res.json({
+          status: "error",
+          message: 'Account has been deleted successfully'
+        });
+      } else if (!user) {
+        res.json({
+          status: "error",
+          message: 'Unauthorized access'
+        });
+      } else {
+        if (
+          !req.body.user_id ||
+          !req.body.onride_id ||
+          !req.body.category_id ||
+          !req.body.payment_type ||
+          !req.body.pickup_location ||
+          !req.body.pickup_lat ||
+          !req.body.pickup_lng ||
+          !req.body.drop_location ||
+          !req.body.drop_lat ||
+          !req.body.drop_lng ||
+          !req.body.schedule_time
+        ) {
+          senderr(res);
+        } else {
+          const scheduleMoment = parseScheduleMoment(req.body.schedule_time);
+          const scheduleError = validateScheduleMoment(scheduleMoment);
+          if (scheduleError) {
+            return res.json({
+              status: "false",
+              message: scheduleError
+            });
+          }
+
+          const updatePayload = {
+            category_id: req.body.category_id,
+            payment_type: req.body.payment_type,
+            pickup_location: req.body.pickup_location,
+            pickup_lat: req.body.pickup_lat,
+            pickup_lng: req.body.pickup_lng,
+            drop_location: req.body.drop_location,
+            drop_lat: req.body.drop_lat,
+            drop_lng: req.body.drop_lng,
+            baseprice: req.body.baseprice,
+            service_type: normalizeRideServiceType(req.body.service_type),
+            ride_stops: normalizeRideStops(req.body.ride_stops),
+            pooling_opt_in: normalizeBoolean(req.body.pooling_opt_in),
+            seats_requested: Math.max(Number(req.body.seats_requested || 1), 1),
+            pool_status: normalizeBoolean(req.body.pooling_opt_in) ? "pool_requested" : "solo",
+            delivery_details: normalizeDeliveryDetails(req.body.delivery_details),
+            type: "schedule",
+            schedule_time: req.body.schedule_time,
+            schedule_utc_time: scheduleMoment.toISOString(),
+            ridestatus: "scheduled",
+            ridestatusat: timeZone(),
+            notify: 0,
+            schedule_reminder_notify: 0
+          };
+
+          Rides.findOneAndUpdate(
+            {
+              _id: req.body.onride_id,
+              user_id: req.body.user_id,
+              ridestatus: {
+                $in: ["scheduled", "scheduleridenotaccepted"]
+              }
+            },
+            {
+              $set: updatePayload,
+              $unset: {
+                driver_id: "",
+                vehicle_no: ""
+              }
+            },
+            {
+              new: true
             }
+          ).exec(function (updateErr, ride) {
+            if (updateErr) {
+              return senderr(res);
+            }
+            if (!ride) {
+              return res.json({
+                status: "false",
+                message: "Scheduled ride can no longer be modified"
+              });
+            }
+
+            return res.json({
+              status: "true",
+              message: "Scheduled ride updated successfully",
+              onride_id: ride._id,
+              onride_type: ride.type,
+              seats_requested: ride.seats_requested,
+              pool_status: ride.pool_status
+            });
           });
         }
       }
@@ -1543,8 +2420,15 @@ router.post(
                     },
                     function (err, vehicles) {
                       if (!err) {
-                        rideresult.driver_vehicle = vehicles.vehicle_name;
-                        rideresult.driver_vehicleno = vehicles.vehicle_number;
+                  rideresult.driver_vehicle = vehicles.vehicle_name;
+                      rideresult.driver_vehicleno = vehicles.vehicle_number;
+                        rideresult.ride_stops = rides.ride_stops || [];
+                        rideresult.pooling_opt_in = rides.pooling_opt_in;
+                        rideresult.seats_requested = rides.seats_requested;
+                        rideresult.pool_status = rides.pool_status;
+                        rideresult.pool_group_size = rides.pool_group_size || 1;
+                        rideresult.pool_discount_percent = rides.pool_discount_percent || 0;
+                        rideresult.delivery_details = rides.delivery_details || {};
                         let userids = [req.body.user_id];
                         
                         let notifed = req.body.is_notify; // remove notifications
@@ -1597,42 +2481,22 @@ router.post(
                   Admin.findOne(function (err, admin) {
                     let maxdistcoverage = parseInt(admin.distancePerCab);
                     /* mongo geonear api */
-                    let query = Driver.aggregate([
-                      {
-                        $geoNear: {
-                          near: {
-                            type: "Point",
-                            coordinates: [lon, lat]
-                          },
-                          maxDistance: maxdistcoverage * 1000,
-                          spherical: true,
-                          distanceField: "distance",
-                          query: {
-                            live_status: "1",
-                            approval: "1",
-                            category_id: rides.category_id
-                          }
-                        }
-                      },
-                      {
-                        $sort: {
-                          distance: 1
-                        }
-                      }
-                    ]);
+                    let query = buildNearbyDriverQuery(lon, lat, maxdistcoverage, rides);
                     query.exec(function (err, driver) {
                       if (err) {
                         senderr(res);
                       } else {
-                        console.log(driver.length);
-                        if (driver.length == "0") {
+                        driver = filterDriversByAcceptanceSettings(driver, rides);
+                        filterBlockedDriversForRide(driver, rides, function (availableDrivers) {
+                        console.log(availableDrivers.length);
+                        if (availableDrivers.length == "0") {
                           res.json({
                             status: "false",
                             message: "Sorry! No Driver found nearby at this moment"
                           });
                         } else {
                           let availdrivers = [];
-                          driver.forEach(function (d) {
+                          availableDrivers.forEach(function (d) {
                             availdrivers.push(d._id);
                           });
 
@@ -1646,6 +2510,7 @@ router.post(
                             nearBy(availdrivers, rides._id);
                           }
                         }
+                        });
                       }
                     });
                   });
@@ -1660,13 +2525,659 @@ router.post(
   }
 );
 
-cron.schedule("* * * * *", function () {
-  /* timestamp */
-  let timestamp = scheduletimeZone();
+router.post("/sosalert", function (req, res) {
+  passport.authenticate("jwt", { session: false }, function (err, user) {
+    if (err === "AccountDeleted") {
+      return res.json({
+        status: "error",
+        message: "Account has been deleted successfully"
+      });
+    }
+    if (!user) {
+      return res.json({
+        status: "error",
+        message: "Unauthorized access"
+      });
+    }
+
+    let alert = new SosAlerts({
+      actor_type: "user",
+      actor_id: req.body.user_id || user._id,
+      actor_model: "User",
+      ride_id: req.body.ride_id || req.body.onride_id || "",
+      location: req.body.location || "",
+      lat: req.body.lat || req.body.latitude || "",
+      lng: req.body.lng || req.body.lon || req.body.longitude || "",
+      message: req.body.message || "Rider emergency alert",
+      action_type: req.body.action_type || "",
+      contact_target: req.body.contact_target || "",
+      status: "active",
+      response_due_at: new Date(Date.now() + 2 * 60 * 1000),
+      callback_required: true,
+      callback_status: "pending"
+    });
+
+    alert.save(function (saveErr, savedAlert) {
+      if (saveErr) {
+        return senderr(res);
+      }
+
+      let locationUrl = alert.lat && alert.lng ? " https://www.google.com/maps/?q=" + alert.lat + "," + alert.lng : "";
+      let smsMessage = "Emergency alert from " + (user.full_name || "rider") + "." + locationUrl;
+      sendEmergencySmsToContacts(emergencyContactsFromProfile(user), smsMessage, function (sentCount) {
+        SosAlerts.updateOne(
+          { _id: savedAlert._id },
+          { $set: { contacts_notified: sentCount } }
+        ).exec(function () {});
+      });
+
+      notifyTo({
+        user_id: String(user._id),
+        notify_to: "admin",
+        title: "Rider SOS Alert",
+        message: alert.message
+      });
+
+      return res.json({
+        status: "true",
+        message: "SOS alert sent",
+        sos_id: savedAlert._id
+      });
+    });
+  })(req, res);
+});
+
+router.post("/lostitem/report", function (req, res) {
+  passport.authenticate("jwt", { session: false }, function (err, user) {
+    if (err === "AccountDeleted") {
+      return res.json({
+        status: "error",
+        message: "Account has been deleted successfully"
+      });
+    }
+    if (!user) {
+      return res.json({
+        status: "error",
+        message: "Unauthorized access"
+      });
+    }
+    if (!req.body.ride_id || !req.body.item_description) {
+      return senderr(res);
+    }
+
+    Rides.findOne({
+      _id: req.body.ride_id,
+      user_id: String(user._id)
+    }).exec(function (rideErr, ride) {
+      if (rideErr || !ride) {
+        return res.json({
+          status: "false",
+          message: "Ride not found"
+        });
+      }
+
+      LostItems.findOneAndUpdate(
+        {
+          ride_id: String(ride._id),
+          user_id: String(user._id),
+          status: {
+            $ne: "resolved"
+          }
+        },
+        {
+          $set: {
+            driver_id: ride.driver_id || "",
+            item_description: req.body.item_description,
+            contact_phone: req.body.contact_phone || user.phone_number || "",
+            status: "open",
+            response_due_at: new Date(Date.now() + 48 * 60 * 60 * 1000),
+            escalation_status: "normal",
+            escalated_at: null,
+            driver_notified: Boolean(ride.driver_id),
+            chat_opened: true,
+            return_incentive_status: "eligible"
+          },
+          $setOnInsert: {
+            ride_id: String(ride._id),
+            user_id: String(user._id),
+            created_at: new Date()
+          }
+        },
+        {
+          new: true,
+          upsert: true
+        }
+      ).exec(function (caseErr, lostItem) {
+        if (caseErr) {
+          return senderr(res);
+        }
+
+        LostItems.count({
+          driver_id: ride.driver_id || "",
+          status: {
+            $ne: "resolved"
+          }
+        }).exec(function (_countErr, repeatCount) {
+          let shouldFlagDriver = Number(repeatCount || 0) >= 3;
+          LostItems.updateOne(
+            { _id: lostItem._id },
+            {
+              $set: {
+                repeat_driver_loss_count: repeatCount || 1,
+                driver_flagged: shouldFlagDriver
+              }
+            }
+          ).exec(function () {});
+
+          saveLostItemMessage({
+            lost_item_id: lostItem._id,
+            ride_id: ride._id,
+            user_id: user._id,
+            driver_id: ride.driver_id || "",
+            sender_type: "user",
+            sender_id: user._id,
+            message: req.body.item_description,
+            increment_admin_unread: 1,
+            increment_driver_unread: ride.driver_id ? 1 : 0
+          }, function (messageErr) {
+            if (messageErr) {
+              console.error("Lost item initial message save failed:", messageErr);
+            }
+          });
+
+          notifyTo({
+            user_id: String(user._id),
+            notify_to: "admin",
+            title: shouldFlagDriver ? "Repeat Lost Item Driver Flagged" : "Lost Item Reported",
+            message: req.body.item_description
+          });
+
+          if (ride.driver_id) {
+            notifyTo({
+              user_id: String(ride.driver_id),
+              notify_to: "driver",
+              title: "Lost Item Reported",
+              message: req.body.item_description
+            });
+            driverNotify([ride.driver_id], "A rider reported a lost item for a completed trip", {
+              ride_id: ride._id,
+              user_id: String(user._id),
+              user_name: user.full_name || "",
+              phone_number: user.phone_number || "",
+              pickup_location: ride.pickup_location || "",
+              drop_location: ride.drop_location || "",
+              lost_item_id: lostItem._id,
+              type: "lost_item",
+              message: "A rider reported a lost item for a completed trip",
+              chat_opened: "true",
+              return_incentive_status: "eligible"
+            });
+          }
+
+          return res.json({
+            status: "true",
+            message: "Lost item report submitted",
+            lost_item_id: lostItem._id,
+            chat_opened: "true",
+            return_incentive_status: "eligible",
+            driver_flagged: shouldFlagDriver
+          });
+        });
+      });
+    });
+  })(req, res);
+});
+
+router.get("/lostitem/messages/:lost_item_id", function (req, res) {
+  passport.authenticate("jwt", { session: false }, function (err, user) {
+    if (err === "AccountDeleted") {
+      return res.json({
+        status: "error",
+        message: "Account has been deleted successfully"
+      });
+    }
+    if (!user) {
+      return res.json({
+        status: "error",
+        message: "Unauthorized access"
+      });
+    }
+
+    LostItems.findOne({
+      _id: req.params.lost_item_id,
+      user_id: String(user._id)
+    }).exec(function (caseErr, lostItem) {
+      if (caseErr || !lostItem) {
+        return res.json({
+          status: "false",
+          message: "Lost item case not found"
+        });
+      }
+
+      LostItemMessages.find({
+        lost_item_id: String(lostItem._id)
+      }).sort({ created_at: 1 }).exec(function (messageErr, messages) {
+        if (messageErr) {
+          return senderr(res);
+        }
+
+        LostItems.updateOne(
+          {
+            _id: lostItem._id
+          },
+          {
+            $set: {
+              unread_user_count: 0
+            }
+          }
+        ).exec(function () {});
+
+        return res.json({
+          status: "true",
+          lost_item_id: lostItem._id,
+          case_status: lostItem.status,
+          result: messages
+        });
+      });
+    });
+  })(req, res);
+});
+
+router.post("/lostitem/message", function (req, res) {
+  passport.authenticate("jwt", { session: false }, function (err, user) {
+    if (err === "AccountDeleted") {
+      return res.json({
+        status: "error",
+        message: "Account has been deleted successfully"
+      });
+    }
+    if (!user) {
+      return res.json({
+        status: "error",
+        message: "Unauthorized access"
+      });
+    }
+    if (!req.body.lost_item_id || !req.body.message) {
+      return senderr(res);
+    }
+
+    LostItems.findOne({
+      _id: req.body.lost_item_id,
+      user_id: String(user._id)
+    }).exec(function (caseErr, lostItem) {
+      if (caseErr || !lostItem) {
+        return res.json({
+          status: "false",
+          message: "Lost item case not found"
+        });
+      }
+      if (["resolved", "returned"].indexOf(String(lostItem.status || "").toLowerCase()) !== -1) {
+        return res.json({
+          status: "false",
+          message: "This lost item case is already closed"
+        });
+      }
+
+      saveLostItemMessage({
+        lost_item_id: lostItem._id,
+        ride_id: lostItem.ride_id || "",
+        user_id: lostItem.user_id || "",
+        driver_id: lostItem.driver_id || "",
+        sender_type: "user",
+        sender_id: user._id,
+        message: req.body.message,
+        increment_admin_unread: 1,
+        increment_driver_unread: lostItem.driver_id ? 1 : 0
+      }, function (messageErr, savedMessage) {
+        if (messageErr) {
+          return senderr(res);
+        }
+
+        notifyTo({
+          user_id: String(user._id),
+          notify_to: "admin",
+          title: "Lost Item Follow-up",
+          message: req.body.message
+        });
+
+        if (lostItem.driver_id) {
+          notifyTo({
+            user_id: String(lostItem.driver_id),
+            notify_to: "driver",
+            title: "Lost Item Follow-up",
+            message: req.body.message
+          });
+        }
+
+        return res.json({
+          status: "true",
+          data: savedMessage
+        });
+      });
+    });
+  })(req, res);
+});
+
+router.get("/lostitem/ride/:ride_id", function (req, res) {
+  passport.authenticate("jwt", { session: false }, function (err, user) {
+    if (err === "AccountDeleted") {
+      return res.json({
+        status: "error",
+        message: "Account has been deleted successfully"
+      });
+    }
+    if (!user) {
+      return res.json({
+        status: "error",
+        message: "Unauthorized access"
+      });
+    }
+
+    LostItems.findOne({
+      ride_id: req.params.ride_id,
+      user_id: String(user._id)
+    }).sort({ created_at: -1 }).exec(function (caseErr, lostItem) {
+      if (caseErr || !lostItem) {
+        return res.json({
+          status: "false",
+          message: "Lost item case not found"
+        });
+      }
+
+      return res.json({
+        status: "true",
+        lost_item_id: lostItem._id,
+        case_status: lostItem.status
+      });
+    });
+  })(req, res);
+});
+
+router.get("/lostitem/:lost_item_id", function (req, res) {
+  passport.authenticate("jwt", { session: false }, function (err, user) {
+    if (err === "AccountDeleted") {
+      return res.json({
+        status: "error",
+        message: "Account has been deleted successfully"
+      });
+    }
+    if (!user) {
+      return res.json({
+        status: "error",
+        message: "Unauthorized access"
+      });
+    }
+
+    LostItems.findOne({
+      _id: req.params.lost_item_id,
+      user_id: String(user._id)
+    }).exec(function (caseErr, lostItem) {
+      if (caseErr || !lostItem) {
+        return res.json({
+          status: "false",
+          message: "Lost item case not found"
+        });
+      }
+
+      return res.json({
+        status: "true",
+        lost_item_id: lostItem._id,
+        case_status: lostItem.status,
+        escalation_status: lostItem.escalation_status || "normal",
+        return_incentive_status: lostItem.return_incentive_status || "eligible",
+        rider_confirmed_returned: Boolean(lostItem.rider_confirmed_returned),
+        response_due_at: lostItem.response_due_at,
+        last_message_at: lostItem.last_message_at
+      });
+    });
+  })(req, res);
+});
+
+router.post("/lostitem/:lost_item_id/escalate", function (req, res) {
+  passport.authenticate("jwt", { session: false }, function (err, user) {
+    if (err === "AccountDeleted") {
+      return res.json({
+        status: "error",
+        message: "Account has been deleted successfully"
+      });
+    }
+    if (!user) {
+      return res.json({
+        status: "error",
+        message: "Unauthorized access"
+      });
+    }
+
+    LostItems.findOne({
+      _id: req.params.lost_item_id,
+      user_id: String(user._id)
+    }).exec(function (caseErr, lostItem) {
+      if (caseErr || !lostItem) {
+        return res.json({
+          status: "false",
+          message: "Lost item case not found"
+        });
+      }
+
+      if (String(lostItem.escalation_status || "").toLowerCase() === "escalated") {
+        return res.json({
+          status: "true",
+          message: "Case already escalated",
+          escalation_status: "escalated"
+        });
+      }
+
+      lostItem.escalation_status = "escalated";
+      lostItem.escalated_at = new Date();
+      lostItem.admin_notes = String(req.body.reason || "Rider requested escalation").trim();
+      lostItem.save(function (saveErr, savedCase) {
+        if (saveErr) {
+          return senderr(res);
+        }
+
+        notifyTo({
+          user_id: String(user._id),
+          notify_to: "admin",
+          title: "Lost Item Escalation Requested",
+          message: savedCase.admin_notes || "Rider requested escalation"
+        });
+
+        if (savedCase.driver_id) {
+          notifyTo({
+            user_id: String(savedCase.driver_id),
+            notify_to: "driver",
+            title: "Lost Item Escalated",
+            message: "Rider requested escalation on a lost item case"
+          });
+        }
+
+        return res.json({
+          status: "true",
+          message: "Lost item case escalated",
+          escalation_status: savedCase.escalation_status
+        });
+      });
+    });
+  })(req, res);
+});
+
+router.post("/lostitem/:lost_item_id/confirmreturn", function (req, res) {
+  passport.authenticate("jwt", { session: false }, function (err, user) {
+    if (err === "AccountDeleted") {
+      return res.json({
+        status: "error",
+        message: "Account has been deleted successfully"
+      });
+    }
+    if (!user) {
+      return res.json({
+        status: "error",
+        message: "Unauthorized access"
+      });
+    }
+
+    LostItems.findOne({
+      _id: req.params.lost_item_id,
+      user_id: String(user._id)
+    }).exec(function (caseErr, lostItem) {
+      if (caseErr || !lostItem) {
+        return res.json({
+          status: "false",
+          message: "Lost item case not found"
+        });
+      }
+
+      lostItem.status = "resolved";
+      lostItem.resolved_at = new Date();
+      lostItem.rider_confirmed_returned = true;
+      lostItem.rider_confirmed_returned_at = new Date();
+      lostItem.return_incentive_status = "completed";
+      lostItem.save(function (saveErr, savedCase) {
+        if (saveErr) {
+          return senderr(res);
+        }
+
+        notifyTo({
+          user_id: String(user._id),
+          notify_to: "admin",
+          title: "Lost Item Return Confirmed",
+          message: "Rider confirmed the lost item was returned"
+        });
+
+        if (savedCase.driver_id) {
+          notifyTo({
+            user_id: String(savedCase.driver_id),
+            notify_to: "driver",
+            title: "Lost Item Return Confirmed",
+            message: "Rider confirmed the lost item was returned"
+          });
+        }
+
+        return res.json({
+          status: "true",
+          message: "Lost item case closed",
+          case_status: savedCase.status,
+          rider_confirmed_returned: true
+        });
+      });
+    });
+  })(req, res);
+});
+
+function sendScheduledRideReminders() {
+  const reminderDeadline = moment().add(SCHEDULE_REMINDER_LEAD_MINUTES, "minutes").toISOString();
+  Rides.find({
+    type: "schedule",
+    ridestatus: {
+      $in: ["scheduled", "accepted"]
+    },
+    schedule_reminder_notify: {
+      $ne: 1
+    },
+    schedule_utc_time: {
+      $lte: reminderDeadline,
+      $gt: moment().toISOString()
+    }
+  }).exec(function (err, rides) {
+    if (err || !Array.isArray(rides)) {
+      if (err) {
+        console.error("Scheduled reminder lookup failed:", err);
+      }
+      return;
+    }
+
+    rides.forEach(function (ride) {
+      const message = "Reminder: your scheduled ride starts in 1 hour";
+      const data = {
+        ride_id: ride._id,
+        type: "scheduledride_reminder",
+        message: message
+      };
+      userNotify([ride.user_id], message, data);
+      notifyTo({
+        user_id: "0",
+        notify_to: ride.user_id,
+        title: "Scheduled Ride Reminder",
+        message: message
+      });
+      Rides.updateOne(
+        {
+          _id: ride._id
+        },
+        {
+          $set: {
+            schedule_reminder_notify: 1
+          }
+        }
+      ).exec();
+    });
+  });
+}
+
+function redispatchOfflineScheduledDrivers() {
+  const dispatchDeadline = moment().add(SCHEDULE_DISPATCH_LEAD_MINUTES, "minutes").toISOString();
+  Rides.find({
+    type: "schedule",
+    ridestatus: "accepted",
+    driver_id: {
+      $exists: true,
+      $ne: null
+    },
+    schedule_utc_time: {
+      $lte: dispatchDeadline,
+      $gt: moment().toISOString()
+    }
+  }).exec(function (err, rides) {
+    if (err || !Array.isArray(rides)) {
+      if (err) {
+        console.error("Scheduled redispatch lookup failed:", err);
+      }
+      return;
+    }
+
+    rides.forEach(function (ride) {
+      Driver.findById(ride.driver_id, function (err, driver) {
+        if (err || !driver || String(driver.live_status) === "1") {
+          return;
+        }
+
+        Rides.updateOne(
+          {
+            _id: ride._id,
+            ridestatus: "accepted"
+          },
+          {
+            $set: {
+              ridestatus: "scheduled",
+              notify: 0
+            },
+            $unset: {
+              driver_id: "",
+              vehicle_no: ""
+            },
+            $inc: {
+              schedule_reassign_count: 1
+            }
+          }
+        ).exec(function (updateErr) {
+          if (updateErr) {
+            console.error("Scheduled redispatch update failed:", updateErr);
+          }
+        });
+      });
+    });
+  });
+}
+
+function dispatchDueScheduledRides() {
+  const dispatchDeadline = moment().add(SCHEDULE_DISPATCH_LEAD_MINUTES, "minutes").toISOString();
   Rides.find({
     ridestatus: "scheduled",
     notify: 0,
-    schedule_utc_time: { $lt: timestamp }
+    schedule_utc_time: {
+      $lte: dispatchDeadline,
+      $gt: moment().toISOString()
+    }
   })
     .populate("driver_id")
     .exec(function (err, schedulerides) {
@@ -1678,7 +3189,6 @@ cron.schedule("* * * * *", function () {
         return;
       }
       schedulerides.forEach(function (rides) {
-        /* notify nearby drivers */
         let lon = parseFloat(rides.pickup_lng);
         let lat = parseFloat(rides.pickup_lat);
         if (isNaN(lon) || isNaN(lat)) {
@@ -1695,49 +3205,54 @@ cron.schedule("* * * * *", function () {
           if (isNaN(maxdistcoverage) || maxdistcoverage <= 0) {
             maxdistcoverage = 1;
           }
-          /* mongo geonear api */
-          let query = Driver.aggregate([
-            {
-              $geoNear: {
-                near: {
-                  type: "Point",
-                  coordinates: [lon, lat]
-                },
-                maxDistance: maxdistcoverage * 1000,
-                spherical: true,
-                distanceField: "distance",
-                query: {
-                  live_status: "1",
-                  approval: "1",
-                  category_id: rides.category_id
-                }
-              }
-            },
-            {
-              $sort: {
-                distance: 1
-              }
-            }
-          ]);
+          let query = buildNearbyDriverQuery(lon, lat, maxdistcoverage, rides);
           query.exec(function (err, driver) {
             if (err) {
               console.error("Nearby driver query failed:", err);
-            } else {
-              if (Array.isArray(driver) && driver.length > 0) {
-                let availdrivers = [];
-                driver.forEach(function (d) {
-                  availdrivers.push(d._id);
-                });
-                /* notify nearby drivers */
-                if (rides.notify == 0) {
-                  schedulenearBy(availdrivers, rides);
-                }
+            } else if (Array.isArray(driver) && driver.length > 0 && rides.notify == 0) {
+              driver = filterDriversByAcceptanceSettings(driver, rides);
+              filterBlockedDriversForRide(driver, rides, function (availableDrivers) {
+              let availdrivers = [];
+              availableDrivers.forEach(function (d) {
+                availdrivers.push(d._id);
+              });
+              if (availdrivers.length > 0) {
+                schedulenearBy(availdrivers, rides);
               }
+              });
             }
           });
         });
       });
     });
+}
+
+function expireUnacceptedScheduledRides() {
+  Rides.updateMany(
+    {
+      ridestatus: "scheduled",
+      schedule_utc_time: {
+        $lt: moment().toISOString()
+      }
+    },
+    {
+      $set: {
+        ridestatus: "scheduleridenotaccepted",
+        ridestatusat: timeZone()
+      }
+    }
+  ).exec(function (err) {
+    if (err) {
+      console.error("Scheduled ride expiry failed:", err);
+    }
+  });
+}
+
+cron.schedule("* * * * *", function () {
+  sendScheduledRideReminders();
+  redispatchOfflineScheduledDrivers();
+  dispatchDueScheduledRides();
+  expireUnacceptedScheduledRides();
 });
 
 /* cancel a ride */
@@ -4000,22 +5515,36 @@ router.post(
               message: "Please check the details"
             });
           } else {
-            let timestamp = timeZone();
             let newplace = {
               user_id: req.body.user_id,
               place_name: req.body.place_name,
               place_full_address: req.body.place_full_address,
               place_latitude: req.body.place_latitude,
               place_longitude: req.body.place_longitude,
-              place_type: req.body.place_type,
+              place_type: normalizeSavedPlaceType(req.body.place_type),
               google_place_id: req.body.google_place_id
             };
-            Places.findOne(
-              {
+
+            const normalizedPlaceType = normalizeSavedPlaceType(req.body.place_type);
+            const shortcutTypes = savedPlaceTypeQuery(normalizedPlaceType);
+            const saveQuery = shortcutTypes.length === 1 && shortcutTypes[0] === normalizedPlaceType && !["Home", "Office"].includes(normalizedPlaceType)
+              ? {
                 user_id: req.body.user_id,
                 google_place_id: req.body.google_place_id
-              },
+              }
+              : {
+                user_id: req.body.user_id,
+                place_type: {
+                  $in: shortcutTypes
+                }
+              };
+
+            Places.findOne(
+              saveQuery,
               function (err, place) {
+                if (err) {
+                  return senderr(res);
+                }
                 if (place == null) {
                   let newuserplace = new Places(newplace);
                   newuserplace.save(function (err) {
@@ -4029,13 +5558,33 @@ router.post(
                       });
                     }
                   });
+                } else if (["Home", "Office"].includes(normalizedPlaceType)) {
+                  Places.findByIdAndUpdate(
+                    place._id,
+                    {
+                      $set: newplace
+                    },
+                    {
+                      new: true
+                    },
+                    function (err, updatedPlace) {
+                      if (err || !updatedPlace) {
+                        return senderr(res);
+                      }
+                      res.json({
+                        status: "true",
+                        place_id: updatedPlace._id,
+                        message: "Saved successfully"
+                      });
+                    }
+                  );
                 } else {
                   res.json({
                     status: "false",
                     message: "Place already saved"
                   });
                 }
-              }
+              },
             );
           }
         } else if (req.body.type && req.body.type == "remove") {
@@ -4093,10 +5642,23 @@ router.post(
           senderr(res);
         } else {
           let allplace = [];
-          Places.find()
-            .where("user_id")
-            .in(req.body.user_id)
+          Places.find({
+            user_id: req.body.user_id
+          })
             .exec(function (err, place) {
+              if (err) {
+                return res.json({
+                  status: "false",
+                  message: "Something went to be wrong"
+                });
+              }
+              place.sort(function (a, b) {
+                const weightDiff = savedPlaceSortWeight(a.place_type) - savedPlaceSortWeight(b.place_type);
+                if (weightDiff !== 0) {
+                  return weightDiff;
+                }
+                return String(a.place_type || "").localeCompare(String(b.place_type || ""));
+              });
               place.forEach(function (h) {
                 allplace.push({
                   place_id: h._id,
@@ -4254,6 +5816,12 @@ router.get("/lastridedetails/:user_id", function (req, res) {
               rideresult.drop_location = rides.drop_location;
               rideresult.drop_lat = rides.drop_lat;
               rideresult.drop_lng = rides.drop_lng;
+              rideresult.ride_stops = rides.ride_stops || [];
+              rideresult.pooling_opt_in = rides.pooling_opt_in;
+              rideresult.seats_requested = rides.seats_requested;
+              rideresult.pool_status = rides.pool_status;
+              rideresult.pool_group_size = rides.pool_group_size || 1;
+              rideresult.pool_discount_percent = rides.pool_discount_percent || 0;
               rideresult.approx_price = rides.category_id.baseprice;
               rideresult.notified = rides.notify;
               allrides.push(rideresult);
@@ -4300,14 +5868,28 @@ router.post("/makecall", function (req, res) {
           let userids = [req.body.receiver_id];
 
           if (req.body.user_type === "user") {
-            driverNotification(userids, "Call Connected Successfully", data);
+            driverNotify(userids, "", data);
+            socketRegistry.emitToUser(req.body.receiver_id, "incoming-call", data);
           }
 
           if (req.body.user_type === "driver") {
-            userNotification(userids, "Call Connected Successfully", data);
+            userNotify(userids, "", data);
+            socketRegistry.emitToUser(req.body.receiver_id, "incoming-call", data);
           }
 
           console.log(JSON.stringify(data));
+
+          saveOrUpdateCallLog({
+            sender_id: req.body.sender_id,
+            receiver_id: req.body.receiver_id,
+            user_type: req.body.user_type,
+            room_id: req.body.room_id,
+            platform: req.body.platform,
+            type: req.body.type,
+            onride_id: req.body.onride_id,
+            status: "started",
+            started_at: new Date()
+          });
 
           res.json({
             status: "true",
@@ -4341,17 +5923,146 @@ router.post("/endcall", function (req, res) {
     let userids = [req.body.receiver_id];
 
     if (req.body.user_type === "user") {
-      driverNotification(userids, "Call Disconnected Successfully", data);
+      driverNotify(userids, "", data);
+      socketRegistry.emitToUser(req.body.receiver_id, "end-call", data);
     }
     if (req.body.user_type === "driver") {
-      userNotification(userids, "Call Disconnected Successfully", data);
+      userNotify(userids, "", data);
+      socketRegistry.emitToUser(req.body.receiver_id, "end-call", data);
     }
+
+    saveOrUpdateCallLog({
+      room_id: req.body.room_id,
+      status: "ended",
+      ended_at: new Date()
+    });
 
     res.json({
       status: "true",
       message: "Call Disconnected Successfully"
     });
   }
+});
+
+router.get("/ridechat/:onride_id/messages", function (req, res) {
+  passport.authenticate("jwt", { session: false }, function (err, user) {
+    if (err === "AccountDeleted") {
+      return res.json({
+        status: "error",
+        message: "Account has been deleted successfully"
+      });
+    }
+    if (!user) {
+      return res.json({
+        status: "error",
+        message: "Unauthorized access"
+      });
+    }
+
+    Rides.findOne({
+      _id: req.params.onride_id,
+      user_id: String(user._id)
+    }).exec(function (rideErr, ride) {
+      if (rideErr || !ride) {
+        return res.json({
+          status: "false",
+          message: "Ride not found"
+        });
+      }
+
+      RideChatMessages.find({
+        onride_id: String(ride._id)
+      }).sort({ created_at: 1 }).exec(function (messageErr, messages) {
+        if (messageErr) {
+          return senderr(res);
+        }
+        return res.json({
+          status: "true",
+          result: messages
+        });
+      });
+    });
+  })(req, res);
+});
+
+router.post("/ridechat/:onride_id/message", function (req, res) {
+  passport.authenticate("jwt", { session: false }, function (err, user) {
+    if (err === "AccountDeleted") {
+      return res.json({
+        status: "error",
+        message: "Account has been deleted successfully"
+      });
+    }
+    if (!user) {
+      return res.json({
+        status: "error",
+        message: "Unauthorized access"
+      });
+    }
+
+    let message = String(req.body.message || "").trim();
+    if (!message) {
+      return res.json({
+        status: "false",
+        message: "Message is required"
+      });
+    }
+
+    Rides.findOne({
+      _id: req.params.onride_id,
+      user_id: String(user._id)
+    }).exec(function (rideErr, ride) {
+      if (rideErr || !ride) {
+        return res.json({
+          status: "false",
+          message: "Ride not found"
+        });
+      }
+
+      saveRideChatMessage({
+        onride_id: ride._id,
+        user_id: user._id,
+        driver_id: ride.driver_id || "",
+        sender_type: "user",
+        sender_id: user._id,
+        message: message
+      }, function (messageErr, savedMessage) {
+        if (messageErr) {
+          return senderr(res);
+        }
+
+        let payload = {
+          onride_id: String(ride._id),
+          room_id: "ridechat_" + String(ride._id),
+          sender_type: "user",
+          sender_id: String(user._id),
+          receiver_id: String(ride.driver_id || ""),
+          user_name: user.full_name || "",
+          user_image: base_url + "/gallery/users/" + (user.profile_image || "user.png"),
+          message: savedMessage.message,
+          created_at: savedMessage.created_at
+        };
+
+        if (ride.driver_id) {
+          driverNotify([ride.driver_id], trimChatPreview(savedMessage.message), {
+            type: "ride_chat",
+            ride_id: String(ride._id),
+            room_id: payload.room_id,
+            sender_type: "user",
+            sender_id: String(user._id),
+            user_name: user.full_name || "",
+            message: savedMessage.message
+          });
+          socketRegistry.emitToUser(ride.driver_id, "incoming-chat", payload);
+        }
+
+        return res.json({
+          status: "true",
+          result: savedMessage
+        });
+      });
+    });
+  })(req, res);
 });
 
 /* delete account */
@@ -4663,8 +6374,8 @@ iOSDriver = function (devicetoken, message_data) {
 nearBy = function (driverIds, rideId) {
   Rides.findOne({
     _id: rideId
-  }).exec(function (err, rides) {
-    if (!err) {
+  }).populate("user_id").exec(function (err, rides) {
+    if (!err && rides) {
       let message = "New Ride available";
       let translatedstring = "";
 
@@ -4687,6 +6398,13 @@ nearBy = function (driverIds, rideId) {
               drop_location: rides.drop_location,
               drop_lat: rides.drop_lat,
               drop_lng: rides.drop_lng,
+              user_id: rides.user_id && rides.user_id._id ? rides.user_id._id : rides.user_id,
+              user_name: rides.user_id && rides.user_id.full_name ? rides.user_id.full_name : "",
+              category_id: rides.category_id,
+              service_type: rides.service_type || "ride",
+              ride_stops: JSON.stringify(rides.ride_stops || []),
+              onride_otp: rides.onride_otp,
+              approx_price: rides.baseprice,
               message: translationServer.langTranslate("NewRideavailable", lang),
               type: "nearby"
             };
@@ -4716,6 +6434,13 @@ nearBy = function (driverIds, rideId) {
               drop_location: rides.drop_location,
               drop_lat: rides.drop_lat,
               drop_lng: rides.drop_lng,
+              user_id: rides.user_id && rides.user_id._id ? rides.user_id._id : rides.user_id,
+              user_name: rides.user_id && rides.user_id.full_name ? rides.user_id.full_name : "",
+              category_id: rides.category_id,
+              service_type: rides.service_type || "ride",
+              ride_stops: JSON.stringify(rides.ride_stops || []),
+              onride_otp: rides.onride_otp,
+              approx_price: rides.baseprice,
               message: translationServer.langTranslate("NewRideavailable", lang),
               type: "nearby"
             };
@@ -4816,12 +6541,12 @@ schedulenearBy = function (driverIds, rides) {
     {
       $set: {
         notify: 1,
-        ridestatus: "scheduleridenotaccepted"
+        schedule_dispatched_at: new Date()
       }
     }
   ).exec(function (err, rides) {
     if (err) {
-      senderr(res);
+      console.error("Scheduled nearby notification update failed:", err);
     } else {
       //console.log("notifications updated to nearby drivers");
     }
@@ -4931,28 +6656,12 @@ fireBaseAndroidDriver = function (devicetokens, messagetext, data) {
 
 /* time based on your region */
 timeZone = function () {
-  let selectedDate = new Date();
-  selectedDate.setHours(selectedDate.getHours() + 5);
-  selectedDate.setMinutes(selectedDate.getMinutes() + 30);
-  let currentDate = selectedDate;
-  let currentTime = currentDate.getTime();
-  let localOffset = -1 * selectedDate.getTimezoneOffset() * 60000;
-  let timestamp = Math.round(new Date(currentTime + localOffset).getTime() / 1000);
-  return timestamp;
+  return timezone.timestampSeconds();
 };
 
 /* schedule time based on your region */
 scheduletimeZone = function () {
-  /*let selectedDate = new Date();
-    selectedDate.setHours(selectedDate.getHours() + 5);
-    selectedDate.setMinutes(selectedDate.getMinutes() + 40);
-    let currentDate = selectedDate;
-    let currentTime = currentDate.getTime();
-    let localOffset = (-1) * selectedDate.getTimezoneOffset() * 60000;*/
-  let timestamp = moment(new Date())
-    .add(10, "minutes")
-    .toISOString();
-  return timestamp;
+  return timezone.isoAfterMinutes(10);
 };
 
 module.exports = router;

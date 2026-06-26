@@ -7,6 +7,8 @@ const express = require('express');
 const router = express.Router();
 const path = require('path');
 const moment = require("moment");
+const socketRegistry = require("../socketRegistry");
+const timezone = require("../utils/timezone");
 
 /* schemas */
 let Driver = require("../schema/driver");
@@ -26,10 +28,20 @@ let Reviews = require("../schema/reviews");
 let Admin = require("../models/admin");
 let Settlements = require("../schema/settlement");
 let OtpVerification = require("../schema/otpverification");
+let SosAlerts = require("../schema/sosalerts");
+let LostItems = require("../schema/lostitems");
+let LostItemMessages = require("../schema/lostitemmessages");
+let RideChatMessages = require("../schema/ridechatmessages");
+let RiderBlocks = require("../schema/riderblocks");
+let CallLogs = require("../schema/calllogs");
 let translationServer = require("../translation/translate.js");
 
 /* api url */
 const base_url = config.baseUrl;
+
+function timeZone() {
+  return timezone.timestampSeconds();
+}
 
 /* upload directories */
 const driverassets = "./src/assets/media/drivers/";
@@ -58,6 +70,342 @@ const OTP_EXPIRY_MINUTES = 5;
 const OTP_MAX_ATTEMPTS = 5;
 const DRIVER_WALLET_TYPE = "driver";
 const DRIVER_FORGOT_PASSWORD_OTP_PURPOSE = "forgot_password";
+const VALID_DRIVER_SERVICE_TYPES = ["ride", "delivery"];
+const ACTIVE_RIDE_STATUSES = ["requested", "accepted", "ontheway", "onride"];
+
+function normalizeDriverServiceTypes(value) {
+  let serviceTypes = value;
+  if (typeof serviceTypes === "string") {
+    try {
+      serviceTypes = JSON.parse(serviceTypes);
+    } catch (_error) {
+      serviceTypes = serviceTypes.split(",");
+    }
+  }
+
+  if (!Array.isArray(serviceTypes)) {
+    serviceTypes = [];
+  }
+
+  serviceTypes = serviceTypes
+    .map(function (serviceType) {
+      return String(serviceType || "").trim().toLowerCase();
+    })
+    .filter(function (serviceType, index, list) {
+      return VALID_DRIVER_SERVICE_TYPES.indexOf(serviceType) !== -1 && list.indexOf(serviceType) === index;
+    });
+
+  if (serviceTypes.length === 0) {
+    serviceTypes.push("ride");
+  }
+
+  return serviceTypes;
+}
+
+function saveDriverCallLog(payload, callback) {
+  let roomId = String(payload.room_id || "").trim();
+  if (!roomId) {
+    return callback && callback();
+  }
+
+  if (payload.ended_at) {
+    return CallLogs.findOne({ room_id: roomId })
+      .sort({ created_at: -1 })
+      .exec(function (_err, log) {
+        if (!log) {
+          return callback && callback();
+        }
+        let endedAt = payload.ended_at;
+        let durationSeconds = Math.max(
+          0,
+          Math.round((endedAt.getTime() - new Date(log.started_at || log.created_at || endedAt).getTime()) / 1000)
+        );
+        CallLogs.updateOne(
+          { _id: log._id },
+          {
+            $set: {
+              status: payload.status || "ended",
+              ended_at: endedAt,
+              duration_seconds: durationSeconds
+            }
+          }
+        ).exec(function () {
+          if (callback) {
+            callback();
+          }
+        });
+      });
+  }
+
+  let log = new CallLogs({
+    room_id: roomId,
+    sender_id: String(payload.sender_id || ""),
+    sender_type: "driver",
+    receiver_id: String(payload.receiver_id || ""),
+    receiver_type: "user",
+    onride_id: String(payload.onride_id || ""),
+    call_type: String(payload.type || "audio"),
+    platform: String(payload.platform || ""),
+    status: payload.status || "started",
+    started_at: payload.started_at || new Date()
+  });
+  log.save(function () {
+    if (callback) {
+      callback();
+    }
+  });
+}
+
+function clearOtherActiveRidesForRider(userId, completedRideId) {
+  if (!userId) {
+    return;
+  }
+
+  Rides.updateMany({
+    user_id: userId,
+    _id: { $ne: completedRideId },
+    ridestatus: { $in: ACTIVE_RIDE_STATUSES }
+  }, {
+    $set: {
+      ridestatus: "cancelled",
+      ridestatusat: timeZone()
+    }
+  }).exec(function (error) {
+    if (error) {
+      console.error("Unable to clear stale active rides:", error);
+    }
+  });
+}
+
+function completeRideForPayment(onrideId, driverId, callback) {
+  Rides.findOne({
+    _id: onrideId
+  }, function (err, ride) {
+    if (err || !ride) {
+      return callback(err || new Error("Ride not found"));
+    }
+
+    if (ride.ridestatus !== "cancelled") {
+      ride.ridestatus = "completed";
+      ride.ridestatusat = timeZone();
+      ride.ride_completed_at = ride.ride_completed_at || new Date();
+    }
+
+    ride.save(function (saveErr) {
+      if (saveErr) {
+        return callback(saveErr);
+      }
+
+      clearOtherActiveRidesForRider(ride.user_id, ride._id);
+      Driver.updateOne({
+        _id: driverId || ride.driver_id
+      }, {
+        $set: {
+          live_status: "1"
+        }
+      }).exec(function (driverErr) {
+        callback(driverErr, ride);
+      });
+    });
+  });
+}
+
+function normalizeRideServiceType(value) {
+  value = String(value || "ride").trim().toLowerCase();
+  return value === "delivery" ? "delivery" : "ride";
+}
+
+function buildDriverServiceTypeMatch(serviceType) {
+  serviceType = normalizeRideServiceType(serviceType);
+  if (serviceType === "delivery") {
+    return {
+      service_types: "delivery"
+    };
+  }
+
+  return {
+    $or: [
+      { service_types: "ride" },
+      { service_types: { $exists: false } },
+      { service_types: { $size: 0 } }
+    ]
+  };
+}
+
+function driverMatchesAcceptanceSettings(driver, ride) {
+  let settings = driver.acceptance_settings || {};
+  let maxPickupDistance = Number(settings.max_pickup_distance_km || 0);
+  let minFare = Number(settings.min_fare || 0);
+  let supportedRideTypes = Array.isArray(settings.ride_types) && settings.ride_types.length > 0
+    ? settings.ride_types
+    : ["ride", "delivery", "pool"];
+  let requestedRideType = ride.pooling_opt_in ? "pool" : normalizeRideServiceType(ride.service_type);
+
+  if (maxPickupDistance > 0 && Number(driver.distance || 0) / 1000 > maxPickupDistance) {
+    return false;
+  }
+  if (minFare > 0 && Number(ride.baseprice || 0) < minFare) {
+    return false;
+  }
+  return supportedRideTypes.indexOf(requestedRideType) !== -1;
+}
+
+function validateDriverCanAcceptRide(driverId, ride, callback) {
+  let lon = parseFloat(ride.pickup_lng);
+  let lat = parseFloat(ride.pickup_lat);
+  if (isNaN(lon) || isNaN(lat)) {
+    return callback(false);
+  }
+
+  Admin.findOne(function (err, admin) {
+    if (err || !admin) {
+      return callback(false);
+    }
+    let maxdistcoverage = parseInt(admin.distancePerCab);
+    if (isNaN(maxdistcoverage) || maxdistcoverage <= 0) {
+      maxdistcoverage = 1;
+    }
+
+    Driver.aggregate([
+      {
+        $geoNear: {
+          near: {
+            type: "Point",
+            coordinates: [lon, lat]
+          },
+          maxDistance: maxdistcoverage * 1000,
+          spherical: true,
+          distanceField: "distance",
+          query: {
+            _id: driverId,
+            live_status: "1",
+            approval: "1",
+            category_id: ride.category_id,
+            ...buildDriverServiceTypeMatch(ride.service_type)
+          }
+        }
+      }
+    ]).exec(function (geoErr, drivers) {
+      if (geoErr || !Array.isArray(drivers) || drivers.length === 0) {
+        return callback(false);
+      }
+      callback(driverMatchesAcceptanceSettings(drivers[0], ride));
+    });
+  });
+}
+
+function emergencyContactsFromProfile(profile) {
+  let contacts = profile && profile.emergency_contact;
+  if (!contacts) {
+    return [];
+  }
+  if (!Array.isArray(contacts)) {
+    contacts = [contacts];
+  }
+  return contacts
+    .map(function (contact) {
+      return contact && (contact.phone_no || contact.phone_number || contact.phone);
+    })
+    .filter(Boolean);
+}
+
+function sendEmergencySmsToContacts(contacts, message, callback) {
+  contacts = Array.isArray(contacts) ? contacts : [];
+  if (contacts.length === 0) {
+    return callback(0);
+  }
+
+  let completed = 0;
+  let sent = 0;
+  contacts.forEach(function (phoneNumber) {
+    smsService.sendSms(phoneNumber, message).then(function (result) {
+      if (result && result.success) {
+        sent += 1;
+      }
+    }).catch(function () {}).then(function () {
+      completed += 1;
+      if (completed === contacts.length) {
+        callback(sent);
+      }
+    });
+  });
+}
+
+function trimPreview(message) {
+  message = String(message || "").trim();
+  if (message.length <= 160) {
+    return message;
+  }
+  return message.substr(0, 157) + "...";
+}
+
+function saveLostItemMessage(options, callback) {
+  let payload = options || {};
+  let messageText = String(payload.message || "").trim();
+  if (!payload.lost_item_id || !messageText) {
+    return callback(new Error("Invalid lost item message payload"));
+  }
+
+  let newMessage = new LostItemMessages({
+    lost_item_id: String(payload.lost_item_id),
+    ride_id: payload.ride_id ? String(payload.ride_id) : "",
+    user_id: payload.user_id ? String(payload.user_id) : "",
+    driver_id: payload.driver_id ? String(payload.driver_id) : "",
+    sender_type: payload.sender_type || "driver",
+    sender_id: payload.sender_id ? String(payload.sender_id) : "",
+    message: messageText
+  });
+
+  newMessage.save(function (messageErr, savedMessage) {
+    if (messageErr) {
+      return callback(messageErr);
+    }
+
+    let counterUpdate = {
+      last_message_at: savedMessage.created_at,
+      last_message_preview: trimPreview(savedMessage.message),
+      last_message_sender: payload.sender_type || "driver"
+    };
+
+    if (payload.sender_type === "driver") {
+      counterUpdate.unread_user_count = Number(payload.increment_user_unread || 1);
+      counterUpdate.unread_admin_count = Number(payload.increment_admin_unread || 1);
+      counterUpdate.unread_driver_count = 0;
+    } else {
+      counterUpdate.unread_driver_count = Number(payload.increment_driver_unread || 1);
+    }
+
+    LostItems.updateOne(
+      {
+        _id: payload.lost_item_id
+      },
+      {
+        $set: counterUpdate
+      }
+    ).exec(function () {
+      callback(null, savedMessage);
+    });
+  });
+}
+
+function saveRideChatMessage(options, callback) {
+  let payload = options || {};
+  let messageText = String(payload.message || "").trim();
+  if (!payload.onride_id || !messageText) {
+    return callback(new Error("Invalid ride chat payload"));
+  }
+
+  let newMessage = new RideChatMessages({
+    onride_id: String(payload.onride_id),
+    user_id: payload.user_id ? String(payload.user_id) : "",
+    driver_id: payload.driver_id ? String(payload.driver_id) : "",
+    sender_type: payload.sender_type || "driver",
+    sender_id: payload.sender_id ? String(payload.sender_id) : "",
+    message: messageText
+  });
+
+  newMessage.save(callback);
+}
 
 function mapSelcomSessionStatus(payload) {
   const paymentStatus = String(payload && payload.payment_status || "").trim().toUpperCase();
@@ -282,6 +630,7 @@ router.post('/signup', function (req, res) {
       lat: req.body.lat,
       lon: req.body.lon,
       loc: [req.body.lon, req.body.lat],
+      service_types: normalizeDriverServiceTypes(req.body.service_types),
       instant_lat: req.body.lat,
       instant_lng: req.body.lon,
       location: req.body.location,
@@ -308,6 +657,7 @@ router.post('/signup', function (req, res) {
             if (count == '0') {
               let newVehicle = new Vehicles({
                 user_id: driver._id,
+                service_types: driver.service_types,
                 completionStatus: "0"
               });
               newVehicle.save(function (err, vehicles) {
@@ -552,6 +902,7 @@ router.post('/signin', function (req, res) {
               result.token = 'JWT ' + signintoken;
               result.emergency_contact = driver.emergency_contact;
               result.walletmoney = getDriverWalletAmount(driver);
+              result.service_types = driver.service_types && driver.service_types.length ? driver.service_types : ["ride"];
               result.approval = ((driver.approval == '1') ? "true" : "false");
               vehicleStatus = ((vehicleinfo.status == '1') ? "approved" : "rejected");
               result.vehicle_approval = ((typeof vehicleinfo.category == 'undefined') ? "pending" : vehicleStatus);
@@ -611,6 +962,7 @@ router.get('/profile/:userid', function (req, res) {
             result.emergency_contact = driver.emergency_contact;
             result.nextinspectionon = driver.inspectionon;
             result.walletmoney = getDriverWalletAmount(driver);
+            result.service_types = driver.service_types && driver.service_types.length ? driver.service_types : ["ride"];
             let querystring = {
               driver_id: req.params.userid
             };
@@ -741,6 +1093,7 @@ router.post('/postvehicledetails', function (req, res) {
     })
       .then(function (c) {
         req.body.amenities = JSON.parse(req.body.amenities);
+        req.body.service_types = normalizeDriverServiceTypes(req.body.service_types);
         if (c > 0) {
           Vehicles.findOneAndUpdate({
             "user_id": req.body.user_id
@@ -748,7 +1101,8 @@ router.post('/postvehicledetails', function (req, res) {
             "$set": req.body
           }).exec(function (err, vehicles) {
             let result = {
-              vehicle_details: "Complete"
+              vehicle_details: "Complete",
+              service_types: req.body.service_types
             };
             if (err) {
               res.json({
@@ -810,7 +1164,8 @@ router.post('/postvehicledetails', function (req, res) {
               });
             } else {
               let result = {
-                vehicle_details: "Complete"
+                vehicle_details: "Complete",
+                service_types: req.body.service_types
               };
               Driver.findOneAndUpdate({
                 _id: req.body.user_id
@@ -2398,6 +2753,11 @@ router.post('/goride', function (req, res) {
     else {
       if (!req.body.user_id || !req.body.onride_id) {
         senderr(res);
+      } else if (String(driver._id) !== String(req.body.user_id)) {
+        res.json({
+          status: "error",
+          message: "Unauthorized access"
+        });
       } else {
         let querystring = {
           _id: req.body.onride_id
@@ -2411,6 +2771,13 @@ router.post('/goride', function (req, res) {
               console.log("goride_rides.ridestatus"+rides.ridestatus);
              
               if (rides.ridestatus == "requested" || rides.ridestatus == "scheduled" || rides.ridestatus == "ridenotaccepted" || rides.ridestatus == "scheduleridenotaccepted") {
+                validateDriverCanAcceptRide(driver._id, rides, function (canAccept) {
+                  if (!canAccept) {
+                    return res.json({
+                      status: "false",
+                      message: "This ride is no longer available near you."
+                    });
+                  }
                 rides.ridestatus = "accepted";
                 console.log("gorideddddd---------"+rides);
                 
@@ -2455,6 +2822,8 @@ router.post('/goride', function (req, res) {
                             });
           
                             rideresult.status = "true";
+                            rideresult.user_id = rides.user_id._id;
+                            rideresult.rideuserid = rides.user_id._id;
                             rideresult.user_name = rides.user_id.full_name;
                             rideresult.onride_otp = rides.onride_otp;
                             rideresult.pickup_location = rides.pickup_location;
@@ -2463,6 +2832,9 @@ router.post('/goride', function (req, res) {
                             rideresult.drop_location = rides.drop_location;
                             rideresult.drop_lat = rides.drop_lat;
                             rideresult.drop_lng = rides.drop_lng;
+                            rideresult.from = "accepted";
+                            rideresult.service_type = rides.service_type || "ride";
+                            rideresult.ride_stops = JSON.stringify(rides.ride_stops || []);
                             rideresult.vehicle_no = rides.vehicle_no;
                             res.json(rideresult);
                           } else {
@@ -2474,6 +2846,7 @@ router.post('/goride', function (req, res) {
                       }
                     });
                   }
+                });
                 });
               } else {
                 res.json({
@@ -2510,7 +2883,11 @@ router.post('/completeride', function (req, res) {
           _id: req.body.onride_id
         };
         let timestamp = timeZone();
-        let distance = parseFloat(req.body.distance).toFixed(2);
+        let requestDistance = parseFloat(req.body.distance);
+        if (!Number.isFinite(requestDistance) || requestDistance <= 0) {
+          requestDistance = 1;
+        }
+        let distance = Math.max(requestDistance, 1).toFixed(2);
         Rides.findOne(querystring).populate('user_id').populate('category_id').
           exec({
             _id: req.body.onride_id
@@ -2520,8 +2897,23 @@ router.post('/completeride', function (req, res) {
               senderr(res);
             } else {
               Admin.findOne(function (err, admin) {
-                
-                if (rides.ridestatus == "onride" || rides.ridestatus == "ontheway") {
+                if (rides.ridestatus === "completed") {
+                  Driver.updateOne({
+                    _id: rides.driver_id
+                  }, {
+                    $set: {
+                      live_status: "1"
+                    }
+                  }).exec(function () {});
+                  clearOtherActiveRidesForRider(rides.user_id && rides.user_id._id ? rides.user_id._id : rides.user_id, rides._id);
+                  return res.json({
+                    status: "true",
+                    type: rides.payment_type,
+                    message: 'Your Ride has been marked as completed'
+                  });
+                }
+
+                if (rides.ridestatus !== "cancelled") {
                   rides.ridestatus = "completed";
                   rides.ridestatusat = timestamp;
                   rides.ride_completed_at = new Date();
@@ -2543,10 +2935,11 @@ router.post('/completeride', function (req, res) {
                         _id: rides.driver_id
                       }, {
                         $set: result
-                      }).exec(function (err, driver) {
+                          }).exec(function (err, driver) {
                         if (err) {
                           senderr(res);
                         } else {
+                          clearOtherActiveRidesForRider(rides.user_id && rides.user_id._id ? rides.user_id._id : rides.user_id, rides._id);
                           /* let notifications = {
                             user_id: req.body.user_id, notify_to: rides.user_id._id, title: "Ride Completed",
                             message: "Your Ride has been completed."
@@ -2760,13 +3153,13 @@ router.post('/ridedetails', function (req, res) {
           if (count > 0) {
             Rides.findOne(querystring).populate('category_id').populate('user_id').
               exec(function (err, rides) {
-                if (!err) {
+                if (!err && rides) {
                   rideresult.status = "true";
-                  rideresult.user_name = rides.user_id.full_name;
-                  rideresult.category_name = rides.category_id.category_name;
-                  let profile_image = rides.category_id.image;
+                  rideresult.user_name = rides.user_id && rides.user_id.full_name ? rides.user_id.full_name : "";
+                  rideresult.category_name = rides.category_id && rides.category_id.category_name ? rides.category_id.category_name : "";
+                  let profile_image = rides.category_id && rides.category_id.image ? rides.category_id.image : "category.png";
                   if (typeof profile_image == 'undefined') {
-                    let profile_image = 'category.png';
+                    profile_image = 'category.png';
                   }
                   let categoryimage = base_url + '/imagegallery/' + profile_image;
                   rideresult.category_image = categoryimage;
@@ -2776,6 +3169,7 @@ router.post('/ridedetails', function (req, res) {
                   rideresult.drop_location = rides.drop_location;
                   rideresult.drop_lat = rides.drop_lat;
                   rideresult.drop_lng = rides.drop_lng;
+                  rideresult.ride_stops = JSON.stringify(rides.ride_stops || []);
                   rideresult.onride_otp = rides.onride_otp;
                   rideresult.approx_price = rides.baseprice;
                   res.json(rideresult);
@@ -2856,16 +3250,16 @@ router.post('/ridehistory', function (req, res) {
                   } else {
                     vehicle_no = c.vehicle_no;
                   }
-                  let profile_image = c.category_id.image;
+                  let profile_image = c.category_id && c.category_id.image ? c.category_id.image : "category.png";
                   if (typeof profile_image == 'undefined') {
-                    let profile_image = 'category.png';
+                    profile_image = 'category.png';
                   }
                   let categoryimage = base_url + '/imagegallery/' + profile_image;
-                  let rideTotal = parseFloat(c.baseprice) + parseFloat(taxprice);
+                  let rideTotal = parseFloat(c.baseprice || 0) + parseFloat(taxprice || 0);
                   rideresult.push({
                     onride_id: c._id,
                     category_image: categoryimage,
-                    category_name: c.category_id.category_name,
+                    category_name: c.category_id && c.category_id.category_name ? c.category_id.category_name : "",
                     ride_status: c.ridestatus,
                     total_price: roundCustomerPayableAmount(rideTotal),
                     vehicle_no: vehicle_no,
@@ -2947,6 +3341,10 @@ router.post('/paybycash', function (req, res) {
       if (!req.body.user_id || !req.body.amount || !req.body.onride_id || !req.body.iswallet || !req.body.basefare || !req.body.commissionamount || !req.body.tax || !req.body.rideuserid) {
         senderr(res);
       } else {
+        completeRideForPayment(req.body.onride_id, req.body.user_id, function (completeErr) {
+          if (completeErr) {
+            return senderr(res);
+          }
         let paidby = "cash";
         if (req.body.amount == 0) {
           paidby = "wallet";
@@ -3139,6 +3537,7 @@ router.post('/paybycash', function (req, res) {
               }
             });
           }
+        });
         });
       }
     }
@@ -3416,6 +3815,819 @@ router.post('/deleteaccount', function (req, res) {
   })(req, res);
 });
 
+router.post("/sosalert", function (req, res) {
+  passport.authenticate("jwt", { session: false }, function (err, driver) {
+    if (err === "AccountDeleted") {
+      return res.json({
+        status: "error",
+        message: "Account has been deleted successfully"
+      });
+    }
+    if (!driver) {
+      return res.json({
+        status: "error",
+        message: "Unauthorized access"
+      });
+    }
+
+    let alert = new SosAlerts({
+      actor_type: "driver",
+      actor_id: req.body.user_id || driver._id,
+      actor_model: "Driver",
+      ride_id: req.body.ride_id || req.body.onride_id || "",
+      location: req.body.location || "",
+      lat: req.body.lat || req.body.latitude || "",
+      lng: req.body.lng || req.body.lon || req.body.longitude || "",
+      message: req.body.message || "Driver emergency alert",
+      action_type: req.body.action_type || "",
+      contact_target: req.body.contact_target || "",
+      status: "active",
+      response_due_at: new Date(Date.now() + 2 * 60 * 1000),
+      callback_required: true,
+      callback_status: "pending"
+    });
+
+    alert.save(function (saveErr, savedAlert) {
+      if (saveErr) {
+        return senderr(res);
+      }
+
+      let locationUrl = alert.lat && alert.lng ? " https://www.google.com/maps/?q=" + alert.lat + "," + alert.lng : "";
+      let smsMessage = "Emergency alert from " + (driver.full_name || "driver") + "." + locationUrl;
+      sendEmergencySmsToContacts(emergencyContactsFromProfile(driver), smsMessage, function (sentCount) {
+        SosAlerts.updateOne(
+          { _id: savedAlert._id },
+          { $set: { contacts_notified: sentCount } }
+        ).exec(function () {});
+      });
+
+      notifyTo({
+        user_id: String(driver._id),
+        notify_to: "admin",
+        title: "Driver SOS Alert",
+        message: alert.message
+      });
+
+      return res.json({
+        status: "true",
+        message: "SOS alert sent",
+        sos_id: savedAlert._id
+      });
+    });
+  })(req, res);
+});
+
+router.post("/blockrider", function (req, res) {
+  passport.authenticate("jwt", { session: false }, function (err, driver) {
+    if (err === "AccountDeleted") {
+      return res.json({
+        status: "error",
+        message: "Account has been deleted successfully"
+      });
+    }
+    if (!driver) {
+      return res.json({
+        status: "error",
+        message: "Unauthorized access"
+      });
+    }
+    if (!req.body.user_id) {
+      return senderr(res);
+    }
+
+    RiderBlocks.findOneAndUpdate(
+      {
+        driver_id: String(driver._id),
+        user_id: req.body.user_id
+      },
+      {
+        $set: {
+          ride_id: req.body.ride_id || req.body.onride_id || "",
+          reason: req.body.reason || "",
+          status: "active"
+        },
+        $setOnInsert: {
+          created_at: new Date()
+        }
+      },
+      {
+        new: true,
+        upsert: true
+      }
+    ).exec(function (blockErr, block) {
+      if (blockErr) {
+        return senderr(res);
+      }
+      RiderBlocks.count({ user_id: req.body.user_id, status: "active" }).exec(function (_riderCountErr, riderBlockCount) {
+        RiderBlocks.count({ driver_id: String(driver._id), status: "active" }).exec(function (_driverCountErr, driverBlockCount) {
+          let requiresAccountReview = Number(riderBlockCount || 0) >= 3;
+          let requiresDriverReview = Number(driverBlockCount || 0) >= 10;
+          let reviewStatus = requiresAccountReview || requiresDriverReview ? "pending" : "none";
+          let escalationAction = requiresAccountReview ? "account_review" : "";
+          if (requiresDriverReview) {
+            escalationAction = escalationAction ? escalationAction + ",driver_review" : "driver_review";
+          }
+
+          RiderBlocks.updateOne(
+            { _id: block._id },
+            {
+              $set: {
+                rider_block_count: riderBlockCount || 1,
+                driver_block_count: driverBlockCount || 1,
+                requires_account_review: requiresAccountReview,
+                requires_driver_review: requiresDriverReview,
+                admin_review_status: reviewStatus,
+                escalation_action: escalationAction
+              }
+            }
+          ).exec(function () {});
+
+          notifyTo({
+            user_id: String(driver._id),
+            notify_to: "admin",
+            title: requiresAccountReview ? "Rider Block Review Required" : "Rider Blocked",
+            message: driver.full_name + " blocked rider " + req.body.user_id
+          });
+          return res.json({
+            status: "true",
+            message: requiresAccountReview ? "Rider blocked and account review requested" : "Rider blocked",
+            block_id: block._id,
+            rider_block_count: riderBlockCount || 1,
+            driver_block_count: driverBlockCount || 1,
+            requires_account_review: requiresAccountReview,
+            requires_driver_review: requiresDriverReview
+          });
+        });
+      });
+    });
+  })(req, res);
+});
+
+router.get("/lostitems/:driver_id", function (req, res) {
+  passport.authenticate("jwt", { session: false }, function (err, driver) {
+    if (err === "AccountDeleted") {
+      return res.json({
+        status: "error",
+        message: "Account has been deleted successfully"
+      });
+    }
+    if (!driver || String(driver._id) !== String(req.params.driver_id)) {
+      return res.json({
+        status: "error",
+        message: "Unauthorized access"
+      });
+    }
+
+    LostItems.find({
+      driver_id: String(driver._id)
+    })
+      .sort({ created_at: -1 })
+      .limit(100)
+      .populate("ride_id")
+      .populate("user_id")
+      .exec(function (caseErr, cases) {
+        if (caseErr) {
+          return senderr(res);
+        }
+        return res.json({
+          status: "true",
+          result: cases || []
+        });
+      });
+  })(req, res);
+});
+
+router.post("/lostitems/:id/status", function (req, res) {
+  passport.authenticate("jwt", { session: false }, function (err, driver) {
+    if (err === "AccountDeleted") {
+      return res.json({
+        status: "error",
+        message: "Account has been deleted successfully"
+      });
+    }
+    if (!driver) {
+      return res.json({
+        status: "error",
+        message: "Unauthorized access"
+      });
+    }
+
+    let allowedStatuses = ["open", "found", "returned", "resolved"];
+    let requestedStatus = allowedStatuses.indexOf(req.body.status) >= 0 ? req.body.status : "found";
+    let update = {
+      status: requestedStatus,
+      driver_notes: req.body.driver_notes || req.body.notes || ""
+    };
+    if (requestedStatus === "resolved" || requestedStatus === "returned") {
+      update.resolved_at = new Date();
+    }
+
+    LostItems.findOneAndUpdate(
+      {
+        _id: req.params.id,
+        driver_id: String(driver._id)
+      },
+      {
+        $set: update
+      },
+      {
+        new: true
+      }
+    ).exec(function (caseErr, lostItem) {
+      if (caseErr || !lostItem) {
+        return senderr(res);
+      }
+
+      notifyTo({
+        user_id: lostItem.user_id,
+        notify_to: "user",
+        title: "Lost Item Update",
+        message: "Your lost item report status is now " + requestedStatus
+      });
+
+      return res.json({
+        status: "true",
+        lost_item_id: lostItem._id,
+        case_status: requestedStatus,
+        message: "Lost item status updated"
+      });
+    });
+  })(req, res);
+});
+
+router.get("/lostitems/:id/messages", function (req, res) {
+  passport.authenticate("jwt", { session: false }, function (err, driver) {
+    if (err === "AccountDeleted") {
+      return res.json({
+        status: "error",
+        message: "Account has been deleted successfully"
+      });
+    }
+    if (!driver) {
+      return res.json({
+        status: "error",
+        message: "Unauthorized access"
+      });
+    }
+
+    LostItems.findOne({
+      _id: req.params.id,
+      driver_id: String(driver._id)
+    }).exec(function (caseErr, lostItem) {
+      if (caseErr || !lostItem) {
+        return res.json({
+          status: "false",
+          message: "Lost item case not found"
+        });
+      }
+
+      LostItemMessages.find({
+        lost_item_id: String(lostItem._id)
+      }).sort({ created_at: 1 }).exec(function (messageErr, messages) {
+        if (messageErr) {
+          return senderr(res);
+        }
+
+        LostItems.updateOne(
+          {
+            _id: lostItem._id
+          },
+          {
+            $set: {
+              unread_driver_count: 0
+            }
+          }
+        ).exec(function () {});
+
+        return res.json({
+          status: "true",
+          lost_item_id: lostItem._id,
+          case_status: lostItem.status,
+          result: messages
+        });
+      });
+    });
+  })(req, res);
+});
+
+router.post("/lostitems/:id/messages", function (req, res) {
+  passport.authenticate("jwt", { session: false }, function (err, driver) {
+    if (err === "AccountDeleted") {
+      return res.json({
+        status: "error",
+        message: "Account has been deleted successfully"
+      });
+    }
+    if (!driver) {
+      return res.json({
+        status: "error",
+        message: "Unauthorized access"
+      });
+    }
+    if (!req.body.message) {
+      return res.json({
+        status: "false",
+        message: "Message is required"
+      });
+    }
+
+    LostItems.findOne({
+      _id: req.params.id,
+      driver_id: String(driver._id)
+    }).exec(function (caseErr, lostItem) {
+      if (caseErr || !lostItem) {
+        return res.json({
+          status: "false",
+          message: "Lost item case not found"
+        });
+      }
+      if (["resolved", "returned"].indexOf(String(lostItem.status || "").toLowerCase()) !== -1) {
+        return res.json({
+          status: "false",
+          message: "This lost item case is already closed"
+        });
+      }
+
+      saveLostItemMessage({
+        lost_item_id: lostItem._id,
+        ride_id: lostItem.ride_id || "",
+        user_id: lostItem.user_id || "",
+        driver_id: lostItem.driver_id || "",
+        sender_type: "driver",
+        sender_id: driver._id,
+        message: req.body.message,
+        increment_user_unread: lostItem.user_id ? 1 : 0,
+        increment_admin_unread: 1
+      }, function (messageErr, savedMessage) {
+        if (messageErr) {
+          return senderr(res);
+        }
+
+        notifyTo({
+          user_id: String(lostItem.user_id || ""),
+          notify_to: "user",
+          title: "Lost Item Follow-up",
+          message: req.body.message
+        });
+        notifyTo({
+          user_id: String(driver._id),
+          notify_to: "admin",
+          title: "Driver Lost Item Reply",
+          message: req.body.message
+        });
+
+        return res.json({
+          status: "true",
+          data: savedMessage
+        });
+      });
+    });
+  })(req, res);
+});
+
+router.get("/ridechat/:onride_id/messages", function (req, res) {
+  passport.authenticate("jwt", { session: false }, function (err, driver) {
+    if (err === "AccountDeleted") {
+      return res.json({
+        status: "error",
+        message: "Account has been deleted successfully"
+      });
+    }
+    if (!driver) {
+      return res.json({
+        status: "error",
+        message: "Unauthorized access"
+      });
+    }
+
+    Rides.findOne({
+      _id: req.params.onride_id,
+      driver_id: String(driver._id)
+    }).exec(function (rideErr, ride) {
+      if (rideErr || !ride) {
+        return res.json({
+          status: "false",
+          message: "Ride not found"
+        });
+      }
+
+      RideChatMessages.find({
+        onride_id: String(ride._id)
+      }).sort({ created_at: 1 }).exec(function (messageErr, messages) {
+        if (messageErr) {
+          return senderr(res);
+        }
+        return res.json({
+          status: "true",
+          result: messages
+        });
+      });
+    });
+  })(req, res);
+});
+
+router.post("/ridechat/:onride_id/message", function (req, res) {
+  passport.authenticate("jwt", { session: false }, function (err, driver) {
+    if (err === "AccountDeleted") {
+      return res.json({
+        status: "error",
+        message: "Account has been deleted successfully"
+      });
+    }
+    if (!driver) {
+      return res.json({
+        status: "error",
+        message: "Unauthorized access"
+      });
+    }
+
+    let message = String(req.body.message || "").trim();
+    if (!message) {
+      return res.json({
+        status: "false",
+        message: "Message is required"
+      });
+    }
+
+    Rides.findOne({
+      _id: req.params.onride_id,
+      driver_id: String(driver._id)
+    }).exec(function (rideErr, ride) {
+      if (rideErr || !ride) {
+        return res.json({
+          status: "false",
+          message: "Ride not found"
+        });
+      }
+
+      saveRideChatMessage({
+        onride_id: ride._id,
+        user_id: ride.user_id || "",
+        driver_id: driver._id,
+        sender_type: "driver",
+        sender_id: driver._id,
+        message: message
+      }, function (messageErr, savedMessage) {
+        if (messageErr) {
+          return senderr(res);
+        }
+
+        let payload = {
+          onride_id: String(ride._id),
+          room_id: "ridechat_" + String(ride._id),
+          sender_type: "driver",
+          sender_id: String(driver._id),
+          receiver_id: String(ride.user_id || ""),
+          driver_name: driver.full_name || "",
+          driver_image: base_url + "/gallery/drivers/" + (driver.profile_image || "driver.png"),
+          message: savedMessage.message,
+          created_at: savedMessage.created_at
+        };
+
+        if (ride.user_id) {
+          riderNotific([ride.user_id], message, {
+            type: "ride_chat",
+            ride_id: String(ride._id),
+            room_id: payload.room_id,
+            sender_type: "driver",
+            sender_id: String(driver._id),
+            driver_name: driver.full_name || "",
+            message: savedMessage.message
+          });
+          socketRegistry.emitToUser(ride.user_id, "incoming-chat", payload);
+        }
+
+        return res.json({
+          status: "true",
+          result: savedMessage
+        });
+      });
+    });
+  })(req, res);
+});
+
+/* Audio Call Addon */
+router.post("/makecall", function (req, res) {
+  if (!req.body.sender_id || (!req.body.receiver_id && !req.body.onride_id) || !req.body.type || !req.body.user_type || !req.body.room_id || !req.body.platform || !req.body.timestamp) {
+    return senderr(res);
+  }
+
+  Driver.findOne({
+    _id: req.body.sender_id
+  }, function (err, driver) {
+    if (err || !driver) {
+      return res.json({
+        status: "error",
+        message: "Unauthorized access"
+      });
+    }
+    if (driver.deletion_status === 1) {
+      return res.json({
+        status: "error",
+        message: "Account has been deleted successfully"
+      });
+    }
+
+    let profileImage = "driver.png";
+    if (typeof driver.profile_image !== "undefined" && driver.profile_image) {
+      profileImage = driver.profile_image;
+    }
+
+    let sendCallNotification = function (receiverId) {
+      receiverId = receiverId ? String(receiverId) : "";
+      if (!receiverId) {
+        return senderr(res);
+      }
+
+      let data = {
+        sender_id: req.body.sender_id,
+        receiver_id: receiverId,
+        user_type: req.body.user_type,
+        room_id: req.body.room_id,
+        platform: req.body.platform,
+        timestamp: req.body.timestamp,
+        type: req.body.type,
+        user_name: driver.full_name,
+        user_image: base_url + "/gallery/drivers/" + profileImage,
+        message: "make_audio_call"
+      };
+
+      console.log("driver_makecall_notify", JSON.stringify({
+        sender_id: req.body.sender_id,
+        receiver_id: receiverId,
+        room_id: req.body.room_id,
+        onride_id: req.body.onride_id || ""
+      }));
+      userNotific([receiverId], "", data);
+      const socketDelivered = socketRegistry.emitToUser(receiverId, "incoming-call", data);
+      console.log("driver_makecall_socket", JSON.stringify({
+        receiver_id: receiverId,
+        delivered: socketDelivered
+      }));
+
+      saveDriverCallLog({
+        sender_id: req.body.sender_id,
+        receiver_id: receiverId,
+        room_id: req.body.room_id,
+        platform: req.body.platform,
+        onride_id: req.body.onride_id || "",
+        type: req.body.type,
+        status: "started",
+        started_at: new Date()
+      });
+
+      return res.json({
+        status: "true",
+        receiver_id: receiverId,
+        socket_delivered: socketDelivered ? "true" : "false",
+        message: "Call Connected Successfully"
+      });
+    };
+
+    if (req.body.receiver_id) {
+      return sendCallNotification(req.body.receiver_id);
+    }
+
+    Rides.findOne({
+      _id: req.body.onride_id
+    }, function (err, ride) {
+      if (err || !ride || !ride.user_id) {
+        return senderr(res);
+      }
+      if (ride.driver_id && String(ride.driver_id) !== String(req.body.sender_id)) {
+        return res.json({
+          status: "error",
+          message: "Unauthorized access"
+        });
+      }
+      return sendCallNotification(ride.user_id);
+    });
+  });
+});
+
+router.post("/endcall", function (req, res) {
+  passport.authenticate("jwt", { session: false }, function (err, driver) {
+    if (err === "AccountDeleted") {
+      return res.json({
+        status: "error",
+        message: "Account has been deleted successfully"
+      });
+    }
+    if (!driver) {
+      return res.json({
+        status: "error",
+        message: "Unauthorized access"
+      });
+    }
+    if (!req.body.sender_id || !req.body.receiver_id || !req.body.type || !req.body.user_type || !req.body.room_id || !req.body.platform || !req.body.timestamp) {
+      return senderr(res);
+    }
+
+    let data = {
+      sender_id: req.body.sender_id,
+      receiver_id: req.body.receiver_id,
+      user_type: req.body.user_type,
+      room_id: req.body.room_id,
+      platform: req.body.platform,
+      timestamp: req.body.timestamp,
+      type: req.body.type,
+      message: "end_audio_call"
+    };
+
+    userNotific([req.body.receiver_id], "", data);
+    saveDriverCallLog({
+      room_id: req.body.room_id,
+      status: "ended",
+      ended_at: new Date()
+    });
+
+    return res.json({
+      status: "true",
+      message: "Call Disconnected Successfully"
+    });
+  })(req, res);
+});
+
+router.get("/scheduledupcoming/:userid", function (req, res) {
+  passport.authenticate("jwt", { session: false }, function (err, driver) {
+    if (err === "AccountDeleted") {
+      return res.json({
+        status: "error",
+        message: "Account has been deleted successfully"
+      });
+    }
+    if (!driver) {
+      return res.json({
+        status: "error",
+        message: "Unauthorized access"
+      });
+    }
+
+    Rides.find({
+      driver_id: req.params.userid,
+      type: "schedule"
+    }).or([
+      { ridestatus: "scheduled" },
+      { ridestatus: "accepted" },
+      { ridestatus: "scheduleridenotaccepted" }
+    ]).populate("category_id").populate("user_id").sort({ schedule_time: 1 }).limit(25).exec(function (rideErr, rides) {
+      if (rideErr) {
+        return senderr(res);
+      }
+      return res.json({
+        status: "true",
+        result: (rides || []).map(function (ride) {
+          return {
+            onride_id: ride._id,
+            user_name: ride.user_id && ride.user_id.full_name || "",
+            pickup_location: ride.pickup_location,
+            pickup_lat: ride.pickup_lat,
+            pickup_lng: ride.pickup_lng,
+            drop_location: ride.drop_location,
+            drop_lat: ride.drop_lat,
+            drop_lng: ride.drop_lng,
+            schedule_time: ride.schedule_time,
+            ride_status: ride.ridestatus,
+            ride_stops: ride.ride_stops || [],
+            service_type: ride.service_type || "ride",
+            category_name: ride.category_id && ride.category_id.category_name || ""
+          };
+        })
+      });
+    });
+  })(req, res);
+});
+
+router.post("/preacceptschedule", function (req, res) {
+  passport.authenticate("jwt", { session: false }, function (err, driver) {
+    if (err === "AccountDeleted") {
+      return res.json({
+        status: "error",
+        message: "Account has been deleted successfully"
+      });
+    }
+    if (!driver) {
+      return res.json({
+        status: "error",
+        message: "Unauthorized access"
+      });
+    }
+    if (!req.body.user_id || !req.body.onride_id) {
+      return senderr(res);
+    }
+
+    Rides.findOneAndUpdate(
+      {
+        _id: req.body.onride_id,
+        driver_id: req.body.user_id,
+        type: "schedule",
+        ridestatus: {
+          $in: ["scheduled", "scheduleridenotaccepted"]
+        }
+      },
+      {
+        $set: {
+          ridestatus: "accepted",
+          schedule_preaccepted_at: new Date()
+        }
+      },
+      {
+        new: true
+      }
+    ).exec(function (rideErr, ride) {
+      if (rideErr || !ride) {
+        return res.json({
+          status: "false",
+          message: "Unable to pre-accept this scheduled ride"
+        });
+      }
+      return res.json({
+        status: "true",
+        message: "Scheduled ride pre-accepted"
+      });
+    });
+  })(req, res);
+});
+
+router.get("/acceptancesettings/:userid", function (req, res) {
+  passport.authenticate("jwt", { session: false }, function (err, driver) {
+    if (err === "AccountDeleted") {
+      return res.json({
+        status: "error",
+        message: "Account has been deleted successfully"
+      });
+    }
+    if (!driver) {
+      return res.json({
+        status: "error",
+        message: "Unauthorized access"
+      });
+    }
+    return res.json({
+      status: "true",
+      acceptance_settings: driver.acceptance_settings || {}
+    });
+  })(req, res);
+});
+
+router.post("/acceptancesettings", function (req, res) {
+  passport.authenticate("jwt", { session: false }, function (err, driver) {
+    if (err === "AccountDeleted") {
+      return res.json({
+        status: "error",
+        message: "Account has been deleted successfully"
+      });
+    }
+    if (!driver) {
+      return res.json({
+        status: "error",
+        message: "Unauthorized access"
+      });
+    }
+
+    let rideTypes = req.body.ride_types;
+    if (typeof rideTypes === "string") {
+      try {
+        rideTypes = JSON.parse(rideTypes);
+      } catch (_error) {
+        rideTypes = rideTypes.split(",");
+      }
+    }
+    if (!Array.isArray(rideTypes) || rideTypes.length === 0) {
+      rideTypes = ["ride", "delivery", "pool"];
+    }
+
+    driver.acceptance_settings = {
+      auto_accept: req.body.auto_accept === true || req.body.auto_accept === "true" || req.body.auto_accept === "1",
+      max_pickup_distance_km: Math.max(Number(req.body.max_pickup_distance_km || 0), 0),
+      min_fare: Math.max(Number(req.body.min_fare || 0), 0),
+      ride_types: rideTypes
+        .map(function (type) {
+          return String(type || "").trim().toLowerCase();
+        })
+        .filter(function (type, index, list) {
+          return ["ride", "delivery", "pool"].indexOf(type) !== -1 && list.indexOf(type) === index;
+        })
+    };
+
+    driver.save(function (saveErr) {
+      if (saveErr) {
+        return senderr(res);
+      }
+      return res.json({
+        status: "true",
+        acceptance_settings: driver.acceptance_settings
+      });
+    });
+  })(req, res);
+});
+
+notifyTo = function (notifications) {
+  notifications.notified_at = timeZone();
+  let newNotifications = new Notifications(notifications);
+  newNotifications.save();
+};
+
 /* Pushnotify */
 userNotific = function (driverIds, message, data) {
   NotifyDevices.find({
@@ -3428,6 +4640,11 @@ userNotific = function (driverIds, message, data) {
       records.forEach(function (rec) {
         sendnotifications.push(rec.device_token);
       });
+      console.log("userNotific_ios_tokens", JSON.stringify({
+        user_ids: driverIds,
+        count: sendnotifications.length,
+        message: data && data.message
+      }));
       fireBase(sendnotifications, message, data);
     });
 
@@ -3442,6 +4659,11 @@ userNotific = function (driverIds, message, data) {
       records.forEach(function (rec) {
         sendnotifications.push(rec.device_token);
       });
+      console.log("userNotific_android_tokens", JSON.stringify({
+        user_ids: driverIds,
+        count: sendnotifications.length,
+        message: data && data.message
+      }));
       fireBaseAndroid(sendnotifications, message, data);
     });
 };

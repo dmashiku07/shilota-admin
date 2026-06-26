@@ -22,6 +22,10 @@ var RidesSchema = new Schema({
         required: true,
         ref: 'Categories'
     },
+    service_type: {
+        type: String,
+        default: 'ride'
+    },
     schedule_time: {
         type: Number,
     },
@@ -51,6 +55,46 @@ var RidesSchema = new Schema({
     drop_lng: {
         type: String,
         required: true,
+    },
+    ride_stops: {
+        type: Array,
+        default: []
+    },
+    pooling_opt_in: {
+        type: Boolean,
+        default: false
+    },
+    seats_requested: {
+        type: Number,
+        default: 1
+    },
+    pool_status: {
+        type: String,
+        default: 'solo'
+    },
+    pool_group_id: {
+        type: String,
+        default: ''
+    },
+    pool_group_size: {
+        type: Number,
+        default: 1
+    },
+    pool_discount_percent: {
+        type: Number,
+        default: 0
+    },
+    pool_zone_key: {
+        type: String,
+        default: ''
+    },
+    matched_pool_ride_ids: {
+        type: [String],
+        default: []
+    },
+    delivery_details: {
+        type: Object,
+        default: {}
     },
     onride_otp: {
         type: String,
@@ -96,6 +140,14 @@ var RidesSchema = new Schema({
     },
     notify: {
         type: Number, default: 0
+    },
+    schedule_reminder_notify: {
+        type: Number,
+        default: 0
+    },
+    schedule_reassign_count: {
+        type: Number,
+        default: 0
     },
     ridedistance: {
         type: Number, default: 0

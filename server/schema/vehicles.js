@@ -68,6 +68,10 @@ var VehicleSchema = new Schema({
     type: String,
     ref: 'Categories'
   },
+  service_types: {
+    type: [String],
+    default: ["ride"]
+  },
   completionStatus: {
     type: String,
   },
