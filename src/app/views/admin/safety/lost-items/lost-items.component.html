@@ -1,0 +1,101 @@
+<div class="row">
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header">
+        <h4 class="card-title">Lost Items</h4>
+      </div>
+      <div class="card-body">
+        <div class="row mb-2">
+          <div class="col-md-4">
+            <input class="form-control" [(ngModel)]="searchText" (ngModelChange)="applyFilters()" placeholder="Search lost items">
+          </div>
+          <div class="col-md-3">
+            <select class="form-control" [(ngModel)]="statusFilter" (ngModelChange)="applyFilters()">
+              <option value="">All Statuses</option>
+              <option value="open">Open</option>
+              <option value="found">Found</option>
+              <option value="returned">Returned</option>
+              <option value="resolved">Resolved</option>
+            </select>
+          </div>
+          <div class="col-md-2">
+            <button class="btn btn-primary" type="button" (click)="loadItems()">Refresh</button>
+          </div>
+        </div>
+
+        <div *ngIf="loading" class="text-muted">Loading lost item reports...</div>
+        <div class="table-responsive" *ngIf="!loading">
+          <table class="table table-striped">
+            <thead>
+              <tr>
+                <th>Rider</th>
+                <th>Driver</th>
+                <th>Trip</th>
+                <th>Description</th>
+                <th>Contact</th>
+                <th>Follow-up</th>
+                <th>Escalation</th>
+                <th>Status</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let item of filteredItems">
+                <td>
+                  <strong>{{ item.user_id?.full_name || 'Rider' }}</strong><br>
+                  <small>{{ item.user_id?.phone_number || '' }}</small>
+                </td>
+                <td>
+                  <strong>{{ item.driver_id?.full_name || 'Driver' }}</strong><br>
+                  <small>{{ item.driver_id?.phone_number || '' }}</small>
+                  <small *ngIf="item.driver_flagged" class="d-block text-danger">Repeat loss flagged</small>
+                </td>
+                <td>
+                  <small>{{ item.ride_id?._id || item.ride_id || '-' }}</small><br>
+                  <strong>{{ item.ride_id?.pickup_location || '-' }}</strong><br>
+                  <small>{{ item.ride_id?.drop_location || '-' }}</small>
+                </td>
+                <td>{{ item.item_description || '-' }}</td>
+                <td>{{ item.contact_phone || '-' }}</td>
+                <td>
+                  <small class="d-block">{{ item.last_message_preview || 'No replies yet' }}</small>
+                  <small class="d-block text-muted">By: {{ item.last_message_sender || '-' }}</small>
+                  <small class="d-block text-danger" *ngIf="item.unread_admin_count">Unread for admin: {{ item.unread_admin_count }}</small>
+                  <small class="d-block text-primary" *ngIf="item.unread_user_count">Unread for rider: {{ item.unread_user_count }}</small>
+                </td>
+                <td>
+                  <span [class.text-danger]="item.escalation_status === 'escalated'">{{ item.escalation_status || 'normal' }}</span><br>
+                  <small *ngIf="item.response_due_at">Due: {{ item.response_due_at | date:'short' }}</small><br>
+                  <small>Driver notified: {{ item.driver_notified ? 'Yes' : 'No' }}</small>
+                </td>
+                <td>
+                  {{ item.status || '-' }}<br>
+                  <small *ngIf="item.driver_notes">{{ item.driver_notes }}</small>
+                </td>
+                <td>
+                  <button class="btn btn-sm btn-outline-secondary mr-1" (click)="openMessages(item)">View Chat</button>
+                  <button class="btn btn-sm btn-info mr-1" *ngIf="item.status !== 'resolved'" (click)="replyToItem(item)">Reply</button>
+                  <button class="btn btn-sm btn-primary" *ngIf="item.status !== 'resolved'" (click)="resolveItem(item)">Resolve</button>
+                </td>
+              </tr>
+              <tr *ngIf="filteredItems.length === 0">
+                <td colspan="9" class="text-muted">No lost item reports found</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="mt-3" *ngIf="activeMessages.length || messagesLoading">
+          <h5>Conversation</h5>
+          <div *ngIf="messagesLoading" class="text-muted">Loading messages...</div>
+          <div class="border rounded p-3" style="max-height: 320px; overflow-y: auto;" *ngIf="!messagesLoading">
+            <div *ngFor="let message of activeMessages" class="mb-2">
+              <strong>{{ message.sender_type || 'system' }}</strong>
+              <small class="text-muted ml-2">{{ message.created_at | date:'short' }}</small>
+              <div>{{ message.message }}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

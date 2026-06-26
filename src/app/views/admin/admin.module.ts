@@ -6,6 +6,13 @@ import { ChartsShimModule } from "app/shared/charts/charts-shim.module";
 import { AdminRoutingModule } from './admin-routing.module';
 import { LoginComponent } from './login/login.component';
 import { DashboardComponent } from './dashboard/dashboard.component';
+import { AdminSosAlertsComponent } from './safety/sos-alerts/sos-alerts.component';
+import { AdminLostItemsComponent } from './safety/lost-items/lost-items.component';
+import { AdminCallLogsComponent } from './safety/call-logs/call-logs.component';
+import { AdminRiderBlocksComponent } from './safety/rider-blocks/rider-blocks.component';
+import { AdminPoolSettingsComponent } from './safety/pool-settings/pool-settings.component';
+import { AdminDemandHeatmapComponent } from './safety/demand-heatmap/demand-heatmap.component';
+import { AdminAcceptanceSettingsComponent } from './safety/acceptance-settings/acceptance-settings.component';
 import { FullLayoutComponent } from 'app/layouts/full/full-layout.component';
 import { ContentLayoutComponent } from 'app/layouts/content/content-layout.component';
 import { FileValueAccessor } from 'app/provider/file-control-value-accessor';
@@ -24,6 +31,6 @@ import { SharedModule } from 'app/shared/shared.module';
     SharedModule
   ],
   declarations: [FullLayoutComponent,ContentLayoutComponent,LoginComponent,
-    DashboardComponent,FileValidator,FileValueAccessor]
+    DashboardComponent,AdminSosAlertsComponent,AdminLostItemsComponent,AdminCallLogsComponent,AdminRiderBlocksComponent,AdminPoolSettingsComponent,AdminDemandHeatmapComponent,AdminAcceptanceSettingsComponent,FileValidator,FileValueAccessor]
 })
 export class AdminModule { }

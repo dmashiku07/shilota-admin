@@ -1,0 +1,79 @@
+<div class="row">
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header">
+        <h4 class="card-title">SOS Alerts</h4>
+      </div>
+      <div class="card-body">
+        <div class="row mb-2">
+          <div class="col-md-4">
+            <input class="form-control" [(ngModel)]="searchText" (ngModelChange)="applyFilters()" placeholder="Search alerts">
+          </div>
+          <div class="col-md-3">
+            <select class="form-control" [(ngModel)]="statusFilter" (ngModelChange)="applyFilters()">
+              <option value="">All Statuses</option>
+              <option value="active">Active</option>
+              <option value="resolved">Resolved</option>
+            </select>
+          </div>
+          <div class="col-md-2">
+            <button class="btn btn-primary" type="button" (click)="loadAlerts()">Refresh</button>
+          </div>
+        </div>
+
+        <div *ngIf="loading" class="text-muted">Loading SOS alerts...</div>
+        <div class="table-responsive" *ngIf="!loading">
+          <table class="table table-striped">
+            <thead>
+              <tr>
+                <th>Actor</th>
+                <th>Message</th>
+                <th>Action</th>
+                <th>Trip</th>
+                <th>Location</th>
+                <th>SLA</th>
+                <th>Status</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let alert of filteredAlerts">
+                <td>
+                  <strong>{{ alert.actor_type || '-' }}</strong><br>
+                  <span>{{ alert.actor_id?.full_name || alert.actor_id || '-' }}</span><br>
+                  <small>{{ alert.actor_id?.phone_number || '' }}</small>
+                </td>
+                <td>{{ alert.message || '-' }}</td>
+                <td>
+                  {{ alert.action_type || '-' }}<br>
+                  <small>{{ alert.contact_target || '' }}</small>
+                </td>
+                <td>
+                  <small>{{ alert.ride_id?._id || alert.ride_id || '-' }}</small><br>
+                  <strong>{{ alert.ride_id?.pickup_location || '-' }}</strong><br>
+                  <small>{{ alert.ride_id?.drop_location || '-' }}</small>
+                </td>
+                <td>
+                  <a *ngIf="alert.lat && alert.lng" href="https://www.google.com/maps?q={{alert.lat}},{{alert.lng}}" target="_blank">Open map</a>
+                  <span *ngIf="!alert.lat || !alert.lng">-</span>
+                </td>
+                <td>
+                  <span *ngIf="alert.response_due_at">{{ alert.response_due_at | date:'short' }}</span>
+                  <span *ngIf="!alert.response_due_at">-</span><br>
+                  <small>Callback: {{ alert.callback_status || 'pending' }}</small>
+                </td>
+                <td>{{ alert.status || '-' }}</td>
+                <td>
+                  <button class="btn btn-sm btn-primary" *ngIf="alert.status !== 'resolved'" (click)="resolveAlert(alert)">Resolve</button>
+                </td>
+              </tr>
+              <tr *ngIf="filteredAlerts.length === 0">
+                <td colspan="8" class="text-muted">No SOS alerts found</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

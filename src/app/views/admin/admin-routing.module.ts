@@ -4,6 +4,13 @@ import { FullLayoutComponent } from 'app/layouts/full/full-layout.component';
 import { ContentLayoutComponent } from 'app/layouts/content/content-layout.component';
 import { LoginComponent } from './login/login.component';
 import { DashboardComponent } from './dashboard/dashboard.component';
+import { AdminSosAlertsComponent } from './safety/sos-alerts/sos-alerts.component';
+import { AdminLostItemsComponent } from './safety/lost-items/lost-items.component';
+import { AdminCallLogsComponent } from './safety/call-logs/call-logs.component';
+import { AdminRiderBlocksComponent } from './safety/rider-blocks/rider-blocks.component';
+import { AdminPoolSettingsComponent } from './safety/pool-settings/pool-settings.component';
+import { AdminDemandHeatmapComponent } from './safety/demand-heatmap/demand-heatmap.component';
+import { AdminAcceptanceSettingsComponent } from './safety/acceptance-settings/acceptance-settings.component';
 import { AdminguardGuard } from 'app/guards/adminguard.guard';
 
 const routes: Routes = [
@@ -24,6 +31,13 @@ const routes: Routes = [
     children: [
 
       { path: 'dashboard', component: DashboardComponent },
+      { path: 'sos-alerts', component: AdminSosAlertsComponent },
+      { path: 'lost-items', component: AdminLostItemsComponent },
+      { path: 'call-logs', component: AdminCallLogsComponent },
+      { path: 'rider-blocks', component: AdminRiderBlocksComponent },
+      { path: 'pool-settings', component: AdminPoolSettingsComponent },
+      { path: 'demand-heatmap', component: AdminDemandHeatmapComponent },
+      { path: 'acceptance-settings', component: AdminAcceptanceSettingsComponent },
 
       {
         path: 'account',

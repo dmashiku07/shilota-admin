@@ -1,0 +1,68 @@
+<div class="row">
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header">
+        <h4 class="card-title">Call Logs</h4>
+      </div>
+      <div class="card-body">
+        <div class="row mb-2">
+          <div class="col-md-4">
+            <input class="form-control" [(ngModel)]="searchText" (ngModelChange)="applyFilters()" placeholder="Search call logs">
+          </div>
+          <div class="col-md-3">
+            <select class="form-control" [(ngModel)]="abuseFilter" (ngModelChange)="applyFilters()">
+              <option value="">All Review States</option>
+              <option value="none">None</option>
+              <option value="flagged">Flagged</option>
+              <option value="reviewed">Reviewed</option>
+              <option value="cleared">Cleared</option>
+            </select>
+          </div>
+          <div class="col-md-2">
+            <button class="btn btn-primary" type="button" (click)="loadItems()">Refresh</button>
+          </div>
+        </div>
+
+        <div *ngIf="loading" class="text-muted">Loading call logs...</div>
+        <div class="table-responsive" *ngIf="!loading">
+          <table class="table table-striped">
+            <thead>
+              <tr>
+                <th>Room</th>
+                <th>Parties</th>
+                <th>Trip</th>
+                <th>Duration</th>
+                <th>Started</th>
+                <th>Abuse Review</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let item of filteredItems">
+                <td>{{ item.room_id }}</td>
+                <td>
+                  <strong>{{ item.sender_type }}:</strong> {{ item.sender_id }}<br>
+                  <strong>{{ item.receiver_type }}:</strong> {{ item.receiver_id }}
+                </td>
+                <td>{{ item.onride_id?._id || item.onride_id || '-' }}</td>
+                <td>{{ item.duration_seconds || 0 }}s<br><small>{{ item.status || '-' }}</small></td>
+                <td>{{ item.started_at | date:'short' }}</td>
+                <td>
+                  <strong>{{ item.abuse_flag_status || 'none' }}</strong><br>
+                  <small>{{ item.abuse_notes || '-' }}</small>
+                </td>
+                <td>
+                  <button class="btn btn-sm btn-warning mr-1" type="button" (click)="review(item, 'flagged')">Flag</button>
+                  <button class="btn btn-sm btn-success" type="button" (click)="review(item, 'cleared')">Clear</button>
+                </td>
+              </tr>
+              <tr *ngIf="filteredItems.length === 0">
+                <td colspan="7" class="text-muted">No call logs found</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

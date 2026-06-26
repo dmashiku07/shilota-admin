@@ -68,6 +68,40 @@ export const ROUTES: RouteInfo[] = [
     },
 
     {
+        path: '', title: 'Safety', icon: 'fa fa-shield', class: 'has-sub',
+        badge: '', badgeClass: 'badge badge-pill badge-danger float-right mr-1 mt-1', isExternalLink: false, submenu: [
+            {
+                path: '/admin/sos-alerts', title: 'SOS Alerts', icon: '', class: '',
+                badge: '', badgeClass: '', isExternalLink: false, submenu: []
+            },
+            {
+                path: '/admin/lost-items', title: 'Lost Items', icon: '', class: '',
+                badge: '', badgeClass: '', isExternalLink: false, submenu: []
+            },
+            {
+                path: '/admin/call-logs', title: 'Call Logs', icon: '', class: '',
+                badge: '', badgeClass: '', isExternalLink: false, submenu: []
+            },
+            {
+                path: '/admin/rider-blocks', title: 'Rider Blocks', icon: '', class: '',
+                badge: '', badgeClass: '', isExternalLink: false, submenu: []
+            },
+            {
+                path: '/admin/demand-heatmap', title: 'Demand Heatmap', icon: '', class: '',
+                badge: '', badgeClass: '', isExternalLink: false, submenu: []
+            },
+            {
+                path: '/admin/pool-settings', title: 'Pool Settings', icon: '', class: '',
+                badge: '', badgeClass: '', isExternalLink: false, submenu: []
+            },
+            {
+                path: '/admin/acceptance-settings', title: 'Acceptance Settings', icon: '', class: '',
+                badge: '', badgeClass: '', isExternalLink: false, submenu: []
+            }
+        ]
+    },
+
+    {
         path: '', title: 'Settings', icon: 'fa fa-sitemap', class: 'has-sub',
         badge: '', badgeClass: 'badge badge-pill badge-danger float-right mr-1 mt-1', isExternalLink: false, submenu: [
             {

@@ -1,0 +1,69 @@
+<div class="row">
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header">
+        <h4 class="card-title">Rider Block Reviews</h4>
+      </div>
+      <div class="card-body">
+        <div class="row mb-2">
+          <div class="col-md-4">
+            <input class="form-control" [(ngModel)]="searchText" (ngModelChange)="applyFilters()" placeholder="Search rider blocks">
+          </div>
+          <div class="col-md-3">
+            <select class="form-control" [(ngModel)]="reviewFilter" (ngModelChange)="applyFilters()">
+              <option value="">All Review States</option>
+              <option value="pending">Pending</option>
+              <option value="resolved">Resolved</option>
+              <option value="none">None</option>
+            </select>
+          </div>
+          <div class="col-md-2">
+            <button class="btn btn-primary" type="button" (click)="loadItems()">Refresh</button>
+          </div>
+        </div>
+
+        <div *ngIf="loading" class="text-muted">Loading rider blocks...</div>
+        <div class="table-responsive" *ngIf="!loading">
+          <table class="table table-striped">
+            <thead>
+              <tr>
+                <th>Driver / Rider</th>
+                <th>Reason</th>
+                <th>Counts</th>
+                <th>Escalation</th>
+                <th>Review</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let item of filteredItems">
+                <td>
+                  <strong>Driver:</strong> {{ item.driver_id }}<br>
+                  <strong>Rider:</strong> {{ item.user_id }}<br>
+                  <small>Ride: {{ item.ride_id || '-' }}</small>
+                </td>
+                <td>{{ item.reason || '-' }}</td>
+                <td>
+                  Rider blocks: {{ item.rider_block_count || 0 }}<br>
+                  Driver blocks: {{ item.driver_block_count || 0 }}
+                </td>
+                <td>{{ item.escalation_action || '-' }}</td>
+                <td>
+                  <strong>{{ item.admin_review_status || '-' }}</strong><br>
+                  <small>{{ item.review_notes || '-' }}</small>
+                </td>
+                <td>
+                  <button class="btn btn-sm btn-success mr-1" type="button" (click)="review(item, 'resolved')">Resolve</button>
+                  <button class="btn btn-sm btn-warning" type="button" (click)="review(item, 'pending')">Keep Pending</button>
+                </td>
+              </tr>
+              <tr *ngIf="filteredItems.length === 0">
+                <td colspan="6" class="text-muted">No rider block reviews found</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

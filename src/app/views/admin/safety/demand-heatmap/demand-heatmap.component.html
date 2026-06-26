@@ -1,0 +1,45 @@
+<div class="row">
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header">
+        <h4 class="card-title">Demand Heatmap</h4>
+      </div>
+      <div class="card-body">
+        <button class="btn btn-primary mb-2" type="button" (click)="load()">Refresh</button>
+        <div *ngIf="loading" class="text-muted">Loading demand zones...</div>
+        <div class="table-responsive" *ngIf="!loading">
+          <table class="table table-striped">
+            <thead>
+              <tr>
+                <th>Zone</th>
+                <th>Trips</th>
+                <th>Drivers Nearby</th>
+                <th>Projected 15m</th>
+                <th>Intensity</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let item of items">
+                <td>
+                  <strong>{{ item.latest_location || item._id?.lat + ',' + item._id?.lng }}</strong><br>
+                  <small>{{ item.latest_lat }}, {{ item.latest_lng }}</small>
+                </td>
+                <td>{{ item.count || 0 }}</td>
+                <td>{{ item.driver_count || 0 }}</td>
+                <td>{{ item.projected_15_min_count || 0 }}</td>
+                <td>{{ item.intensity || '-' }}<span *ngIf="item.projected_surge"> / surge</span></td>
+                <td>
+                  <button class="btn btn-sm btn-warning" type="button" (click)="pushIncentive(item)">Push Incentive</button>
+                </td>
+              </tr>
+              <tr *ngIf="items.length === 0">
+                <td colspan="6" class="text-muted">No demand zones found</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

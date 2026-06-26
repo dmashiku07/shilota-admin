@@ -1,0 +1,47 @@
+<div class="row">
+  <div class="col-lg-8">
+    <div class="card">
+      <div class="card-header">
+        <h4 class="card-title">Pool Settings</h4>
+      </div>
+      <div class="card-body" *ngIf="!loading">
+        <div class="form-group">
+          <label><input type="checkbox" [(ngModel)]="model.enabled"> Enable pooling</label>
+        </div>
+        <div class="form-row">
+          <div class="form-group col-md-4">
+            <label>Discount %</label>
+            <input class="form-control" type="number" [(ngModel)]="model.discount_percent">
+          </div>
+          <div class="form-group col-md-4">
+            <label>Max passengers</label>
+            <input class="form-control" type="number" [(ngModel)]="model.max_passengers">
+          </div>
+          <div class="form-group col-md-4">
+            <label>Max detour km</label>
+            <input class="form-control" type="number" [(ngModel)]="model.max_detour_km">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group col-md-6">
+            <label>Max pickup gap km</label>
+            <input class="form-control" type="number" [(ngModel)]="model.max_pickup_gap_km">
+          </div>
+          <div class="form-group col-md-6">
+            <label>Max drop gap km</label>
+            <input class="form-control" type="number" [(ngModel)]="model.max_drop_gap_km">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Zone overrides JSON</label>
+          <textarea class="form-control" rows="8" [(ngModel)]="zoneOverridesText"></textarea>
+          <small class="text-muted">Example: [{"zone_key":"-6.80,39.28","label":"CBD","enabled":true}]</small>
+        </div>
+        <button class="btn btn-primary" type="button" [disabled]="saving" (click)="save()">
+          {{ saving ? 'Saving...' : 'Save Pool Settings' }}
+        </button>
+      </div>
+      <div class="card-body text-muted" *ngIf="loading">Loading pooling settings...</div>
+    </div>
+  </div>
+</div>
