@@ -1,0 +1,141 @@
+<div class="row">
+  <div class="col-lg-12 mb-3">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <h4 class="card-title mb-0">Destination Broadcast Settings</h4>
+        <button class="btn btn-sm btn-outline-primary" type="button" (click)="loadSettings()">Refresh</button>
+      </div>
+      <div class="card-body" *ngIf="!settingsLoading">
+        <div class="form-group">
+          <label><input type="checkbox" [(ngModel)]="settings.enabled"> Enable driver destination broadcasts</label>
+        </div>
+        <div class="form-row">
+          <div class="form-group col-md-4">
+            <label>Broadcast fee</label>
+            <input class="form-control" type="number" [(ngModel)]="settings.broadcast_fee">
+          </div>
+          <div class="form-group col-md-4">
+            <label>Currency</label>
+            <input class="form-control" [(ngModel)]="settings.currency">
+          </div>
+          <div class="form-group col-md-4">
+            <label>Expiry duration (minutes)</label>
+            <input class="form-control" type="number" [(ngModel)]="settings.expiry_duration_minutes">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group col-md-4">
+            <label>Default radius (km)</label>
+            <input class="form-control" type="number" [(ngModel)]="settings.default_radius_km">
+          </div>
+          <div class="form-group col-md-4">
+            <label>Maximum radius (km)</label>
+            <input class="form-control" type="number" [(ngModel)]="settings.max_radius_km">
+          </div>
+          <div class="form-group col-md-4">
+            <label>Maximum active broadcasts per driver</label>
+            <input class="form-control" type="number" [(ngModel)]="settings.maximum_active_broadcasts_per_driver">
+          </div>
+        </div>
+        <div class="alert alert-warning mb-3">
+          Cancellation and refund policy: {{ settings.cancellation_refund_policy || 'NO_REFUND' }}.
+          Refund handling is not integrated in the current payment capabilities.
+        </div>
+        <button class="btn btn-primary" type="button" [disabled]="settingsSaving" (click)="saveSettings()">
+          {{ settingsSaving ? 'Saving...' : 'Save Destination Broadcast Settings' }}
+        </button>
+      </div>
+      <div class="card-body text-muted" *ngIf="settingsLoading">Loading destination broadcast settings...</div>
+    </div>
+  </div>
+
+  <div class="col-lg-7">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <h4 class="card-title mb-0">Driver Destination Broadcasts</h4>
+        <button class="btn btn-sm btn-outline-primary" type="button" (click)="load()">Refresh</button>
+      </div>
+      <div class="card-body p-0" *ngIf="!loading">
+        <div class="table-responsive">
+          <table class="table table-striped mb-0">
+            <thead>
+              <tr>
+                <th>Driver</th>
+                <th>Route</th>
+                <th>Seats</th>
+                <th>Status</th>
+                <th>Payment</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let item of broadcasts">
+                <td>{{ item.driver_id?.full_name || item.driver_id }}</td>
+                <td>{{ item.origin_label }} → {{ item.destination_label }}</td>
+                <td>{{ item.remaining_seats }}/{{ item.available_seats }}</td>
+                <td>{{ item.status }}</td>
+                <td>{{ item.payment_status }}<span *ngIf="item.payment_reference"> • {{ item.payment_reference }}</span></td>
+                <td><button class="btn btn-sm btn-outline-secondary" type="button" (click)="openRequests(item)">Requests</button></td>
+              </tr>
+              <tr *ngIf="broadcasts.length === 0">
+                <td colspan="6" class="text-center text-muted py-3">No destination broadcasts found.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card-body text-muted" *ngIf="loading">Loading destination broadcasts...</div>
+    </div>
+  </div>
+
+  <div class="col-lg-5">
+    <div class="card mb-3">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <h4 class="card-title mb-0">Broadcast Revenue</h4>
+        <button class="btn btn-sm btn-outline-primary" type="button" (click)="loadRevenue()">Refresh</button>
+      </div>
+      <div class="card-body" *ngIf="revenue">
+        <div>Total revenue: {{ revenue.total_revenue || 0 }}</div>
+        <div>Paid broadcasts: {{ revenue.paid_broadcasts || 0 }}</div>
+        <div>Pending payment: {{ revenue.pending_payment_broadcasts || 0 }}</div>
+        <div>Failed payment: {{ revenue.failed_payment_broadcasts || 0 }}</div>
+        <div>Total broadcasts: {{ revenue.total_broadcasts || 0 }}</div>
+      </div>
+      <div class="card-body text-muted" *ngIf="!revenue">Revenue summary unavailable.</div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <h4 class="card-title mb-0">
+          {{ selectedBroadcast ? ('Join Requests for ' + selectedBroadcast.destination_label) : 'Join Requests' }}
+        </h4>
+      </div>
+      <div class="card-body p-0" *ngIf="!requestLoading">
+        <div class="table-responsive">
+          <table class="table table-striped mb-0">
+            <thead>
+              <tr>
+                <th>Passenger</th>
+                <th>Pickup</th>
+                <th>Seats</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let item of requests">
+                <td>{{ item.passenger_name || item.passenger_id }}</td>
+                <td>{{ item.pickup_label }}</td>
+                <td>{{ item.requested_seats }}</td>
+                <td>{{ item.status }}</td>
+              </tr>
+              <tr *ngIf="requests.length === 0">
+                <td colspan="4" class="text-center text-muted py-3">Select a broadcast to inspect requests.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card-body text-muted" *ngIf="requestLoading">Loading join requests...</div>
+    </div>
+  </div>
+</div>

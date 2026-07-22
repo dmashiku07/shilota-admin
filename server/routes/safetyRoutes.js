@@ -7,10 +7,16 @@ var LostItemMessages = require("../schema/lostitemmessages");
 var RiderBlocks = require("../schema/riderblocks");
 var CallLogs = require("../schema/calllogs");
 var PoolSettings = require("../schema/poolsettings");
+var PriceBroadcastSettings = require("../schema/pricebroadcastsettings");
+var DestinationBroadcastSettings = require("../schema/destinationbroadcastsettings");
 var Rides = require("../schema/rides");
+var DriverDestinationBroadcast = require("../schema/driverdestinationbroadcasts");
+var DriverDestinationJoinRequest = require("../schema/driverdestinationjoinrequests");
 var Driver = require("../schema/driver");
+var User = require("../schema/user");
 var DriverDevices = require("../schema/driverdevices");
 var pushService = require("../services/pushService");
+var { logAuditFromRequest } = require("../services/auditLogService");
 
 function toNumber(value) {
   var parsed = Number(value);
@@ -89,6 +95,15 @@ function resolveCase(Model, req, res) {
         message: "Unable to update case"
       });
     }
+    logAuditFromRequest(req, {
+      action: String(Model.modelName || "case").toLowerCase() + ".resolved",
+      target_type: String(Model.modelName || "case").toLowerCase(),
+      target_id: record._id,
+      metadata: {
+        status: record.status,
+        callback_status: record.callback_status
+      }
+    });
     return res.json({
       status: "true",
       data: record
@@ -210,6 +225,14 @@ router.post("/calllogs/:id/review", function (req, res) {
     if (err || !log) {
       return res.json({ status: "false", message: "Unable to review call log" });
     }
+    logAuditFromRequest(req, {
+      action: "call_log.reviewed",
+      target_type: "call_log",
+      target_id: log._id,
+      metadata: {
+        abuse_flag_status: log.abuse_flag_status
+      }
+    });
     return res.json({ status: "true", data: log });
   });
 });
@@ -258,7 +281,273 @@ router.post("/poolsettings", function (req, res) {
     if (err || !settings) {
       return res.json({ status: "false", message: "Unable to save pooling settings" });
     }
+    logAuditFromRequest(req, {
+      action: "pool_settings.updated",
+      target_type: "pool_settings",
+      target_id: settings._id,
+      metadata: {
+        enabled: settings.enabled,
+        discount_percent: settings.discount_percent,
+        max_passengers: settings.max_passengers
+      }
+    });
     return res.json({ status: "true", data: settings });
+  });
+});
+
+router.get("/pricebroadcastsettings", function (_req, res) {
+  PriceBroadcastSettings.findOne().sort({ updated_at: -1 }).exec(function (err, settings) {
+    if (err) {
+      return res.json({ status: "false", message: "Unable to load price broadcast settings" });
+    }
+    return res.json({
+      status: "true",
+      data: settings || {
+        enabled: true,
+        default_radius_km: 8,
+        max_radius_km: 20,
+        default_expiry_minutes: 5,
+        max_expiry_minutes: 15,
+        max_broadcasts_per_day: null
+      }
+    });
+  });
+});
+
+router.post("/pricebroadcastsettings", function (req, res) {
+  PriceBroadcastSettings.findOneAndUpdate(
+    {},
+    {
+      $set: {
+        enabled: !(req.body.enabled === false || req.body.enabled === "false" || req.body.enabled === 0 || req.body.enabled === "0"),
+        default_radius_km: Math.max(Number(req.body.default_radius_km || 8), 1),
+        max_radius_km: Math.max(Number(req.body.max_radius_km || req.body.default_radius_km || 20), 1),
+        default_expiry_minutes: Math.max(Number(req.body.default_expiry_minutes || 5), 1),
+        max_expiry_minutes: Math.max(Number(req.body.max_expiry_minutes || req.body.default_expiry_minutes || 15), 1),
+        max_broadcasts_per_day:
+          req.body.max_broadcasts_per_day === null ||
+          typeof req.body.max_broadcasts_per_day === "undefined" ||
+          req.body.max_broadcasts_per_day === ""
+            ? null
+            : Math.max(Number(req.body.max_broadcasts_per_day || 0), 0),
+        updated_at: new Date()
+      }
+    },
+    {
+      upsert: true,
+      new: true,
+      setDefaultsOnInsert: true
+    }
+  ).exec(function (err, settings) {
+    if (err || !settings) {
+      return res.json({ status: "false", message: "Unable to save price broadcast settings" });
+    }
+    if (Number(settings.max_radius_km || 0) < Number(settings.default_radius_km || 0)) {
+      settings.max_radius_km = Number(settings.default_radius_km || 0);
+    }
+    if (Number(settings.max_expiry_minutes || 0) < Number(settings.default_expiry_minutes || 0)) {
+      settings.max_expiry_minutes = Number(settings.default_expiry_minutes || 0);
+    }
+    settings.save(function (_saveErr) {
+      logAuditFromRequest(req, {
+        action: "price_broadcast_settings.updated",
+        target_type: "price_broadcast_settings",
+        target_id: settings._id,
+        metadata: {
+          enabled: settings.enabled,
+          default_radius_km: settings.default_radius_km,
+          max_radius_km: settings.max_radius_km,
+          default_expiry_minutes: settings.default_expiry_minutes,
+          max_expiry_minutes: settings.max_expiry_minutes,
+          max_broadcasts_per_day: settings.max_broadcasts_per_day
+        }
+      });
+      return res.json({ status: "true", data: settings });
+    });
+  });
+});
+
+router.get("/pricebroadcasts", function (req, res) {
+  var limit = Math.min(Math.max(Number(req.query.limit || 50), 1), 200);
+  Rides.find({
+    request_type: "PASSENGER_PRICE_BROADCAST"
+  })
+    .sort({ created_at: -1 })
+    .limit(limit)
+    .populate("driver_id")
+    .exec(function (err, rides) {
+      if (err) {
+        return res.json({ status: "false", data: [] });
+      }
+      return res.json({ status: "true", data: rides || [] });
+    });
+});
+
+router.get("/destinationbroadcasts", function (req, res) {
+  var limit = Math.min(Math.max(Number(req.query.limit || 50), 1), 200);
+  var paymentStatus = String(req.query.payment_status || "").trim().toUpperCase();
+  var query = {};
+  if (paymentStatus) {
+    query.payment_status = paymentStatus;
+  }
+  DriverDestinationBroadcast.find(query)
+    .sort({ created_at: -1 })
+    .limit(limit)
+    .populate("driver_id")
+    .exec(function (err, items) {
+      if (err) {
+        return res.json({ status: "false", data: [] });
+      }
+      return res.json({ status: "true", data: items || [] });
+    });
+});
+
+router.get("/destinationbroadcastsettings", function (_req, res) {
+  DestinationBroadcastSettings.findOne().sort({ updated_at: -1 }).exec(function (err, settings) {
+    if (err) {
+      return res.json({ status: "false", message: "Unable to load destination broadcast settings" });
+    }
+    return res.json({
+      status: "true",
+      data: settings || {
+        enabled: true,
+        broadcast_fee: 1000,
+        currency: "TZS",
+        default_radius_km: 8,
+        max_radius_km: 20,
+        expiry_duration_minutes: 30,
+        maximum_active_broadcasts_per_driver: 1,
+        cancellation_refund_policy: "NO_REFUND"
+      }
+    });
+  });
+});
+
+router.post("/destinationbroadcastsettings", function (req, res) {
+  DestinationBroadcastSettings.findOneAndUpdate(
+    {},
+    {
+      $set: {
+        enabled: !(req.body.enabled === false || req.body.enabled === "false" || req.body.enabled === 0 || req.body.enabled === "0"),
+        broadcast_fee: Math.max(Number(req.body.broadcast_fee || 0), 0),
+        currency: String(req.body.currency || "TZS").trim().toUpperCase(),
+        default_radius_km: Math.max(Number(req.body.default_radius_km || 8), 1),
+        max_radius_km: Math.max(Number(req.body.max_radius_km || req.body.default_radius_km || 20), 1),
+        expiry_duration_minutes: Math.max(Number(req.body.expiry_duration_minutes || 30), 1),
+        maximum_active_broadcasts_per_driver: Math.max(Number(req.body.maximum_active_broadcasts_per_driver || 1), 1),
+        cancellation_refund_policy: "NO_REFUND",
+        updated_at: new Date()
+      }
+    },
+    {
+      upsert: true,
+      new: true,
+      setDefaultsOnInsert: true
+    }
+  ).exec(function (err, settings) {
+    if (err || !settings) {
+      return res.json({ status: "false", message: "Unable to save destination broadcast settings" });
+    }
+    if (Number(settings.max_radius_km || 0) < Number(settings.default_radius_km || 0)) {
+      settings.max_radius_km = Number(settings.default_radius_km || 0);
+    }
+    settings.save(function () {
+      logAuditFromRequest(req, {
+        action: "destination_broadcast_settings.updated",
+        target_type: "destination_broadcast_settings",
+        target_id: settings._id,
+        metadata: {
+          enabled: settings.enabled,
+          broadcast_fee: settings.broadcast_fee,
+          currency: settings.currency,
+          default_radius_km: settings.default_radius_km,
+          max_radius_km: settings.max_radius_km,
+          expiry_duration_minutes: settings.expiry_duration_minutes,
+          maximum_active_broadcasts_per_driver: settings.maximum_active_broadcasts_per_driver
+        }
+      });
+      return res.json({ status: "true", data: settings });
+    });
+  });
+});
+
+router.get("/destinationbroadcastrevenues", function (_req, res) {
+  DriverDestinationBroadcast.aggregate([
+    {
+      $group: {
+        _id: null,
+        total_broadcasts: { $sum: 1 },
+        paid_broadcasts: {
+          $sum: {
+            $cond: [{ $eq: ["$payment_status", "PAID"] }, 1, 0]
+          }
+        },
+        pending_payment_broadcasts: {
+          $sum: {
+            $cond: [{ $eq: ["$payment_status", "PENDING"] }, 1, 0]
+          }
+        },
+        failed_payment_broadcasts: {
+          $sum: {
+            $cond: [{ $eq: ["$payment_status", "FAILED"] }, 1, 0]
+          }
+        },
+        total_revenue: {
+          $sum: {
+            $cond: [{ $eq: ["$payment_status", "PAID"] }, "$broadcast_fee", 0]
+          }
+        }
+      }
+    }
+  ]).exec(function (err, rows) {
+    if (err) {
+      return res.json({ status: "false", data: null });
+    }
+    return res.json({
+      status: "true",
+      data: rows && rows[0] ? rows[0] : {
+        total_broadcasts: 0,
+        paid_broadcasts: 0,
+        pending_payment_broadcasts: 0,
+        failed_payment_broadcasts: 0,
+        total_revenue: 0
+      }
+    });
+  });
+});
+
+router.get("/destinationbroadcasts/:id/requests", function (req, res) {
+  DriverDestinationJoinRequest.find({
+    broadcast_id: req.params.id
+  }).sort({ created_at: -1 }).limit(100).exec(function (err, items) {
+    if (err) {
+      return res.json({ status: "false", data: [] });
+    }
+    User.find({
+      _id: { $in: (items || []).map(function (item) { return String(item.passenger_id); }) }
+    }).select("_id full_name profile_image").exec(function (_userErr, users) {
+      return res.json({
+        status: "true",
+        data: (items || []).map(function (item) {
+          var user = (users || []).find(function (entry) {
+            return String(entry._id) === String(item.passenger_id);
+          });
+          return {
+            _id: String(item._id),
+            passenger_id: String(item.passenger_id),
+            passenger_name: user ? String(user.full_name || "") : "",
+            passenger_image: user ? String(user.profile_image || "") : "",
+            pickup_label: item.pickup_label,
+            pickup_lat: item.pickup_lat,
+            pickup_lng: item.pickup_lng,
+            requested_seats: item.requested_seats,
+            status: item.status,
+            created_at: item.created_at,
+            updated_at: item.updated_at
+          };
+        })
+      });
+    });
   });
 });
 

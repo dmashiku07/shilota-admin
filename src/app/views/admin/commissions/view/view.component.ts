@@ -4,6 +4,7 @@ import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { Router } from '@angular/router';
 import { ToastrService } from 'ngx-toastr';
+import { environment } from '../../../../../environments/environment';
 
 @Component({
   standalone: false,
@@ -14,6 +15,7 @@ selector: 'app-view',
 export class ViewComponent implements OnInit {
   tax:any[] = [];
   loading = false;
+  readonly commissionEnabled = environment.featureFlags.commission_enabled;
   constructor(private service:CommissionsService,
     private http: HttpClient,
     private router: Router,
@@ -46,7 +48,7 @@ export class ViewComponent implements OnInit {
         this.tax = Array.isArray(res) ? res : [];
         this.loading = false;
         this.cdr.detectChanges();
-        if(this.tax.length==0){
+        if(this.tax.length==0 && this.commissionEnabled){
           this.router.navigate(['admin/commissions/add']);
         }
       },
@@ -59,6 +61,9 @@ export class ViewComponent implements OnInit {
   }
 
   delete(id) {
+    if (!this.commissionEnabled) {
+      return;
+    }
     this.service.delete(id).subscribe(data=>{
       if(data['success']) {
         this.toastr.info(data['msg']);        

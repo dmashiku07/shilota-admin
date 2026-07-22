@@ -11,6 +11,9 @@ import { AdminRiderBlocksComponent } from './safety/rider-blocks/rider-blocks.co
 import { AdminPoolSettingsComponent } from './safety/pool-settings/pool-settings.component';
 import { AdminDemandHeatmapComponent } from './safety/demand-heatmap/demand-heatmap.component';
 import { AdminAcceptanceSettingsComponent } from './safety/acceptance-settings/acceptance-settings.component';
+import { AdminPriceBroadcastSettingsComponent } from './safety/price-broadcast-settings/price-broadcast-settings.component';
+import { AdminDestinationBroadcastMonitorComponent } from './safety/destination-broadcast-monitor/destination-broadcast-monitor.component';
+import { PlatformReportsComponent } from './reports/platform-reports/platform-reports.component';
 import { AdminguardGuard } from 'app/guards/adminguard.guard';
 
 const routes: Routes = [
@@ -36,8 +39,11 @@ const routes: Routes = [
       { path: 'call-logs', component: AdminCallLogsComponent },
       { path: 'rider-blocks', component: AdminRiderBlocksComponent },
       { path: 'pool-settings', component: AdminPoolSettingsComponent },
+      { path: 'price-broadcast-settings', component: AdminPriceBroadcastSettingsComponent },
+      { path: 'destination-broadcast-monitor', component: AdminDestinationBroadcastMonitorComponent },
       { path: 'demand-heatmap', component: AdminDemandHeatmapComponent },
       { path: 'acceptance-settings', component: AdminAcceptanceSettingsComponent },
+      { path: 'reports', component: PlatformReportsComponent },
 
       {
         path: 'account',
@@ -80,6 +86,14 @@ const routes: Routes = [
       {
         path: 'commissions',
         loadChildren: () => import('./commissions/commissions.module').then(m => m.CommissionsModule)
+      },
+      {
+        path: 'subscription-plans',
+        loadChildren: () => import('./subscription-plans/subscription-plans.module').then(m => m.SubscriptionPlansModule)
+      },
+      {
+        path: 'driver-subscriptions',
+        loadChildren: () => import('./driver-subscriptions/driver-subscriptions.module').then(m => m.DriverSubscriptionsModule)
       },
 
       { path: "**", component: DashboardComponent }

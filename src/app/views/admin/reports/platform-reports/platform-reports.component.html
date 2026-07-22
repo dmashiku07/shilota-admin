@@ -1,0 +1,243 @@
+<div class="row" *ngIf="!loading && report; else reportsLoading">
+  <div class="col-xl-3 col-lg-6 col-12">
+    <div class="card">
+      <div class="card-body">
+        <h6 class="text-muted">Driver Subscription Revenue</h6>
+        <h3 class="mb-0">{{ report.revenue?.driver_subscription_revenue || 0 }}</h3>
+        <small>{{ report.revenue?.driver_subscription_count || 0 }} paid subscriptions</small>
+      </div>
+    </div>
+  </div>
+  <div class="col-xl-3 col-lg-6 col-12">
+    <div class="card">
+      <div class="card-body">
+        <h6 class="text-muted">Passenger Subscription Revenue</h6>
+        <h3 class="mb-0">{{ report.revenue?.passenger_subscription_revenue || 0 }}</h3>
+        <small>{{ report.revenue?.passenger_subscription_count || 0 }} paid subscriptions</small>
+      </div>
+    </div>
+  </div>
+  <div class="col-xl-3 col-lg-6 col-12">
+    <div class="card">
+      <div class="card-body">
+        <h6 class="text-muted">Driver Broadcast Revenue</h6>
+        <h3 class="mb-0">{{ report.revenue?.driver_broadcast_revenue || 0 }}</h3>
+        <small>{{ report.revenue?.driver_broadcast_paid_count || 0 }} paid broadcasts</small>
+      </div>
+    </div>
+  </div>
+  <div class="col-xl-3 col-lg-6 col-12">
+    <div class="card border-warning">
+      <div class="card-body">
+        <h6 class="text-muted">Legacy Commission Revenue</h6>
+        <h3 class="mb-0">{{ report.revenue?.legacy_commission_revenue || 0 }}</h3>
+        <small>{{ report.revenue?.legacy_commission_settlement_count || 0 }} legacy settlements</small>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <h4 class="card-title mb-0">Subscription Health</h4>
+        <span class="badge badge-light">Business date: {{ report.business_date }}</span>
+      </div>
+      <div class="card-body">
+        <div class="row text-center">
+          <div class="col-4">
+            <h3>{{ report.subscriptions?.active_subscriptions || 0 }}</h3>
+            <p class="mb-0 text-muted">Active</p>
+          </div>
+          <div class="col-4">
+            <h3>{{ report.subscriptions?.expired_subscriptions || 0 }}</h3>
+            <p class="mb-0 text-muted">Expired</p>
+          </div>
+          <div class="col-4">
+            <h3>{{ report.subscriptions?.expiring_subscriptions || 0 }}</h3>
+            <p class="mb-0 text-muted">Expiring (7d)</p>
+          </div>
+        </div>
+        <hr>
+        <div class="row">
+          <div class="col-sm-6">
+            <ul class="list-group">
+              <li class="list-group-item d-flex justify-content-between"><span>Driver active</span><strong>{{ report.subscriptions?.active_driver_subscriptions || 0 }}</strong></li>
+              <li class="list-group-item d-flex justify-content-between"><span>Driver expired</span><strong>{{ report.subscriptions?.expired_driver_subscriptions || 0 }}</strong></li>
+              <li class="list-group-item d-flex justify-content-between"><span>Driver expiring</span><strong>{{ report.subscriptions?.expiring_driver_subscriptions || 0 }}</strong></li>
+            </ul>
+          </div>
+          <div class="col-sm-6">
+            <ul class="list-group">
+              <li class="list-group-item d-flex justify-content-between"><span>Passenger active</span><strong>{{ report.subscriptions?.active_passenger_subscriptions || 0 }}</strong></li>
+              <li class="list-group-item d-flex justify-content-between"><span>Passenger expired</span><strong>{{ report.subscriptions?.expired_passenger_subscriptions || 0 }}</strong></li>
+              <li class="list-group-item d-flex justify-content-between"><span>Passenger expiring</span><strong>{{ report.subscriptions?.expiring_passenger_subscriptions || 0 }}</strong></li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header">
+        <h4 class="card-title mb-0">Offer And Broadcast Stats</h4>
+      </div>
+      <div class="card-body">
+        <ul class="list-group mb-3">
+          <li class="list-group-item d-flex justify-content-between"><span>Standard ride requests</span><strong>{{ report.normal_ride_offers?.total_standard_requests || 0 }}</strong></li>
+          <li class="list-group-item d-flex justify-content-between"><span>Total offers</span><strong>{{ report.normal_ride_offers?.total_offers || 0 }}</strong></li>
+          <li class="list-group-item d-flex justify-content-between"><span>Accepted offers</span><strong>{{ report.normal_ride_offers?.accepted_offers || 0 }}</strong></li>
+          <li class="list-group-item d-flex justify-content-between"><span>Average offer price</span><strong>{{ report.normal_ride_offers?.average_offer_price || 0 }}</strong></li>
+        </ul>
+        <ul class="list-group">
+          <li class="list-group-item d-flex justify-content-between"><span>Passenger price broadcasts</span><strong>{{ report.passenger_price_broadcasts?.total_broadcasts || 0 }}</strong></li>
+          <li class="list-group-item d-flex justify-content-between"><span>Accepted passenger-price offers</span><strong>{{ report.passenger_price_broadcasts?.accept_passenger_price_offers || 0 }}</strong></li>
+          <li class="list-group-item d-flex justify-content-between"><span>Driver counter-offers</span><strong>{{ report.passenger_price_broadcasts?.driver_counter_offers || 0 }}</strong></li>
+          <li class="list-group-item d-flex justify-content-between"><span>Destination broadcasts</span><strong>{{ report.driver_destination_broadcasts?.total_broadcasts || 0 }}</strong></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header">
+        <h4 class="card-title mb-0">Drivers At Daily Limit</h4>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-striped mb-0">
+            <thead>
+              <tr>
+                <th>Driver</th>
+                <th>Plan</th>
+                <th>Usage</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let item of report.drivers_at_daily_limits">
+                <td>{{ item.driver_name || item.driver_id }}</td>
+                <td>{{ item.plan_name_snapshot }}</td>
+                <td>{{ item.rides_used_today }}/{{ item.daily_limit_snapshot }}</td>
+              </tr>
+              <tr *ngIf="!report.drivers_at_daily_limits?.length">
+                <td colspan="3" class="text-center text-muted py-3">No drivers are currently at their daily limit.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="card">
+      <div class="card-header">
+        <h4 class="card-title mb-0">Completed Rides By Driver Plan</h4>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-striped mb-0">
+            <thead>
+              <tr>
+                <th>Plan</th>
+                <th>Completed rides</th>
+                <th>Final revenue</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let row of report.completed_rides_by_driver_plan">
+                <td>{{ row._id }}</td>
+                <td>{{ row.completed_rides }}</td>
+                <td>{{ row.final_revenue || 0 }}</td>
+              </tr>
+              <tr *ngIf="!report.completed_rides_by_driver_plan?.length">
+                <td colspan="3" class="text-center text-muted py-3">No completed ride data found.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <h4 class="card-title mb-0">Subscriptions By Plan</h4>
+        <button class="btn btn-sm btn-outline-primary" type="button" (click)="load()">Refresh</button>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-striped mb-0">
+            <thead>
+              <tr>
+                <th>Customer type</th>
+                <th>Plan</th>
+                <th>Status</th>
+                <th>Subscribers</th>
+                <th>Revenue</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let row of report.subscriptions_by_plan">
+                <td>{{ row._id?.customer_type }}</td>
+                <td>{{ row._id?.plan_name_snapshot }}</td>
+                <td>{{ row._id?.status }}</td>
+                <td>{{ row.subscriber_count }}</td>
+                <td>{{ row.total_revenue || 0 }}</td>
+              </tr>
+              <tr *ngIf="!report.subscriptions_by_plan?.length">
+                <td colspan="5" class="text-center text-muted py-3">No subscription plan data found.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <h4 class="card-title mb-0">Recent Audit Logs</h4>
+        <button class="btn btn-sm btn-outline-primary" type="button" (click)="loadAuditLogs()">Refresh</button>
+      </div>
+      <div class="card-body p-0" *ngIf="!auditLoading; else auditLoadingState">
+        <div class="table-responsive">
+          <table class="table table-striped mb-0">
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Action</th>
+                <th>Actor</th>
+                <th>Target</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let row of auditLogs">
+                <td>{{ row.created_at | date:'medium' }}</td>
+                <td>{{ row.action }}</td>
+                <td>{{ row.actor_label || row.actor_type }}</td>
+                <td>{{ row.target_type }} {{ row.target_id }}</td>
+              </tr>
+              <tr *ngIf="auditLogs.length === 0">
+                <td colspan="4" class="text-center text-muted py-3">No audit activity logged yet.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <ng-template #auditLoadingState>
+        <div class="card-body text-muted">Loading audit logs...</div>
+      </ng-template>
+    </div>
+  </div>
+</div>
+
+<ng-template #reportsLoading>
+  <div class="card">
+    <div class="card-body text-muted">Loading platform reports...</div>
+  </div>
+</ng-template>

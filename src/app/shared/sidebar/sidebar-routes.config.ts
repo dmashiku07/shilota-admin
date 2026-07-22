@@ -1,4 +1,5 @@
 import { RouteInfo } from './sidebar.metadata';
+import { environment } from '../../../environments/environment';
 
 //Sidebar menu Routes and data
 export const ROUTES: RouteInfo[] = [
@@ -68,6 +69,20 @@ export const ROUTES: RouteInfo[] = [
     },
 
     {
+        path: '', title: 'Reports', icon: 'fa fa-line-chart', class: 'has-sub',
+        badge: '', badgeClass: 'badge badge-pill badge-danger float-right mr-1 mt-1', isExternalLink: false, submenu: [
+            {
+                path: '/admin/reports', title: 'Platform Reports', icon: '', class: '',
+                badge: '', badgeClass: '', isExternalLink: false, submenu: []
+            },
+            {
+                path: '/admin/management/settlementHistory', title: 'Legacy Commission History', icon: '', class: '',
+                badge: '', badgeClass: '', isExternalLink: false, submenu: []
+            }
+        ]
+    },
+
+    {
         path: '', title: 'Safety', icon: 'fa fa-shield', class: 'has-sub',
         badge: '', badgeClass: 'badge badge-pill badge-danger float-right mr-1 mt-1', isExternalLink: false, submenu: [
             {
@@ -92,6 +107,14 @@ export const ROUTES: RouteInfo[] = [
             },
             {
                 path: '/admin/pool-settings', title: 'Pool Settings', icon: '', class: '',
+                badge: '', badgeClass: '', isExternalLink: false, submenu: []
+            },
+            {
+                path: '/admin/price-broadcast-settings', title: 'Price Broadcast Settings', icon: '', class: '',
+                badge: '', badgeClass: '', isExternalLink: false, submenu: []
+            },
+            {
+                path: '/admin/destination-broadcast-monitor', title: 'Destination Broadcasts', icon: '', class: '',
                 badge: '', badgeClass: '', isExternalLink: false, submenu: []
             },
             {
@@ -132,11 +155,10 @@ export const ROUTES: RouteInfo[] = [
                 path: '/admin/account/payment', title: 'Payment Settings', icon: '', class: '',
                 badge: '', badgeClass: '', isExternalLink: false, submenu: []
             },
-
-            {
-                path: '/admin/commissions/view', title: 'Commissions', icon: '', class: '',
+            ...(environment.featureFlags.commission_enabled ? [{
+                path: '/admin/commissions/view', title: 'Commission Settings', icon: '', class: '',
                 badge: '', badgeClass: '', isExternalLink: false, submenu: []
-            },
+            }] : []),
 
             {
                 path: '/admin/management/payment', title: 'User Payment', icon: '', class: '',
@@ -144,14 +166,27 @@ export const ROUTES: RouteInfo[] = [
             },
 
             {
-                path: '/admin/management/driverPay', title: 'Driver Payment', icon: '', class: '',
+                path: '/admin/subscription-plans/view', title: 'Driver Subscription Plans', icon: '', class: '',
                 badge: '', badgeClass: '', isExternalLink: false, submenu: []
             },
 
             {
-                path: '/admin/management/settlementHistory', title: 'Settlement History', icon: '', class: '',
+                path: '/admin/subscription-plans/view?customer_type=PASSENGER', title: 'Passenger Subscription Plans', icon: '', class: '',
                 badge: '', badgeClass: '', isExternalLink: false, submenu: []
             },
+
+            {
+                path: '/admin/driver-subscriptions/view', title: 'Driver Subscriptions', icon: '', class: '',
+                badge: '', badgeClass: '', isExternalLink: false, submenu: []
+            },
+            ...(environment.featureFlags.commission_enabled ? [{
+                path: '/admin/management/driverPay', title: 'Driver Payment', icon: '', class: '',
+                badge: '', badgeClass: '', isExternalLink: false, submenu: []
+            },
+            {
+                path: '/admin/management/settlementHistory', title: 'Settlement History', icon: '', class: '',
+                badge: '', badgeClass: '', isExternalLink: false, submenu: []
+            }] : []),
 
         ]
 

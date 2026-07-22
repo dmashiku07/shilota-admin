@@ -3,6 +3,7 @@ var app = express();
 var router = express.Router();
 var Payment = require('../schema/payments');
 var Driver = require('../schema/driver');
+var config = require('../config');
 var {
   buildPaginationResult,
   buildSort,
@@ -88,6 +89,13 @@ router.route('/').get(async function (req, res) {
 
 
 router.route('/totalAmt').get(function (req, res) {
+  if (config.featureFlags.commission_enabled === false) {
+    return res.json(buildPaginationResult([], 0, getPaginationParams(req, {
+      defaultSortBy: '_id',
+      allowedSortFields: ['_id', 'totalbaseprice', 'totalcommissionamount', 'totaltax', 'totalearnings', 'count']
+    })));
+  }
+
   let params = getPaginationParams(req, {
     defaultSortBy: '_id',
     allowedSortFields: ['_id', 'totalbaseprice', 'totalcommissionamount', 'totaltax', 'totalearnings', 'count']
@@ -101,7 +109,8 @@ router.route('/totalAmt').get(function (req, res) {
   let paymentQuery=Payment.aggregate([
     { $match: { 
       $and: [ 
-      { paid: 0 },  
+      { paid: 0 },
+      { direct_to_driver: { $ne: 1 } },
       {
         $or:[{payment_type : 'wallet'},
         {payment_type : 'card'}
@@ -137,7 +146,8 @@ router.route('/totalAmt').get(function (req, res) {
           {
             $match: {
               payment_type: 'cash',
-              paid:0
+              paid:0,
+              direct_to_driver: { $ne: 1 }
             }
           },{
             $group: {

@@ -23,6 +23,7 @@
                     <span class="ft-arrow-down" *ngIf="key =='email'" [ngClass]="{'ft-arrow-up':reverse,'ft-arrow-down':!reverse}"></span>
                   </th>
                   <th>Mobile</th>
+                  <th>Subscription</th>
                   <!-- <th>Location</th> -->
                   <th>Action</th>
                   <th>Submission</th>
@@ -30,7 +31,7 @@
               </thead>
               <tbody>
                 <tr *ngIf="loading">
-                  <td colspan="6" class="text-center py-4">
+                  <td colspan="7" class="text-center py-4">
                     <i class="fa fa-spinner fa-spin mr-2"></i>
                     Loading drivers...
                   </td>
@@ -40,6 +41,10 @@
                   <td>{{page.full_name | lowercase}}</td>
                   <td>{{page.email}}</td>
                   <td>{{page.phone_number}}</td>
+                  <td>
+                    <span class="badge badge-success white" *ngIf="page.subscription_eligible">Eligible</span>
+                    <span class="badge badge-warning white" *ngIf="!page.subscription_eligible">{{page.subscription_error_code || 'Not eligible'}}</span>
+                  </td>
                   <td>
                     <button class="btn btn-raised btn-danger mr-1" (click)="deactive(page._id)" *ngIf="page.approval==1">
                       Deactivate</button>
@@ -57,7 +62,7 @@
                   </td>
                 </tr>
                 <tr *ngIf="!loading && pages.length === 0 ">
-                  <td colspan="6" style="text-align:center;">No result found</td>
+                  <td colspan="7" style="text-align:center;">No result found</td>
                 </tr>
               </tbody>
             </table>

@@ -5,6 +5,7 @@ import { Router } from '@angular/router';
 import { ToastrService } from 'ngx-toastr';
 import { AuthenticationService } from '../../../../service/authentication.service';
 import { SettlementService } from '../../../../service/settlement.service';
+import { environment } from '../../../../../environments/environment';
 
 
 
@@ -18,6 +19,7 @@ export class DriverPayComponent implements OnInit {
   payment: any[] = [];
   user:any = { currencySymbol: '' };
   loading = false;
+  readonly commissionEnabled = environment.featureFlags.commission_enabled;
   filter = '';
   pagination: any = { page: 1, pageSize: 25, totalItems: 0, totalPages: 1 };
   constructor(private service:PaymentService,
@@ -61,6 +63,9 @@ export class DriverPayComponent implements OnInit {
   }
    
   payDriver(driverID,totalFare,commissionAmt,tax,earn,count){
+    if (!this.commissionEnabled) {
+      return;
+    }
     this.settlement.add(driverID,totalFare,commissionAmt,tax,earn,count).subscribe(data=>{ 
       if(data['success']) {
         this.getPage();  

@@ -3,6 +3,7 @@ var app = express();
 var router = express.Router();
 var Payment = require('../schema/payments');
 var Settlement = require('../schema/settlement');
+var config = require('../config');
 var {
   buildPaginationResult,
   buildSort,
@@ -34,12 +35,22 @@ router.route('/').get(async function (req, res) {
 });
 
 router.route('/add').post(function (req, res) {
+  if (config.featureFlags.commission_enabled === false) {
+    return res.json({
+      error: true,
+      msg: 'Legacy settlement approvals are disabled while commission is turned off'
+    });
+  }
+
   var settlement = new Settlement(req.body);
 
   settlement.save(function (err, result) {
     var criteria = {
       driver_id: result.driver_id,
-      paid: 0
+      paid: 0,
+      direct_to_driver: {
+        $ne: 1
+      }
     };
     if (err) throw err;
     Payment.update(criteria, {

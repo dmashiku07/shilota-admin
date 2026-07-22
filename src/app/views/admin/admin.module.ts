@@ -13,6 +13,9 @@ import { AdminRiderBlocksComponent } from './safety/rider-blocks/rider-blocks.co
 import { AdminPoolSettingsComponent } from './safety/pool-settings/pool-settings.component';
 import { AdminDemandHeatmapComponent } from './safety/demand-heatmap/demand-heatmap.component';
 import { AdminAcceptanceSettingsComponent } from './safety/acceptance-settings/acceptance-settings.component';
+import { AdminPriceBroadcastSettingsComponent } from './safety/price-broadcast-settings/price-broadcast-settings.component';
+import { AdminDestinationBroadcastMonitorComponent } from './safety/destination-broadcast-monitor/destination-broadcast-monitor.component';
+import { PlatformReportsComponent } from './reports/platform-reports/platform-reports.component';
 import { FullLayoutComponent } from 'app/layouts/full/full-layout.component';
 import { ContentLayoutComponent } from 'app/layouts/content/content-layout.component';
 import { FileValueAccessor } from 'app/provider/file-control-value-accessor';
@@ -31,6 +34,6 @@ import { SharedModule } from 'app/shared/shared.module';
     SharedModule
   ],
   declarations: [FullLayoutComponent,ContentLayoutComponent,LoginComponent,
-    DashboardComponent,AdminSosAlertsComponent,AdminLostItemsComponent,AdminCallLogsComponent,AdminRiderBlocksComponent,AdminPoolSettingsComponent,AdminDemandHeatmapComponent,AdminAcceptanceSettingsComponent,FileValidator,FileValueAccessor]
+    DashboardComponent,AdminSosAlertsComponent,AdminLostItemsComponent,AdminCallLogsComponent,AdminRiderBlocksComponent,AdminPoolSettingsComponent,AdminDemandHeatmapComponent,AdminAcceptanceSettingsComponent,AdminPriceBroadcastSettingsComponent,AdminDestinationBroadcastMonitorComponent,PlatformReportsComponent,FileValidator,FileValueAccessor]
 })
 export class AdminModule { }

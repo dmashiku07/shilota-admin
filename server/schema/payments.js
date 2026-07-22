@@ -37,6 +37,17 @@ var PaymentsSchema = new Schema({
         type:Number,
          default:0
     },
+    payment_status:{
+        type:String,
+        default:"pending"
+    },
+    direct_to_driver:{
+        type:Number,
+        default:0
+    },
+    paid_at:{
+        type: Date
+    },
     drop_time:{ type: Date, default: Date.now },
     settlement_id:{
         type: String,

@@ -1,0 +1,175 @@
+const test = require("node:test");
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+
+const SubscriptionPlan = require("../schema/subscriptionplans");
+const {
+  PASSENGER_FEATURE_DEFINITIONS,
+  applySubscriptionPlanFields,
+  buildPlanOrderUpdates,
+  normalizePlanFeatures,
+  setPlanActiveStatus,
+  validateSubscriptionPlanPayload
+} = require("../services/subscriptionPlanService");
+
+const routeSource = fs.readFileSync(
+  path.join(__dirname, "..", "routes", "subscriptionPlanRoutes.js"),
+  "utf8"
+);
+
+test("driver subscription plan validation rejects invalid values", function () {
+  let errors = validateSubscriptionPlanPayload({
+    customer_type: "DRIVER",
+    name: "Starter",
+    price: -1,
+    currency: "TZS",
+    duration_unit: "DAY",
+    duration_value: 0,
+    daily_ride_limit: 0,
+    is_unlimited: false,
+    display_order: -1
+  });
+
+  assert.equal(errors.price, "Price must be zero or greater");
+  assert.equal(errors.duration_value, "Duration value must be greater than zero");
+  assert.equal(errors.daily_ride_limit, "Daily ride limit must be greater than zero for limited driver plans");
+  assert.equal(errors.display_order, "Display order must be zero or greater");
+});
+
+test("unlimited driver plan may omit daily ride limit", function () {
+  const plan = new SubscriptionPlan({});
+  applySubscriptionPlanFields(plan, {
+    customer_type: "DRIVER",
+    name: "Unlimited",
+    description: "All day access",
+    price: 10000,
+    currency: "TZS",
+    duration_unit: "MONTH",
+    duration_value: 1,
+    daily_ride_limit: "",
+    is_unlimited: true,
+    is_active: true,
+    display_order: 0
+  });
+
+  const validationError = plan.validateSync();
+  assert.equal(validationError, undefined);
+  assert.equal(plan.daily_ride_limit, null);
+});
+
+test("limited driver plan requires a positive daily ride limit", function () {
+  const plan = new SubscriptionPlan({
+    customer_type: "DRIVER",
+    name: "Daily 3",
+    description: "",
+    price: 1000,
+    currency: "TZS",
+    duration_unit: "DAY",
+    duration_value: 1,
+    daily_ride_limit: null,
+    is_unlimited: false,
+    is_active: true,
+    display_order: 0
+  });
+
+  const validationError = plan.validateSync();
+  assert.ok(validationError);
+  assert.ok(validationError.errors.daily_ride_limit);
+});
+
+test("activation and deactivation update plan state without changing pricing fields", function () {
+  const plan = new SubscriptionPlan({
+    customer_type: "DRIVER",
+    name: "Weekly 5",
+    description: "",
+    price: 5000,
+    currency: "TZS",
+    duration_unit: "WEEK",
+    duration_value: 1,
+    daily_ride_limit: 5,
+    is_unlimited: false,
+    is_active: true,
+    display_order: 1
+  });
+
+  setPlanActiveStatus(plan, false);
+  assert.equal(plan.is_active, false);
+  assert.equal(plan.price, 5000);
+
+  setPlanActiveStatus(plan, true);
+  assert.equal(plan.is_active, true);
+  assert.equal(plan.daily_ride_limit, 5);
+});
+
+test("reordering plans rewrites display order predictably", function () {
+  const updates = buildPlanOrderUpdates(
+    [
+      { _id: "a", display_order: 0 },
+      { _id: "b", display_order: 1 },
+      { _id: "c", display_order: 2 }
+    ],
+    ["c", "a", "b"]
+  );
+
+  assert.deepStrictEqual(updates, [
+    { id: "c", display_order: 0 },
+    { id: "a", display_order: 1 },
+    { id: "b", display_order: 2 }
+  ]);
+});
+
+test("passenger plan validation rejects invalid feature values", function () {
+  const errors = validateSubscriptionPlanPayload({
+    customer_type: "PASSENGER",
+    name: "Passenger Plus",
+    price: 2500,
+    currency: "TZS",
+    duration_unit: "MONTH",
+    duration_value: 1,
+    display_order: 0,
+    features: [
+      {
+        feature_code: "CAN_SET_RIDE_PRICE",
+        feature_value: "yes"
+      },
+      {
+        feature_code: "MAX_PRICE_BROADCASTS_PER_DAY",
+        feature_value: -1
+      }
+    ]
+  });
+
+  assert.equal(errors["features.CAN_SET_RIDE_PRICE"], "Can set ride price must be true or false");
+  assert.equal(errors["features.MAX_PRICE_BROADCASTS_PER_DAY"], "Max price broadcasts per day must be 0 or greater");
+});
+
+test("passenger plan features are normalized and deduplicated", function () {
+  const normalized = normalizePlanFeatures([
+    { feature_code: "can_set_ride_price", feature_value: "true" },
+    { feature_code: "CAN_SET_RIDE_PRICE", feature_value: false },
+    { feature_code: "PASSENGER_BROADCAST_RADIUS_KM", feature_value: "12" },
+    { feature_code: "UNKNOWN", feature_value: true }
+  ]);
+
+  assert.deepStrictEqual(normalized, [
+    { feature_code: "CAN_SET_RIDE_PRICE", feature_value: false },
+    { feature_code: "PASSENGER_BROADCAST_RADIUS_KM", feature_value: 12 }
+  ]);
+});
+
+test("passenger feature definition catalog exposes configured feature codes", function () {
+  assert.ok(PASSENGER_FEATURE_DEFINITIONS.CAN_SET_RIDE_PRICE);
+  assert.ok(PASSENGER_FEATURE_DEFINITIONS.CAN_BROADCAST_RIDE_REQUEST);
+  assert.ok(PASSENGER_FEATURE_DEFINITIONS.PRIORITY_MATCHING);
+  assert.ok(PASSENGER_FEATURE_DEFINITIONS.MAX_PRICE_BROADCASTS_PER_DAY);
+  assert.ok(PASSENGER_FEATURE_DEFINITIONS.PASSENGER_BROADCAST_RADIUS_KM);
+});
+
+test("subscription plan routes expose activation, deactivation, reorder, and delete protection", function () {
+  assert.match(routeSource, /router\.post\("\/:id\/activate"/);
+  assert.match(routeSource, /router\.post\("\/:id\/deactivate"/);
+  assert.match(routeSource, /router\.post\("\/reorder"/);
+  assert.match(routeSource, /router\.get\("\/meta\/features"/);
+  assert.match(routeSource, /referenced by subscriptions/);
+});

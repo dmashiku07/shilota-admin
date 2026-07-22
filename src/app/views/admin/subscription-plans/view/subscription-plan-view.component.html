@@ -1,0 +1,67 @@
+<section class="row">
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <h4 class="card-title mb-0">{{ pageTitle }}</h4>
+        <a class="btn btn-primary btn-sm" [routerLink]="addLink" [queryParams]="queryParams">Add plan</a>
+      </div>
+      <div class="card-body">
+        <div *ngIf="loading" class="text-muted">{{ loadingLabel }}</div>
+        <div *ngIf="!loading" class="table-responsive">
+          <table class="table table-striped">
+            <thead>
+              <tr>
+                <th>Order</th>
+                <th>Name</th>
+                <th>Price</th>
+                <th>Validity</th>
+                <th>{{ isPassenger ? 'Premium features' : 'Rides / day' }}</th>
+                <th *ngIf="isPassenger">Active subscribers</th>
+                <th>Status</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let plan of plans; let i = index">
+                <td>
+                  {{ plan.display_order }}
+                  <div class="btn-group btn-group-sm ml-2">
+                    <button class="btn btn-outline-secondary" type="button" (click)="moveUp(i)" [disabled]="i === 0">↑</button>
+                    <button class="btn btn-outline-secondary" type="button" (click)="moveDown(i)" [disabled]="i === plans.length - 1">↓</button>
+                  </div>
+                </td>
+                <td>
+                  <strong>{{ plan.name }}</strong><br>
+                  <small class="text-muted">{{ plan.description || 'No description' }}</small>
+                </td>
+                <td>{{ plan.currency }} {{ plan.price }}</td>
+                <td>{{ validityLabel(plan) }}</td>
+                <td *ngIf="!isPassenger">
+                  <span class="badge badge-warning mr-1" *ngIf="plan.is_unlimited">Unlimited</span>
+                  <span>{{ ridesPerDayLabel(plan) }}</span>
+                </td>
+                <td *ngIf="isPassenger">
+                  <small>{{ featureSummary(plan) }}</small>
+                </td>
+                <td *ngIf="isPassenger">{{ plan.active_subscriber_count || 0 }}</td>
+                <td>
+                  <span class="badge" [ngClass]="plan.is_active ? 'badge-success' : 'badge-secondary'">
+                    {{ plan.is_active ? 'Active' : 'Inactive' }}
+                  </span>
+                </td>
+                <td class="text-right">
+                  <a class="btn btn-sm btn-outline-primary mr-2" [routerLink]="['/admin/subscription-plans/edit', plan._id]" [queryParams]="queryParams">Edit</a>
+                  <button *ngIf="!plan.is_active" class="btn btn-sm btn-success mr-2" type="button" (click)="activate(plan)">Activate</button>
+                  <button *ngIf="plan.is_active" class="btn btn-sm btn-danger" type="button" (click)="deactivate(plan)">Deactivate</button>
+                </td>
+              </tr>
+              <tr *ngIf="plans.length === 0">
+                <td [attr.colspan]="isPassenger ? 8 : 7" class="text-muted">{{ emptyStateLabel }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>

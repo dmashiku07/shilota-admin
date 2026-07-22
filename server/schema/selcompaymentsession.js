@@ -19,9 +19,28 @@ var SelcomPaymentSessionSchema = new Schema(
       default: "user",
       index: true
     },
+    purpose: {
+      type: String,
+      default: "wallet",
+      index: true
+    },
     amount: {
       type: Number,
       required: true
+    },
+    subscription_id: {
+      type: String,
+      default: null,
+      index: true
+    },
+    destination_broadcast_id: {
+      type: String,
+      default: null,
+      index: true
+    },
+    plan_id: {
+      type: String,
+      default: null
     },
     status: {
       type: String,

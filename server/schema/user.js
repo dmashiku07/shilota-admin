@@ -46,6 +46,25 @@ var UserSchema = new Schema({
     type: Number,
     default: 0
   },
+  current_lat: {
+    type: Number,
+    default: null
+  },
+  current_lng: {
+    type: Number,
+    default: null
+  },
+  current_location: {
+    type: String,
+    default: ""
+  },
+  loc: {
+    type: [Number],
+    index: {
+      type: "2dsphere",
+      sparse: true
+    }
+  },
 });
 
 UserSchema.pre("save", function(next) {

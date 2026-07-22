@@ -4,6 +4,13 @@ window.__shilotaConfig = {
   googleapiKey: "REPLACE_GOOGLE_MAPS_API_KEY",
   googleloginClientid: "REPLACE_GOOGLE_LOGIN_CLIENT_ID",
   enablePhoneVerification: "false",
+  featureFlags: {
+    commission_enabled: "true",
+    driver_subscriptions_enabled: "false",
+    driver_pricing_enabled: "false",
+    passenger_price_broadcast_enabled: "false",
+    driver_destination_broadcast_enabled: "false"
+  },
   firebase: {
     apiKey: "REPLACE_FIREBASE_API_KEY",
     authDomain: "REPLACE_FIREBASE_AUTH_DOMAIN",

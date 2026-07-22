@@ -1,0 +1,75 @@
+<div class="row">
+  <div class="col-lg-7">
+    <div class="card">
+      <div class="card-header">
+        <h4 class="card-title">Passenger Price Broadcast Settings</h4>
+      </div>
+      <div class="card-body" *ngIf="!loading">
+        <div class="form-group">
+          <label><input type="checkbox" [(ngModel)]="model.enabled"> Enable passenger price broadcasts</label>
+        </div>
+        <div class="form-row">
+          <div class="form-group col-md-6">
+            <label>Default radius (km)</label>
+            <input class="form-control" type="number" [(ngModel)]="model.default_radius_km">
+          </div>
+          <div class="form-group col-md-6">
+            <label>Maximum radius (km)</label>
+            <input class="form-control" type="number" [(ngModel)]="model.max_radius_km">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group col-md-6">
+            <label>Default expiry (minutes)</label>
+            <input class="form-control" type="number" [(ngModel)]="model.default_expiry_minutes">
+          </div>
+          <div class="form-group col-md-6">
+            <label>Maximum expiry (minutes)</label>
+            <input class="form-control" type="number" [(ngModel)]="model.max_expiry_minutes">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Optional global broadcasts per day cap</label>
+          <input class="form-control" type="number" [(ngModel)]="model.max_broadcasts_per_day" placeholder="Leave empty for no global cap">
+        </div>
+        <button class="btn btn-primary" type="button" [disabled]="saving" (click)="save()">
+          {{ saving ? 'Saving...' : 'Save Price Broadcast Settings' }}
+        </button>
+      </div>
+      <div class="card-body text-muted" *ngIf="loading">Loading passenger price broadcast settings...</div>
+    </div>
+  </div>
+
+  <div class="col-lg-5">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <h4 class="card-title mb-0">Recent Broadcasts</h4>
+        <button class="btn btn-sm btn-outline-primary" type="button" (click)="loadActivities()">Refresh</button>
+      </div>
+      <div class="card-body p-0" *ngIf="!activitiesLoading">
+        <div class="table-responsive">
+          <table class="table table-striped mb-0">
+            <thead>
+              <tr>
+                <th>Passenger price</th>
+                <th>Status</th>
+                <th>Radius</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let item of activities">
+                <td>{{ item.passenger_offered_price || 0 }} {{ item.final_agreed_currency || 'TZS' }}</td>
+                <td>{{ item.ridestatus || '-' }}</td>
+                <td>{{ item.broadcast_radius || '-' }} km</td>
+              </tr>
+              <tr *ngIf="activities.length === 0">
+                <td colspan="3" class="text-center text-muted py-3">No broadcasts found yet.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card-body text-muted" *ngIf="activitiesLoading">Loading activity...</div>
+    </div>
+  </div>
+</div>

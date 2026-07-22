@@ -62,9 +62,46 @@ function asNumber(value, fallback) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function asBoolean(value, fallback) {
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "true") {
+      return true;
+    }
+    if (normalized === "false") {
+      return false;
+    }
+  }
+
+  return fallback;
+}
+
 loadEnvFiles();
 const localConfig = readLegacyLocalConfig();
 const resolvedApiPort = asNumber(process.env.API_PORT || process.env.PORT || localConfig.apiPort, 3000);
+const featureFlags = {
+  commission_enabled: asBoolean(process.env.COMMISSION_ENABLED || localConfig.commissionEnabled, true),
+  driver_subscriptions_enabled: asBoolean(
+    process.env.DRIVER_SUBSCRIPTIONS_ENABLED || localConfig.driverSubscriptionsEnabled,
+    false
+  ),
+  driver_pricing_enabled: asBoolean(
+    process.env.DRIVER_PRICING_ENABLED || localConfig.driverPricingEnabled,
+    false
+  ),
+  passenger_price_broadcast_enabled: asBoolean(
+    process.env.PASSENGER_PRICE_BROADCAST_ENABLED || localConfig.passengerPriceBroadcastEnabled,
+    false
+  ),
+  driver_destination_broadcast_enabled: asBoolean(
+    process.env.DRIVER_DESTINATION_BROADCAST_ENABLED || localConfig.driverDestinationBroadcastEnabled,
+    false
+  )
+};
 
 module.exports = {
   database: process.env.MONGO_URL || localConfig.database || "mongodb://127.0.0.1:27017/shilota_db",
@@ -73,6 +110,7 @@ module.exports = {
   socketPort: asNumber(process.env.SOCKET_PORT || localConfig.socketPort, 8081),
   httpsMode: process.env.HTTPS_MODE || localConfig.httpsMode || "disable",
   baseUrl: process.env.BASE_URL || localConfig.baseUrl || `http://localhost:${resolvedApiPort}`,
+  featureFlags: featureFlags,
   cets: {
     enabled: (process.env.CETS_ENABLED || localConfig.cetsEnabled || "false").toLowerCase() === "true",
     baseUrl: process.env.CETS_BASE_URL || localConfig.cetsBaseUrl || "",

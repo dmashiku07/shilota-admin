@@ -5,17 +5,20 @@
 
               <div class="card-header">
                   <div class="actions float-right">
-                      <a [routerLink]="['/admin/commissions/add']" >
+                      <a *ngIf="commissionEnabled" [routerLink]="['/admin/commissions/add']" >
                       <span data-i18n="" class="btn btn-raised btn-dark btn-sm "><i class="fa fa-plus"></i>&nbsp;Add Commissions</span></a>
                  
                                          </div>
-                  <h4 class="card-title">Commissions Management</h4>
+                  <h4 class="card-title">{{ commissionEnabled ? 'Commissions Management' : 'Legacy Commissions' }}</h4>
                   
               </div>
 
              
               <div class="card-body">
                   <div class="card-block">
+                      <div *ngIf="!commissionEnabled" class="alert alert-warning">
+                        Commission is disabled for new rides. These records remain available for historical reporting only.
+                      </div>
                       <table class="table table-striped table-bordered table-responsive-md table-inverse ">
                           <thead>
                               <tr>
@@ -24,7 +27,7 @@
                                   <th>Price From</th>
                                   <th>Price To</th>
                                   <th>Percentage(%)</th>
-                                   <th style="width:20%">Actions</th>
+                                   <th style="width:20%">{{ commissionEnabled ? 'Actions' : 'Legacy Status' }}</th>
                               </tr>
                           </thead>
                           <tbody>
@@ -41,13 +44,14 @@
       <td>{{page.percentage}} %</td>
       <td>
 
-              <a class="btn btn-raised btn-icon btn-success mr-1"  [routerLink]="['/admin/commissions/edit',page._id]">
+              <a *ngIf="commissionEnabled" class="btn btn-raised btn-icon btn-success mr-1"  [routerLink]="['/admin/commissions/edit',page._id]">
                 <i class="fa fa-pencil"></i></a>
           
                   
-          <a   class="btn btn-raised btn-icon btn-danger mr-1 white"  (click)="delete(page._id)">
+          <a *ngIf="commissionEnabled" class="btn btn-raised btn-icon btn-danger mr-1 white"  (click)="delete(page._id)">
             <i class="fa fa-trash-o"></i>
           </a>
+          <span *ngIf="!commissionEnabled" class="badge badge-secondary">Legacy only</span>
       </td>
   </tr>
   <tr *ngIf="!loading && tax.length === 0">

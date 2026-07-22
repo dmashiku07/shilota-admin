@@ -34,6 +34,11 @@ let LostItemMessages = require("../schema/lostitemmessages");
 let RideChatMessages = require("../schema/ridechatmessages");
 let RiderBlocks = require("../schema/riderblocks");
 let CallLogs = require("../schema/calllogs");
+let SubscriptionPlan = require("../schema/subscriptionplans");
+let Subscription = require("../schema/subscriptions");
+let RideOffer = require("../schema/rideoffers");
+let DriverDestinationBroadcast = require("../schema/driverdestinationbroadcasts");
+let DriverDestinationJoinRequest = require("../schema/driverdestinationjoinrequests");
 let translationServer = require("../translation/translate.js");
 
 /* api url */
@@ -65,6 +70,56 @@ const smsService = require("../services/smsService");
 const selcomService = require("../services/selcomService");
 const cetsSyncService = require("../services/cetsSyncService");
 const { roundCustomerPayableAmount } = require("../utils/pricing");
+const {
+  applyRideCompletionFinancials,
+  buildPaymentDocument,
+  getRideFinalAmount,
+  isCommissionEnabled,
+  isLegacyCommissionRide,
+  markRidePaymentComplete
+} = require("../services/rideRevenuePolicy");
+const { formatValidity: formatPlanValidity } = require("../services/subscriptionPlanService");
+const {
+  DRIVER_SUBSCRIPTION_ACTOR_TYPE,
+  buildSubscriptionUsageLabel,
+  buildPendingDriverSubscriptionRecord,
+  consumeCompletedRideUsage,
+  expireDriverSubscriptions,
+  finalizeSubscriptionSession,
+  formatDriverSubscription,
+  getCurrentDriverSubscription,
+  getSubscriptionUsageSnapshot,
+  markDriverSubscriptionPaymentFailed,
+  resetDailyUsageIfNeeded,
+  validatePlanForPurchase
+} = require("../services/driverSubscriptionService");
+const {
+  applyPostRideAvailability,
+  buildEligibilityErrorPayload,
+  evaluateDriverActionEligibility,
+  evaluateDriverEligibility,
+  filterEligibleDrivers,
+  hasInProgressRide
+} = require("../services/driverEligibilityService");
+const {
+  DRIVER_DESTINATION_BROADCAST_ACTOR_TYPE,
+  finalizeDestinationBroadcastSession,
+  createDriverDestinationBroadcast,
+  decideJoinRequest,
+  expireDriverDestinationBroadcasts,
+  getDestinationBroadcastSettings,
+  isDriverDestinationBroadcastEnabled,
+  retryDestinationBroadcastPayment,
+  reconcilePendingDestinationBroadcastPayments,
+  updateBroadcastStatus
+} = require("../services/driverDestinationBroadcastService");
+const {
+  getDriverOfferForRide,
+  isDriverOfferRide,
+  isDriverPricingEnabled,
+  submitRideOffer,
+  withdrawRideOffer
+} = require("../services/rideOfferService");
 
 const OTP_EXPIRY_MINUTES = 5;
 const OTP_MAX_ATTEMPTS = 5;
@@ -197,13 +252,17 @@ function completeRideForPayment(onrideId, driverId, callback) {
       }
 
       clearOtherActiveRidesForRider(ride.user_id, ride._id);
-      Driver.updateOne({
-        _id: driverId || ride.driver_id
-      }, {
-        $set: {
-          live_status: "1"
-        }
-      }).exec(function (driverErr) {
+      consumeCompletedRideUsage({
+        rideId: ride._id,
+        driverId: driverId || ride.driver_id,
+        now: new Date()
+      }).then(function () {
+        return applyPostRideAvailability(driverId || ride.driver_id, {
+          now: new Date()
+        });
+      }).then(function () {
+        callback(null, ride);
+      }).catch(function (driverErr) {
         callback(driverErr, ride);
       });
     });
@@ -289,7 +348,16 @@ function validateDriverCanAcceptRide(driverId, ride, callback) {
       if (geoErr || !Array.isArray(drivers) || drivers.length === 0) {
         return callback(false);
       }
-      callback(driverMatchesAcceptanceSettings(drivers[0], ride));
+      filterEligibleDrivers(drivers, {
+        now: new Date()
+      }).then(function (eligibleDrivers) {
+        if (!Array.isArray(eligibleDrivers) || eligibleDrivers.length === 0) {
+          return callback(false);
+        }
+        callback(driverMatchesAcceptanceSettings(eligibleDrivers[0], ride));
+      }).catch(function () {
+        callback(false);
+      });
     });
   });
 }
@@ -573,6 +641,24 @@ function getDriverWalletAmount(driver) {
   }
 
   return Math.round(Number(driver.walletmoney || 0) * 100) / 100;
+}
+
+function buildDriverSubscriptionResponse(subscription) {
+  if (!subscription) {
+    return null;
+  }
+
+  resetDailyUsageIfNeeded(subscription, new Date());
+  const result = formatDriverSubscription(subscription);
+  const usage = getSubscriptionUsageSnapshot(subscription, new Date());
+  result.validity_label = formatPlanValidity({
+    duration_unit: result.duration_unit_snapshot,
+    duration_value: result.duration_value_snapshot
+  });
+  result.current_usage_label = buildSubscriptionUsageLabel(subscription, new Date());
+  result.remaining_rides = usage.remaining_rides;
+  result.reached_daily_limit = usage.reached_daily_limit;
+  return result;
 }
 
 async function pushDriverWalletNotification(driverId, walletamount, message) {
@@ -1385,6 +1471,391 @@ router.get('/helppages', function (req, res) {
       });
     }
   });
+});
+
+router.get('/subscriptionplans/:userid', function (req, res) {
+  passport.authenticate('jwt', { session: false }, function (err, driver) {
+    if (err === "AccountDeleted") {
+      res.json({
+        status: "error",
+        message: 'Account has been deleted successfully'
+      });
+    } else if (!driver) {
+      res.json({
+        status: "error",
+        message: 'Unauthorized access'
+      });
+    } else if (String(driver._id) !== String(req.params.userid)) {
+      res.json({
+        status: "false",
+        message: 'Unauthorized access'
+      });
+    } else {
+      SubscriptionPlan.find({
+        customer_type: "DRIVER",
+        is_active: true
+      }).sort({
+        display_order: 1,
+        created_at: 1
+      }).exec(function (planErr, plans) {
+        if (planErr) {
+          return res.json({
+            status: "false",
+            result: []
+          });
+        }
+
+        return res.json({
+          status: "true",
+          result: (plans || []).map(function (plan) {
+            return {
+              _id: plan._id,
+              name: plan.name,
+              description: plan.description,
+              price: plan.price,
+              currency: plan.currency,
+              duration_unit: plan.duration_unit,
+              duration_value: plan.duration_value,
+              daily_ride_limit: plan.daily_ride_limit,
+              is_unlimited: plan.is_unlimited,
+              validity_label: formatPlanValidity(plan)
+            };
+          })
+        });
+      });
+    }
+  })(req, res);
+});
+
+router.get('/subscriptions/current/:userid', function (req, res) {
+  passport.authenticate('jwt', { session: false }, async function (err, driver) {
+    if (err === "AccountDeleted") {
+      return res.json({
+        status: "error",
+        message: 'Account has been deleted successfully'
+      });
+    } else if (!driver) {
+      return res.json({
+        status: "error",
+        message: 'Unauthorized access'
+      });
+    } else if (String(driver._id) !== String(req.params.userid)) {
+      return res.json({
+        status: "false",
+        message: 'Unauthorized access'
+      });
+    }
+
+    try {
+      const activeSubscription = await getCurrentDriverSubscription(driver._id, new Date());
+      const pendingSubscription = await Subscription.findOne({
+        customer_type: "DRIVER",
+        driver_id: driver._id,
+        status: "PENDING_PAYMENT"
+      }).sort({ created_at: -1 }).exec();
+
+      return res.json({
+        status: "true",
+        current_subscription: buildDriverSubscriptionResponse(activeSubscription),
+        pending_subscription: buildDriverSubscriptionResponse(pendingSubscription)
+      });
+    } catch (_error) {
+      return res.json({
+        status: "false",
+        message: "Unable to load subscription details"
+      });
+    }
+  })(req, res);
+});
+
+router.get('/subscriptions/usage/:userid', function (req, res) {
+  passport.authenticate('jwt', { session: false }, async function (err, driver) {
+    if (err === "AccountDeleted") {
+      return res.json({
+        status: "error",
+        message: 'Account has been deleted successfully'
+      });
+    } else if (!driver) {
+      return res.json({
+        status: "error",
+        message: 'Unauthorized access'
+      });
+    } else if (String(driver._id) !== String(req.params.userid)) {
+      return res.json({
+        status: "false",
+        message: 'Unauthorized access'
+      });
+    }
+
+    try {
+      const activeSubscription = await getCurrentDriverSubscription(driver._id, new Date());
+      const usage = activeSubscription ? getSubscriptionUsageSnapshot(activeSubscription, new Date()) : null;
+      return res.json({
+        status: "true",
+        current_subscription: buildDriverSubscriptionResponse(activeSubscription),
+        usage: usage
+      });
+    } catch (_error) {
+      return res.json({
+        status: "false",
+        message: "Unable to load subscription usage"
+      });
+    }
+  })(req, res);
+});
+
+router.get('/subscriptions/remainingrides/:userid', function (req, res) {
+  passport.authenticate('jwt', { session: false }, async function (err, driver) {
+    if (err === "AccountDeleted") {
+      return res.json({
+        status: "error",
+        message: 'Account has been deleted successfully'
+      });
+    } else if (!driver) {
+      return res.json({
+        status: "error",
+        message: 'Unauthorized access'
+      });
+    } else if (String(driver._id) !== String(req.params.userid)) {
+      return res.json({
+        status: "false",
+        message: 'Unauthorized access'
+      });
+    }
+
+    try {
+      const activeSubscription = await getCurrentDriverSubscription(driver._id, new Date());
+      const usage = activeSubscription ? getSubscriptionUsageSnapshot(activeSubscription, new Date()) : null;
+      return res.json({
+        status: "true",
+        is_unlimited: usage ? usage.is_unlimited : false,
+        rides_used_today: usage ? usage.rides_used_today : 0,
+        daily_limit: usage ? usage.daily_limit : null,
+        remaining_rides: usage ? usage.remaining_rides : null,
+        reached_daily_limit: usage ? usage.reached_daily_limit : false
+      });
+    } catch (_error) {
+      return res.json({
+        status: "false",
+        message: "Unable to load remaining rides"
+      });
+    }
+  })(req, res);
+});
+
+router.get('/subscriptions/history/:userid', function (req, res) {
+  passport.authenticate('jwt', { session: false }, async function (err, driver) {
+    if (err === "AccountDeleted") {
+      return res.json({
+        status: "error",
+        message: 'Account has been deleted successfully'
+      });
+    } else if (!driver) {
+      return res.json({
+        status: "error",
+        message: 'Unauthorized access'
+      });
+    } else if (String(driver._id) !== String(req.params.userid)) {
+      return res.json({
+        status: "false",
+        message: 'Unauthorized access'
+      });
+    }
+
+    try {
+      await expireDriverSubscriptions(new Date());
+      const subscriptions = await Subscription.find({
+        customer_type: "DRIVER",
+        driver_id: driver._id
+      }).sort({ created_at: -1 }).limit(20).exec();
+
+      return res.json({
+        status: "true",
+        result: (subscriptions || []).map(buildDriverSubscriptionResponse)
+      });
+    } catch (_error) {
+      return res.json({
+        status: "false",
+        result: []
+      });
+    }
+  })(req, res);
+});
+
+router.post('/subscriptions/initiate', function (req, res) {
+  passport.authenticate('jwt', { session: false }, async function (err, driver) {
+    if (err === "AccountDeleted") {
+      return res.json({
+        status: "error",
+        message: "Account has been deleted successfully"
+      });
+    } else if (!driver) {
+      return res.json({
+        status: "error",
+        message: "Unauthorized access"
+      });
+    } else if (!req.body.user_id || !req.body.plan_id) {
+      return senderr(res);
+    } else if (String(driver._id) !== String(req.body.user_id)) {
+      return res.json({
+        status: "false",
+        message: "Unauthorized access"
+      });
+    } else if (!selcomService.isConfigured()) {
+      return res.json({
+        status: "false",
+        message: "Selcom payment is not configured"
+      });
+    }
+
+    try {
+      await expireDriverSubscriptions(new Date());
+      const plan = await SubscriptionPlan.findById(req.body.plan_id).exec();
+      const validationMessage = validatePlanForPurchase(plan);
+      if (validationMessage) {
+        return res.json({
+          status: "false",
+          message: validationMessage
+        });
+      }
+
+      const existingPendingSubscription = await Subscription.findOne({
+        customer_type: "DRIVER",
+        driver_id: driver._id,
+        plan_id: plan._id,
+        status: "PENDING_PAYMENT",
+        payment_status: "PENDING"
+      }).sort({ created_at: -1 }).exec();
+
+      let subscription = existingPendingSubscription;
+      if (!subscription) {
+        subscription = new Subscription(buildPendingDriverSubscriptionRecord(driver._id, plan, new Date()));
+        await subscription.save();
+      }
+
+      const transid = selcomService.generateTransId();
+      const returnUrl = selcomService.buildReturnUrl(transid);
+      const checkout = await selcomService.createOrder({
+        transid: transid,
+        amount: subscription.price_snapshot,
+        user: driver,
+        userId: req.body.user_id,
+        returnUrl: returnUrl,
+        remarks: "Shilota driver subscription payment"
+      });
+
+      const session = await SelcomPaymentSession.findOneAndUpdate(
+        { transid: transid },
+        {
+          transid: transid,
+          order_id: checkout.orderId,
+          user_id: String(req.body.user_id),
+          actor_type: DRIVER_SUBSCRIPTION_ACTOR_TYPE,
+          amount: subscription.price_snapshot,
+          status: "pending",
+          purpose: "driver_subscription",
+          subscription_id: subscription._id,
+          plan_id: plan._id,
+          verified_at: null,
+          consumed_at: null,
+          expires_at: new Date(Date.now() + 30 * 60 * 1000)
+        },
+        {
+          upsert: true,
+          new: true,
+          setDefaultsOnInsert: true
+        }
+      ).exec();
+
+      subscription.selcom_session_id = session._id;
+      await subscription.save();
+
+      return res.json({
+        status: "true",
+        message: "Payment URL generated successfully",
+        payment_url: checkout.paymentUrl,
+        return_url: returnUrl,
+        transid: transid,
+        subscription_id: String(subscription._id),
+        result: buildDriverSubscriptionResponse(subscription)
+      });
+    } catch (error) {
+      return res.json({
+        status: "false",
+        message: error && error.message ? error.message : "Unable to create subscription payment"
+      });
+    }
+  })(req, res);
+});
+
+router.get('/subscriptions/verifyselcom/:transid', async function (req, res) {
+  const transid = String(req.params.transid || "").trim();
+  if (!transid) {
+    return senderr(res);
+  }
+
+  try {
+    const session = await SelcomPaymentSession.findOne({
+      transid: transid,
+      actor_type: DRIVER_SUBSCRIPTION_ACTOR_TYPE
+    }).exec();
+
+    if (!session) {
+      return res.json({
+        status: "false",
+        message: "Payment session not found"
+      });
+    }
+
+    if (session.expires_at && session.expires_at.getTime() < Date.now() && !session.verified_at) {
+      return res.json({
+        status: "false",
+        message: "Payment session has expired"
+      });
+    }
+
+    if (session.status !== "verified" && session.status !== "completed" && !session.verified_at) {
+      try {
+        await ensureSelcomPaymentVerified(session, transid);
+      } catch (verifyError) {
+        if (session.status === "failed") {
+          await finalizeSubscriptionSession(session, new Date());
+        }
+        return res.json({
+          status: "false",
+          message: verifyError && verifyError.message ? verifyError.message : "Payment is still pending"
+        });
+      }
+    }
+
+    const finalized = await finalizeSubscriptionSession(session, new Date());
+    if (finalized && finalized.subscription) {
+      if (!session.consumed_at && (session.status === "verified" || session.status === "completed" || session.verified_at)) {
+        session.status = "completed";
+        session.consumed_at = new Date();
+        await session.save();
+      }
+
+      const success = finalized.reason === "activated" || finalized.reason === "already_active";
+      return res.json({
+        status: success ? "true" : "false",
+        message: success ? "Subscription activated successfully" : "Payment is still pending",
+        transid: transid,
+        paidamount: String(session.paid_amount || session.amount || ""),
+        result: buildDriverSubscriptionResponse(finalized.subscription)
+      });
+    }
+
+    return res.json({
+      status: "false",
+      message: "Payment is still pending"
+    });
+  } catch (error) {
+    return res.json({
+      status: "false",
+      message: error && error.message ? error.message : "Unable to verify Selcom payment"
+    });
+  }
 });
 
 /* notifications */
@@ -2240,7 +2711,10 @@ router.get('/dashboard/:userid', function (req, res) {
 
                       let availableamoutQuery = Payments.aggregate([{
                         $match: {
-                          driver_id: req.params.userid
+                          driver_id: req.params.userid,
+                          direct_to_driver: {
+                            $ne: 1
+                          }
                         }
                       }, {
                         $group: {
@@ -2297,7 +2771,34 @@ router.get('/dashboard/:userid', function (req, res) {
                             _id: req.params.userid
                           }, function (err, driver) {
                             if (!err) {
+                              evaluateDriverEligibility(driver, {
+                                now: new Date()
+                              }).then(function (eligibility) {
+                              return hasInProgressRide(driver._id).then(function (activeRide) {
+                                if (!eligibility.eligible && !activeRide && String(driver.live_status) !== "0") {
+                                  return applyPostRideAvailability(driver._id, {
+                                    now: new Date()
+                                  }).then(function () {
+                                    driver.live_status = "0";
+                                    return eligibility;
+                                  });
+                                }
+                                return eligibility;
+                              });
+                              }).then(function (eligibility) {
                               reportsummary.livestatus = ((driver.live_status == '0') ? "false" : "true");
+                              reportsummary.subscription_eligible = eligibility.eligible ? "true" : "false";
+                              reportsummary.subscription_error_code = eligibility.code || "";
+                              reportsummary.subscription_message = eligibility.message || "";
+                              reportsummary.subscription_rides_used_today = eligibility.usage ? String(eligibility.usage.rides_used_today || 0) : "0";
+                              reportsummary.subscription_daily_limit = eligibility.usage && eligibility.usage.daily_limit !== null
+                                ? String(eligibility.usage.daily_limit)
+                                : "";
+                              reportsummary.subscription_remaining_rides = eligibility.usage && eligibility.usage.remaining_rides !== null
+                                ? String(eligibility.usage.remaining_rides)
+                                : "";
+                              reportsummary.subscription_is_unlimited = eligibility.usage && eligibility.usage.is_unlimited ? "true" : "false";
+                              reportsummary.subscription_reached_daily_limit = eligibility.usage && eligibility.usage.reached_daily_limit ? "true" : "false";
                               settlementQuery.exec(function (err, settlementdetails) {
                                 //console.log(settlementdetails);
                                 if (!err && settlementdetails.length > 0) {
@@ -2326,6 +2827,9 @@ router.get('/dashboard/:userid', function (req, res) {
                                   });
                                 });
                               });
+                              }).catch(function () {
+                                senderr(res);
+                              });
                             } else {
                               senderr(res);
                             }
@@ -2344,19 +2848,49 @@ router.get('/dashboard/:userid', function (req, res) {
               _id: req.params.userid
             }, function (err, driver) {
               if (!err) {
-                let noreportedsummary = {
-                  status: "true",
-                  available_amount: 0,
-                  cash_collected: 0,
-                  total_earning: 0,
-                  ride_today: 0,
-                  ridebymonth: 0,
-                  rating: "0",
-                  booking_count: 0,
-                  livestatus: ((driver.live_status == '0') ? "false" : "true"),
-                  cumulative_report: []
-                };
-                res.json(noreportedsummary);
+                evaluateDriverEligibility(driver, {
+                  now: new Date()
+                }).then(function (eligibility) {
+                  return hasInProgressRide(driver._id).then(function (activeRide) {
+                    if (!eligibility.eligible && !activeRide && String(driver.live_status) !== "0") {
+                      return applyPostRideAvailability(driver._id, {
+                        now: new Date()
+                      }).then(function () {
+                        driver.live_status = "0";
+                        return eligibility;
+                      });
+                    }
+                    return eligibility;
+                  });
+                }).then(function (eligibility) {
+                  let noreportedsummary = {
+                    status: "true",
+                    available_amount: 0,
+                    cash_collected: 0,
+                    total_earning: 0,
+                    ride_today: 0,
+                    ridebymonth: 0,
+                    rating: "0",
+                    booking_count: 0,
+                    livestatus: ((driver.live_status == '0') ? "false" : "true"),
+                    subscription_eligible: eligibility.eligible ? "true" : "false",
+                    subscription_error_code: eligibility.code || "",
+                    subscription_message: eligibility.message || "",
+                    subscription_rides_used_today: eligibility.usage ? String(eligibility.usage.rides_used_today || 0) : "0",
+                    subscription_daily_limit: eligibility.usage && eligibility.usage.daily_limit !== null
+                      ? String(eligibility.usage.daily_limit)
+                      : "",
+                    subscription_remaining_rides: eligibility.usage && eligibility.usage.remaining_rides !== null
+                      ? String(eligibility.usage.remaining_rides)
+                      : "",
+                    subscription_is_unlimited: eligibility.usage && eligibility.usage.is_unlimited ? "true" : "false",
+                    subscription_reached_daily_limit: eligibility.usage && eligibility.usage.reached_daily_limit ? "true" : "false",
+                    cumulative_report: []
+                  };
+                  res.json(noreportedsummary);
+                }).catch(function () {
+                  senderr(res);
+                });
               } else {
                 senderr(res);
               }
@@ -2574,20 +3108,49 @@ router.post('/liveme', function (req, res) {
     } else {
       if (!req.body.user_id || !req.body.status) {
         senderr(res);
+      } else if (String(driver._id) !== String(req.body.user_id)) {
+        return res.json({
+          status: "error",
+          message: "Unauthorized access"
+        });
       } else {
         Driver.findOne({
           _id: req.body.user_id
-        }, function (err, driver) {
-          if (!driver) {
+        }, function (err, driverRecord) {
+          if (!driverRecord) {
             senderr(res);
           } else {
-            if (driver.live_status != '2') {
+            if (req.body.status == 'online') {
+              evaluateDriverActionEligibility(driverRecord, {
+                now: new Date()
+              }).then(function (eligibility) {
+                if (!eligibility.eligible) {
+                  return res.json(buildEligibilityErrorPayload(eligibility));
+                }
+                if (driverRecord.live_status != '2') {
+                  driverRecord.live_status = "1";
+                  driverRecord.save(function () {
+                    res.json({
+                      status: "true",
+                      message: 'Driver is ' + req.body.status
+                    });
+                  });
+                } else {
+                  res.json({
+                    status: "false",
+                    message: 'You are on ride'
+                  });
+                }
+              }).catch(function () {
+                senderr(res);
+              });
+              return;
+            }
+
+            if (driverRecord.live_status != '2') {
               let liveme = "0";
-              if (req.body.status == 'online') {
-                liveme = "1";
-              }
-              driver.live_status = liveme;
-              driver.save(function (err) {
+              driverRecord.live_status = liveme;
+              driverRecord.save(function (err) {
                 res.json({
                   status: "true",
                   message: 'Driver is ' + req.body.status
@@ -2624,9 +3187,15 @@ router.post('/whereiam', function (req, res) {
       let translatedstring = "";
       if (!req.body.user_id || !req.body.onride_id || !req.body.status) {
         senderr(res);
+      } else if (String(driver._id) !== String(req.body.user_id)) {
+        return res.json({
+          status: "error",
+          message: "Unauthorized access"
+        });
       } else {
         let query;
         let timestamp = timeZone();
+        const continueRideStatuses = ["ontheway", "onride"];
         if (req.body.status == "onride") {
           query = Rides.findOne({
             _id: req.body.onride_id,
@@ -2654,7 +3223,8 @@ router.post('/whereiam', function (req, res) {
             _id: req.body.onride_id
           });
         }
-        query.exec(function (err, rides) {
+        const proceedWithRideStatusChange = function () {
+          query.exec(function (err, rides) {
           if (!rides) {
             res.json({
               status: "false",
@@ -2729,7 +3299,26 @@ router.post('/whereiam', function (req, res) {
               });
             });
           }
-        });
+          });
+        };
+
+        if (continueRideStatuses.indexOf(String(req.body.status || "").toLowerCase()) !== -1) {
+          evaluateDriverActionEligibility(driver, {
+            now: new Date(),
+            allowActiveRideContinuation: true,
+            rideId: req.body.onride_id
+          }).then(function (eligibility) {
+            if (!eligibility.eligible) {
+              return res.json(buildEligibilityErrorPayload(eligibility));
+            }
+            proceedWithRideStatusChange();
+          }).catch(function () {
+            senderr(res);
+          });
+          return;
+        }
+
+        proceedWithRideStatusChange();
       }
     }
   })(req, res);
@@ -2759,105 +3348,293 @@ router.post('/goride', function (req, res) {
           message: "Unauthorized access"
         });
       } else {
-        let querystring = {
-          _id: req.body.onride_id
-        };
-        Rides.findOne(querystring).populate('user_id').
-          exec(function (err, rides) {
-            if (!rides) {
-              senderr(res);
-            } else {
-              let rideresult = {};
-              console.log("goride_rides.ridestatus"+rides.ridestatus);
-             
-              if (rides.ridestatus == "requested" || rides.ridestatus == "scheduled" || rides.ridestatus == "ridenotaccepted" || rides.ridestatus == "scheduleridenotaccepted") {
-                validateDriverCanAcceptRide(driver._id, rides, function (canAccept) {
-                  if (!canAccept) {
-                    return res.json({
-                      status: "false",
-                      message: "This ride is no longer available near you."
-                    });
-                  }
-                rides.ridestatus = "accepted";
-                console.log("gorideddddd---------"+rides);
-                
-                rides.driver_id = req.body.user_id;
-                Vehicles.findOne({
-                  user_id: rides.driver_id
-                }).exec(function (err, vehicles) {
-                  if (!vehicles) {
-                    senderr(res);
-                  } else {
-                    rides.vehicle_no = vehicles.vehicle_number;
-                    rides.save(function (err) {
-                      if (err) {
+        evaluateDriverActionEligibility(driver, {
+          now: new Date()
+        }).then(function (eligibility) {
+          if (!eligibility.eligible) {
+            return res.json(buildEligibilityErrorPayload(eligibility));
+          }
+
+          let querystring = {
+            _id: req.body.onride_id
+          };
+          Rides.findOne(querystring).populate('user_id').
+            exec(function (err, rides) {
+              if (!rides) {
+                senderr(res);
+              } else {
+                let rideresult = {};
+	                console.log("goride_rides.ridestatus" + rides.ridestatus);
+
+	                if (isDriverOfferRide(rides) && isDriverPricingEnabled()) {
+	                  return res.json({
+	                    status: "false",
+	                    message: "Submit a driver offer for this trip instead of directly accepting it",
+	                    error_code: "DRIVER_OFFER_REQUIRED"
+	                  });
+	                }
+
+	                if (rides.ridestatus == "requested" || rides.ridestatus == "scheduled" || rides.ridestatus == "ridenotaccepted" || rides.ridestatus == "scheduleridenotaccepted") {
+                  validateDriverCanAcceptRide(driver._id, rides, function (canAccept) {
+                    if (!canAccept) {
+                      return res.json({
+                        status: "false",
+                        message: "This ride is no longer available near you."
+                      });
+                    }
+                    rides.ridestatus = "accepted";
+                    console.log("gorideddddd---------" + rides);
+
+                    rides.driver_id = req.body.user_id;
+                    Vehicles.findOne({
+                      user_id: rides.driver_id
+                    }).exec(function (err, vehicles) {
+                      if (!vehicles) {
                         senderr(res);
                       } else {
-                        Driver.findOne({
-                          _id: req.body.user_id
-                        }, function (err, driver) {
-                          if (!err) {
-                            driver.live_status = "2";
-                            driver.save();
-
-                            NotifyDevices.findOne({
-                              user_id: rides.user_id._id
-                            }, function (err, userdevices) {
-                               
-                              console.log("userdevices--------"+userdevices);
-                               if (userdevices) {
-                              let lang = userdevices.lang_type;
-                             
-                                       
-                                           let userids = [rides.user_id._id];
-                                          let message = "Your ride has been accepted";
-                                          let data = {
-                                            "ride_id": rides._id,
-                                            "type": "accepted",
-                                            "message": "Your ride has been accepted"
-                                          };
-                                          userNotific(userids, message, data);
-                              } 
-          
-                            });
-          
-                            rideresult.status = "true";
-                            rideresult.user_id = rides.user_id._id;
-                            rideresult.rideuserid = rides.user_id._id;
-                            rideresult.user_name = rides.user_id.full_name;
-                            rideresult.onride_otp = rides.onride_otp;
-                            rideresult.pickup_location = rides.pickup_location;
-                            rideresult.pickup_lat = rides.pickup_lat;
-                            rideresult.pickup_lng = rides.pickup_lng;
-                            rideresult.drop_location = rides.drop_location;
-                            rideresult.drop_lat = rides.drop_lat;
-                            rideresult.drop_lng = rides.drop_lng;
-                            rideresult.from = "accepted";
-                            rideresult.service_type = rides.service_type || "ride";
-                            rideresult.ride_stops = JSON.stringify(rides.ride_stops || []);
-                            rideresult.vehicle_no = rides.vehicle_no;
-                            res.json(rideresult);
-                          } else {
+                        rides.vehicle_no = vehicles.vehicle_number;
+                        rides.save(function (err) {
+                          if (err) {
                             senderr(res);
+                          } else {
+                            Driver.findOne({
+                              _id: req.body.user_id
+                            }, function (err, driver) {
+                              if (!err) {
+                                driver.live_status = "2";
+                                driver.save();
+
+                                NotifyDevices.findOne({
+                                  user_id: rides.user_id._id
+                                }, function (err, userdevices) {
+
+                                  console.log("userdevices--------" + userdevices);
+                                  if (userdevices) {
+                                    let lang = userdevices.lang_type;
+
+
+                                    let userids = [rides.user_id._id];
+                                    let message = "Your ride has been accepted";
+                                    let data = {
+                                      "ride_id": rides._id,
+                                      "type": "accepted",
+                                      "message": "Your ride has been accepted"
+                                    };
+                                    userNotific(userids, message, data);
+                                  }
+
+                                });
+
+                                rideresult.status = "true";
+                                rideresult.user_id = rides.user_id._id;
+                                rideresult.rideuserid = rides.user_id._id;
+                                rideresult.user_name = rides.user_id.full_name;
+                                rideresult.onride_otp = rides.onride_otp;
+                                rideresult.pickup_location = rides.pickup_location;
+                                rideresult.pickup_lat = rides.pickup_lat;
+                                rideresult.pickup_lng = rides.pickup_lng;
+                                rideresult.drop_location = rides.drop_location;
+                                rideresult.drop_lat = rides.drop_lat;
+                                rideresult.drop_lng = rides.drop_lng;
+                                rideresult.from = "accepted";
+                                rideresult.service_type = rides.service_type || "ride";
+                                rideresult.ride_stops = JSON.stringify(rides.ride_stops || []);
+                                rideresult.vehicle_no = rides.vehicle_no;
+                                res.json(rideresult);
+                              } else {
+                                senderr(res);
+                              }
+
+                            });
+
                           }
-
                         });
-
                       }
                     });
-                  }
-                });
-                });
-              } else {
-                res.json({
-                  status: "false",
-                  message: "This ride is unavailable now. Kindly look for another one."
-                });
+                  });
+                } else {
+                  res.json({
+                    status: "false",
+                    message: "This ride is unavailable now. Kindly look for another one."
+                  });
+                }
               }
-            }
-          });
+            });
+        }).catch(function () {
+          senderr(res);
+        });
       }
     }
+	})(req, res);
+});
+
+router.post("/rideoffers/submit", function (req, res) {
+  passport.authenticate("jwt", { session: false }, function (err, driver) {
+    if (err === "AccountDeleted") {
+      return res.json({
+        status: "error",
+        message: "Account has been deleted successfully"
+      });
+    }
+    if (!driver) {
+      return res.json({
+        status: "error",
+        message: "Unauthorized access"
+      });
+    }
+    if (!req.body.user_id || !req.body.onride_id || typeof req.body.offered_price === "undefined") {
+      return senderr(res);
+    }
+    if (String(driver._id) !== String(req.body.user_id)) {
+      return res.json({
+        status: "error",
+        message: "Unauthorized access"
+      });
+    }
+
+    submitRideOffer({
+      rideId: req.body.onride_id,
+      driverId: req.body.user_id,
+      offeredPrice: req.body.offered_price,
+      currency: req.body.currency || "TZS",
+      offerType: req.body.offer_type || "",
+      estimatedArrivalMinutes: req.body.estimated_arrival_minutes,
+      message: req.body.message || "",
+      now: new Date()
+    }).then(function (result) {
+      if (!result.ok) {
+        return res.json({
+          status: "false",
+          message: result.message,
+          error_code: result.code
+        });
+      }
+
+      NotifyDevices.findOne({
+        user_id: result.ride.user_id
+      }, function (_notifyErr, userdevices) {
+        const message = result.action === "updated" ? "A driver updated an offer for your trip" : "A driver sent an offer for your trip";
+        const data = {
+          ride_id: String(result.ride._id),
+          type: result.action === "updated" ? "offer_updated" : "offer_created",
+          message: message,
+          offer_id: String(result.offer.id),
+          offer_type: String(result.offer.offer_type || "DRIVER_DIRECT_OFFER"),
+          offered_price: String(result.offer.offered_price),
+          currency: result.offer.currency,
+          driver_id: String(result.offer.driver_id)
+        };
+        if (userdevices) {
+          userNotific([result.ride.user_id], message, data);
+        }
+        socketRegistry.emitToUser(String(result.ride.user_id), "ride-offer", data);
+      });
+
+      return res.json({
+        status: "true",
+        message: result.action === "updated" ? "Ride offer updated" : "Ride offer submitted",
+        offer: result.offer
+      });
+    }).catch(function () {
+      senderr(res);
+    });
+  })(req, res);
+});
+
+router.post("/rideoffers/withdraw", function (req, res) {
+  passport.authenticate("jwt", { session: false }, function (err, driver) {
+    if (err === "AccountDeleted") {
+      return res.json({
+        status: "error",
+        message: "Account has been deleted successfully"
+      });
+    }
+    if (!driver) {
+      return res.json({
+        status: "error",
+        message: "Unauthorized access"
+      });
+    }
+    if (!req.body.user_id || (!req.body.onride_id && !req.body.offer_id)) {
+      return senderr(res);
+    }
+    if (String(driver._id) !== String(req.body.user_id)) {
+      return res.json({
+        status: "error",
+        message: "Unauthorized access"
+      });
+    }
+
+    withdrawRideOffer({
+      rideId: req.body.onride_id,
+      offerId: req.body.offer_id,
+      driverId: req.body.user_id
+    }).then(function (result) {
+      if (!result.ok) {
+        return res.json({
+          status: "false",
+          message: result.message,
+          error_code: result.code
+        });
+      }
+
+      Rides.findById(result.offer.ride_request_id).exec(function (_rideErr, ride) {
+        if (ride) {
+          const message = "A driver withdrew an offer for your trip";
+          const data = {
+            ride_id: String(ride._id),
+            type: "offer_withdrawn",
+            message: message,
+            offer_id: String(result.offer.id),
+            driver_id: String(result.offer.driver_id)
+          };
+          userNotific([ride.user_id], message, data);
+          socketRegistry.emitToUser(String(ride.user_id), "ride-offer-withdrawn", data);
+        }
+      });
+
+      return res.json({
+        status: "true",
+        message: "Ride offer withdrawn",
+        offer: result.offer
+      });
+    }).catch(function () {
+      senderr(res);
+    });
+  })(req, res);
+});
+
+router.get("/rideoffers/:rideid/:userid", function (req, res) {
+  passport.authenticate("jwt", { session: false }, function (err, driver) {
+    if (err === "AccountDeleted") {
+      return res.json({
+        status: "error",
+        message: "Account has been deleted successfully"
+      });
+    }
+    if (!driver) {
+      return res.json({
+        status: "error",
+        message: "Unauthorized access"
+      });
+    }
+    if (String(driver._id) !== String(req.params.userid)) {
+      return res.json({
+        status: "error",
+        message: "Unauthorized access"
+      });
+    }
+
+    getDriverOfferForRide(req.params.rideid, req.params.userid, new Date())
+      .then(function (offer) {
+        return res.json({
+          status: "true",
+          offer: offer
+        });
+      })
+      .catch(function () {
+        senderr(res);
+      });
   })(req, res);
 });
 
@@ -2898,19 +3675,25 @@ router.post('/completeride', function (req, res) {
             } else {
               Admin.findOne(function (err, admin) {
                 if (rides.ridestatus === "completed") {
-                  Driver.updateOne({
-                    _id: rides.driver_id
-                  }, {
-                    $set: {
-                      live_status: "1"
-                    }
-                  }).exec(function () {});
-                  clearOtherActiveRidesForRider(rides.user_id && rides.user_id._id ? rides.user_id._id : rides.user_id, rides._id);
-                  return res.json({
-                    status: "true",
-                    type: rides.payment_type,
-                    message: 'Your Ride has been marked as completed'
+                  consumeCompletedRideUsage({
+                    rideId: rides._id,
+                    driverId: rides.driver_id,
+                    now: new Date()
+                  }).then(function () {
+                    return applyPostRideAvailability(rides.driver_id, {
+                      now: new Date()
+                    });
+                  }).then(function () {
+                    clearOtherActiveRidesForRider(rides.user_id && rides.user_id._id ? rides.user_id._id : rides.user_id, rides._id);
+                    return res.json({
+                      status: "true",
+                      type: rides.payment_type,
+                      message: 'Your Ride has been marked as completed'
+                    });
+                  }).catch(function () {
+                    senderr(res);
                   });
+                  return;
                 }
 
                 if (rides.ridestatus !== "cancelled") {
@@ -2920,91 +3703,86 @@ router.post('/completeride', function (req, res) {
                   rides.ridedistance = distance;
                   let distbycat = [];
                   distbycat[rides.category_id._id] = distance;
-                  let fareamount = totalFare(rides.category_id, distbycat, admin.maxDistance);
-                  rides.baseprice = fareamount;
-                  rides.total = fareamount;
+	                  let fareamount = totalFare(rides.category_id, distbycat, admin.maxDistance);
+	                  if (isDriverOfferRide(rides) && Number.isFinite(Number(rides.final_agreed_price))) {
+	                    fareamount = Number(rides.final_agreed_price);
+	                  }
+                  applyRideCompletionFinancials({
+                    ride: rides,
+                    baseFare: fareamount,
+                    taxRate: admin.tax,
+                    commissionBands: [],
+                    commissionEnabled: isCommissionEnabled(),
+                    roundCustomerPayableAmount: roundCustomerPayableAmount
+                  });
                   // save the driver details
                   rides.save(function (err) {
                     if (err) {
                       senderr(res);
                     } else {
-                      let result = {
-                        live_status: "1"
-                      };
-                      Driver.findOneAndUpdate({
-                        _id: rides.driver_id
-                      }, {
-                        $set: result
-                          }).exec(function (err, driver) {
-                        if (err) {
-                          senderr(res);
-                        } else {
+                      consumeCompletedRideUsage({
+                        rideId: rides._id,
+                        driverId: rides.driver_id,
+                        now: new Date()
+                      }).then(function () {
+                        return applyPostRideAvailability(rides.driver_id, {
+                          now: new Date()
+                        });
+                      }).then(function () {
                           clearOtherActiveRidesForRider(rides.user_id && rides.user_id._id ? rides.user_id._id : rides.user_id, rides._id);
                           /* let notifications = {
                             user_id: req.body.user_id, notify_to: rides.user_id._id, title: "Ride Completed",
                             message: "Your Ride has been completed."
                           };
                           notifyTo(notifications); */
-                          Commissions.find().exec(function (err, results) {
-                            let taxamount = 0,
-                              commissionamount = 0,
-                              tax;
-                            let resultcount = results.length;
-                            tax = admin.tax;
-                            taxamount = parseFloat(rides.baseprice) * (tax / 100);
-                            if (resultcount > 0) {
-                              results.forEach(function (d) {
-                                let dprice_from = parseFloat(d.price_from);
-                                let dprice_to = parseFloat(d.price_to);
-                                if (rides.baseprice >= dprice_from && rides.baseprice <= dprice_to) {
-                                  commissionamount = parseFloat(rides.baseprice) * (d.percentage / 100);
-                                }
-                              });
+                          Commissions.find().exec(function (commissionErr, results) {
+                            if (commissionErr) {
+                              return senderr(res);
                             }
-                            let basepricewithcommission = parseFloat(rides.baseprice) + parseFloat(commissionamount);
-                            rides.baseprice = basepricewithcommission.toFixed(2);
-                            rides.commissionamount = commissionamount.toFixed(2);
-                            rides.tax = taxamount.toFixed(2);
+
+                            applyRideCompletionFinancials({
+                              ride: rides,
+                              baseFare: rides.total,
+                              taxRate: admin.tax,
+                              commissionBands: results,
+                              commissionEnabled: isCommissionEnabled(),
+                              roundCustomerPayableAmount: roundCustomerPayableAmount
+                            });
+
                             rides.save(function (rideSaveError) {
                               if (rideSaveError) {
                                 console.error("Unable to persist final ride totals for CeTS sync:", rideSaveError);
-                              } else {
-                                cetsSyncService.enqueueTripSync(rides._id, "ride_completed").catch(function (syncError) {
-                                  console.error("CeTS trip enqueue failed:", syncError);
-                                });
+                                return senderr(res);
                               }
+
+                              cetsSyncService.enqueueTripSync(rides._id, "ride_completed").catch(function (syncError) {
+                                console.error("CeTS trip enqueue failed:", syncError);
+                              });
+
+                              NotifyDevices.findOne({
+                                user_id: rides.user_id._id
+                              }, function (err, userdevices) {
+                                if (userdevices) {
+                                  let userids = [rides.user_id._id];
+                                  let message = "Your ride has been completed";
+                                  let data = {
+                                    "ride_id": rides._id,
+                                    "type": "completed",
+                                    "message": "Your ride has been completed"
+                                  };
+                                  userNotific(userids, message, data);
+                                }
+                              });
+
+                              res.json({
+                                status: "true",
+                                type: rides.payment_type,
+                                message: 'Your Ride has been marked as completed'
+                              });
                             });
-
-                             NotifyDevices.findOne({
-                    user_id: rides.user_id._id
-                  }, function (err, userdevices) {
-                     
-                      
-                     if (userdevices) {
-                    let lang = userdevices.lang_type;
-                   
-                             
-                                 let userids = [rides.user_id._id];
-                                let message = "Your ride has been completed";
-                                let data = {
-                                  "ride_id": rides._id,
-                                  "type": "completed",
-                                  "message": "Your ride has been completed"
-                                };
-                                userNotific(userids, message, data);
-                    } 
-
-                  });
-
-                            res.json({
-                              status: "true",
-                              type: rides.payment_type,
-                              message: 'Your Ride has been marked as completed'
-                            });
-
                           });
-
-                        }
+                      }).catch(function () {
+                        senderr(res);
                       });
 
                     }
@@ -3066,13 +3844,18 @@ router.post('/completeridedetails', function (req, res) {
                   rideresult.drop_lng = rides.drop_lng;
                   rideresult.driver_name = rides.driver_id.full_name;
                   rideresult.driver_image = base_url + '/gallery/drivers/' + rides.driver_id.profile_image;
-                  rideresult.ride_fare = rides.baseprice; /* commission included */
-                  rideresult.basefare = rides.total; /* commission excluded */
+	                  rideresult.ride_fare = rides.pricing_mode === "driver_offer"
+	                    ? (rides.final_agreed_price || rides.baseprice)
+	                    : rides.baseprice;
+                  rideresult.basefare = rides.total;
                   rideresult.commissionamount = rides.commissionamount;
                   rideresult.ride_tax = rides.tax;
-                  let rideTotal = parseFloat(rides.baseprice) + parseFloat(rides.tax);
-                  rideresult.ride_total = roundCustomerPayableAmount(rideTotal);
+                  rideresult.ride_total = getRideFinalAmount(rides, roundCustomerPayableAmount);
                   rideresult.payment_type = rides.payment_type;
+                  rideresult.payment_status = rides.payment_status || "unpaid";
+                  rideresult.payment_direct_to_driver = String(rides.payment_direct_to_driver || 0);
+                  rideresult.payment_recorded_at = rides.payment_recorded_at || "";
+                  rideresult.legacy_commission_ride = isLegacyCommissionRide(rides) ? "true" : "false";
                   rideresult.pickup_time = parseInt(rides.ridestatusat);
                   rideresult.walletmoney = 0;
                   rideresult.vehicle_no = rides.vehicle_no;
@@ -3090,14 +3873,18 @@ router.post('/completeridedetails', function (req, res) {
                     if (!reviews) {
                       Payments.findOne({
                         onride_id: req.body.onride_id
-                      }).exec(function (err, payments) {
-                        if (!payments) {
-                          res.json(rideresult);
-                        } else {
-                          rideresult.ispayment = "true";
-                          res.json(rideresult);
-                        }
-                      });
+                        }).exec(function (err, payments) {
+                          if (!payments) {
+                            res.json(rideresult);
+                          } else {
+                            rideresult.ispayment = "true";
+                            rideresult.payment_type = payments.payment_type;
+                            rideresult.payment_status = payments.payment_status || "paid";
+                            rideresult.payment_direct_to_driver = String(payments.direct_to_driver || 0);
+                            rideresult.payment_recorded_at = payments.paid_at || payments.drop_time || "";
+                            res.json(rideresult);
+                          }
+                        });
                     } else {
                       rideresult.isreview = "true";
                       rideresult.review_message = reviews.review_message;
@@ -3109,6 +3896,10 @@ router.post('/completeridedetails', function (req, res) {
                           res.json(rideresult);
                         } else {
                           rideresult.ispayment = "true";
+                          rideresult.payment_type = payments.payment_type;
+                          rideresult.payment_status = payments.payment_status || "paid";
+                          rideresult.payment_direct_to_driver = String(payments.direct_to_driver || 0);
+                          rideresult.payment_recorded_at = payments.paid_at || payments.drop_time || "";
                           res.json(rideresult);
                         }
                       });
@@ -3226,55 +4017,55 @@ router.post('/ridehistory', function (req, res) {
         }).or(querystring).populate('category_id').sort({
           '_id': -1
         }).
-          exec(function (err, rides) {
-            if (!err) {
-              if (rides.length == '0') {
-                res.json({
-                  status: "false",
-                  message: 'No rides found'
-                });
-              } else {
-                rides.forEach(function (c) {
-                  if (typeof c.tax == "undefined" || c.tax == null) {
-                    taxprice = 0;
-                  } else {
-                    taxprice = Math.round(c.tax * 100) / 100;
-                  }
-                  if (c.type == "schedule") {
-                    statustime = parseInt(c.schedule_time);
-                  } else {
-                    statustime = c.ridestatusat;
-                  }
-                  if (typeof c.vehicle_no == "undefined" || c.vehicle_no == null) {
-                    vehicle_no = "";
-                  } else {
-                    vehicle_no = c.vehicle_no;
-                  }
-                  let profile_image = c.category_id && c.category_id.image ? c.category_id.image : "category.png";
-                  if (typeof profile_image == 'undefined') {
-                    profile_image = 'category.png';
-                  }
-                  let categoryimage = base_url + '/imagegallery/' + profile_image;
-                  let rideTotal = parseFloat(c.baseprice || 0) + parseFloat(taxprice || 0);
-                  rideresult.push({
-                    onride_id: c._id,
-                    category_image: categoryimage,
-                    category_name: c.category_id && c.category_id.category_name ? c.category_id.category_name : "",
-                    ride_status: c.ridestatus,
-                    total_price: roundCustomerPayableAmount(rideTotal),
-                    vehicle_no: vehicle_no,
-                    pickup_time: statustime
-                  });
-                });
-                res.json({
-                  status: "true",
-                  result: rideresult
-                });
-              }
-            } else {
-              senderr(res);
-            }
-          });
+	          exec(function (err, rides) {
+	            if (!err) {
+	              if (rides.length == '0') {
+	                res.json({
+	                  status: "false",
+	                  message: 'No rides found'
+	                });
+	              } else {
+	                rides.forEach(function (c) {
+	                  if (typeof c.tax == "undefined" || c.tax == null) {
+	                    taxprice = 0;
+	                  } else {
+	                    taxprice = Math.round(c.tax * 100) / 100;
+	                  }
+	                  if (c.type == "schedule") {
+	                    statustime = parseInt(c.schedule_time);
+	                  } else {
+	                    statustime = c.ridestatusat;
+	                  }
+	                  if (typeof c.vehicle_no == "undefined" || c.vehicle_no == null) {
+	                    vehicle_no = "";
+	                  } else {
+	                    vehicle_no = c.vehicle_no;
+	                  }
+	                  let profile_image = c.category_id && c.category_id.image ? c.category_id.image : "category.png";
+	                  if (typeof profile_image == 'undefined') {
+	                    profile_image = 'category.png';
+	                  }
+	                  let categoryimage = base_url + '/imagegallery/' + profile_image;
+	                  let rideTotal = parseFloat(c.baseprice || 0) + parseFloat(taxprice || 0);
+	                  rideresult.push({
+	                    onride_id: c._id,
+	                    category_image: categoryimage,
+	                    category_name: c.category_id && c.category_id.category_name ? c.category_id.category_name : "",
+	                    ride_status: c.ridestatus,
+	                    total_price: roundCustomerPayableAmount(rideTotal),
+	                    vehicle_no: vehicle_no,
+	                    pickup_time: statustime
+	                  });
+	                });
+	                res.json({
+	                  status: "true",
+	                  result: rideresult
+	                });
+	              }
+	            } else {
+	              senderr(res);
+	            }
+	          });
       }
     }
   })(req, res);
@@ -3338,39 +4129,50 @@ router.post('/paybycash', function (req, res) {
       });
     } else {
       let translatedstring = "";
-      if (!req.body.user_id || !req.body.amount || !req.body.onride_id || !req.body.iswallet || !req.body.basefare || !req.body.commissionamount || !req.body.tax || !req.body.rideuserid) {
+      if (!req.body.user_id || !req.body.amount || !req.body.onride_id || !req.body.iswallet || !req.body.rideuserid) {
         senderr(res);
       } else {
         completeRideForPayment(req.body.onride_id, req.body.user_id, function (completeErr) {
           if (completeErr) {
             return senderr(res);
           }
-        let paidby = "cash";
-        if (req.body.amount == 0) {
-          paidby = "wallet";
-        }
-        Payments.count({
-          onride_id: req.body.onride_id
-        }, function (err, count) {
-          if (count > 0) {
-            res.json({
-              status: "true",
-              message: 'Payment has been done successfully'
-            });
-          } else {
-            let payObject = {
-              user_id: req.body.rideuserid,
-              onride_id: req.body.onride_id,
-              payment_type: paidby,
-              ride_fare: req.body.amount,
-              baseprice: req.body.basefare,
-              commissionamount: req.body.commissionamount,
-              tax: req.body.tax,
-              driver_id: req.body.user_id
-            };
-            let newPayment = new Payments(payObject);
+
+          let paidby = "cash";
+          if (req.body.amount == 0) {
+            paidby = "wallet";
+          }
+          Payments.count({
+            onride_id: req.body.onride_id
+          }, function (err, count) {
+            if (count > 0) {
+              res.json({
+                status: "true",
+                message: 'Payment has been done successfully'
+              });
+            } else {
+              Rides.findOne({
+                _id: req.body.onride_id,
+                driver_id: req.body.user_id
+              }).exec(function (rideErr, ride) {
+                if (rideErr || !ride) {
+                  return senderr(res);
+                }
+
+                let paidAt = new Date();
+                let payObject = buildPaymentDocument({
+                  ride: ride,
+                  userId: req.body.rideuserid,
+                  driverId: req.body.user_id,
+                  paymentType: paidby,
+                  paidByWallet: req.body.iswallet == "1" ? Number(req.body.walletamount || 0) : 0,
+                  paidAt: paidAt,
+                  roundCustomerPayableAmount: roundCustomerPayableAmount
+                });
+                let newPayment = new Payments(payObject);
             newPayment.save(function (err) {
               if (!err) {
+                markRidePaymentComplete(ride, paidby, paidAt);
+                ride.save(function (_rideSaveErr) {});
                 if (req.body.iswallet == "1") {
                   let paywalletObject = {
                     user_id: req.body.rideuserid,
@@ -3536,8 +4338,9 @@ router.post('/paybycash', function (req, res) {
                 senderr(res);
               }
             });
-          }
-        });
+              });
+            }
+          });
         });
       }
     }
@@ -4515,6 +5318,19 @@ router.post("/preacceptschedule", function (req, res) {
     if (!req.body.user_id || !req.body.onride_id) {
       return senderr(res);
     }
+    if (String(driver._id) !== String(req.body.user_id)) {
+      return res.json({
+        status: "error",
+        message: "Unauthorized access"
+      });
+    }
+
+    evaluateDriverActionEligibility(driver, {
+      now: new Date()
+    }).then(function (eligibility) {
+      if (!eligibility.eligible) {
+        return res.json(buildEligibilityErrorPayload(eligibility));
+      }
 
     Rides.findOneAndUpdate(
       {
@@ -4545,6 +5361,9 @@ router.post("/preacceptschedule", function (req, res) {
         status: "true",
         message: "Scheduled ride pre-accepted"
       });
+    });
+    }).catch(function () {
+      senderr(res);
     });
   })(req, res);
 });
@@ -4619,6 +5438,434 @@ router.post("/acceptancesettings", function (req, res) {
         acceptance_settings: driver.acceptance_settings
       });
     });
+  })(req, res);
+});
+
+router.post("/destinationbroadcasts", function (req, res) {
+  passport.authenticate("jwt", { session: false }, async function (err, driver) {
+    if (err === "AccountDeleted") {
+      return res.json({
+        status: "error",
+        message: "Account has been deleted successfully"
+      });
+    }
+    if (!driver) {
+      return res.json({
+        status: "error",
+        message: "Unauthorized access"
+      });
+    }
+    if (!req.body.user_id || String(driver._id) !== String(req.body.user_id)) {
+      return res.json({
+        status: "false",
+        message: "Unauthorized access"
+      });
+    }
+
+    try {
+      const result = await createDriverDestinationBroadcast({
+        driverId: driver._id,
+        payload: req.body,
+        now: new Date()
+      });
+      if (!result.ok) {
+        return res.json({
+          status: "false",
+          message: result.message,
+          error_code: result.code
+        });
+      }
+
+      if (result.requiresPayment) {
+        return res.json({
+          status: "true",
+          message: "Destination broadcast payment initiated",
+          payment_required: "true",
+          payment_url: result.paymentUrl,
+          return_url: result.returnUrl,
+          transid: result.transid,
+          result: result.broadcast
+        });
+      }
+
+      const nearbyPassengers = await User.find({
+        loc: {
+          $near: {
+            $geometry: {
+              type: "Point",
+              coordinates: [Number(result.broadcast.origin_lng || 0), Number(result.broadcast.origin_lat || 0)]
+            },
+            $maxDistance: Number(result.broadcast.notification_radius || 0) * 1000
+          }
+        },
+        deletion_status: 0
+      }).select("_id").limit(100).exec().catch(function () {
+        return [];
+      });
+
+      const nearbyPassengerIds = nearbyPassengers.map(function (item) {
+        return String(item._id);
+      });
+      if (nearbyPassengerIds.length > 0) {
+        userNotific(nearbyPassengerIds, "A driver is headed your way", {
+          type: "driver_destination_broadcast",
+          broadcast_id: String(result.broadcast._id),
+          driver_id: String(driver._id),
+          driver_name: String(driver.full_name || ""),
+          origin_label: result.broadcast.origin_label,
+          destination_label: result.broadcast.destination_label,
+          departure_time: result.broadcast.departure_time,
+          price_per_passenger: String(result.broadcast.price_per_passenger),
+          remaining_seats: String(result.broadcast.remaining_seats),
+          message: "A driver is headed your way"
+        });
+      }
+
+      return res.json({
+        status: "true",
+        message: "Destination broadcast created",
+        result: result.broadcast
+      });
+    } catch (_error) {
+      return senderr(res);
+    }
+  })(req, res);
+});
+
+router.get("/destinationbroadcastsettings", function (_req, res) {
+  passport.authenticate("jwt", { session: false }, async function (err, driver) {
+    if (err === "AccountDeleted") {
+      return res.json({ status: "error", message: "Account has been deleted successfully" });
+    }
+    if (!driver) {
+      return res.json({ status: "error", message: "Unauthorized access" });
+    }
+
+    try {
+      const settings = await getDestinationBroadcastSettings();
+      return res.json({
+        status: "true",
+        result: settings
+      });
+    } catch (_error) {
+      return senderr(res);
+    }
+  })(_req, res);
+});
+
+router.get("/destinationbroadcasts/:userid", function (req, res) {
+  passport.authenticate("jwt", { session: false }, async function (err, driver) {
+    if (err === "AccountDeleted") {
+      return res.json({
+        status: "error",
+        message: "Account has been deleted successfully"
+      });
+    }
+    if (!driver) {
+      return res.json({
+        status: "error",
+        message: "Unauthorized access"
+      });
+    }
+    if (String(driver._id) !== String(req.params.userid)) {
+      return res.json({
+        status: "false",
+        message: "Unauthorized access"
+      });
+    }
+
+    try {
+      await expireDriverDestinationBroadcasts(new Date());
+      await reconcilePendingDestinationBroadcastPayments(new Date());
+      const broadcasts = await DriverDestinationBroadcast.find({
+        driver_id: String(driver._id)
+      }).sort({ created_at: -1 }).limit(25).exec();
+      return res.json({
+        status: "true",
+        result: broadcasts
+      });
+    } catch (_error) {
+      return senderr(res);
+    }
+  })(req, res);
+});
+
+router.post("/destinationbroadcasts/retrypayment", function (req, res) {
+  passport.authenticate("jwt", { session: false }, async function (err, driver) {
+    if (err === "AccountDeleted") {
+      return res.json({ status: "error", message: "Account has been deleted successfully" });
+    }
+    if (!driver) {
+      return res.json({ status: "error", message: "Unauthorized access" });
+    }
+    if (!req.body.user_id || String(driver._id) !== String(req.body.user_id)) {
+      return res.json({ status: "false", message: "Unauthorized access" });
+    }
+
+    try {
+      const result = await retryDestinationBroadcastPayment({
+        broadcastId: req.body.broadcast_id,
+        driverId: driver._id
+      });
+      if (!result.ok) {
+        return res.json({
+          status: "false",
+          message: result.message,
+          error_code: result.code
+        });
+      }
+      return res.json({
+        status: "true",
+        message: result.requiresPayment ? "Destination broadcast payment retried" : "Destination broadcast activated",
+        payment_required: result.requiresPayment ? "true" : "false",
+        payment_url: result.paymentUrl || "",
+        return_url: result.returnUrl || "",
+        transid: result.transid || "",
+        result: result.broadcast
+      });
+    } catch (_error) {
+      return senderr(res);
+    }
+  })(req, res);
+});
+
+router.get('/destinationbroadcasts/verifyselcom/:transid', async function (req, res) {
+  const transid = String(req.params.transid || "").trim();
+  if (!transid) {
+    return senderr(res);
+  }
+
+  try {
+    const session = await SelcomPaymentSession.findOne({
+      transid: transid,
+      actor_type: DRIVER_DESTINATION_BROADCAST_ACTOR_TYPE
+    }).exec();
+
+    if (!session) {
+      return res.json({ status: "false", message: "Payment session not found" });
+    }
+
+    if (session.expires_at && session.expires_at.getTime() < Date.now() && !session.verified_at) {
+      return res.json({ status: "false", message: "Payment session has expired" });
+    }
+
+    if (session.status !== "verified" && session.status !== "completed" && !session.verified_at) {
+      try {
+        await ensureSelcomPaymentVerified(session, transid);
+      } catch (verifyError) {
+        await finalizeDestinationBroadcastSession(session, new Date());
+        return res.json({
+          status: "false",
+          message: verifyError && verifyError.message ? verifyError.message : "Payment is still pending"
+        });
+      }
+    }
+
+    const finalized = await finalizeDestinationBroadcastSession(session, new Date());
+    if (finalized && finalized.broadcast) {
+      if (!session.consumed_at && (session.status === "verified" || session.status === "completed" || session.verified_at)) {
+        session.status = "completed";
+        session.consumed_at = new Date();
+        await session.save();
+      }
+
+      return res.json({
+        status: finalized.activated || finalized.reason === "already_active" ? "true" : "false",
+        message: finalized.activated || finalized.reason === "already_active"
+          ? "Destination broadcast activated successfully"
+          : "Payment is still pending",
+        transid: transid,
+        paidamount: String(session.paid_amount || session.amount || ""),
+        result: finalized.broadcast
+      });
+    }
+
+    return res.json({ status: "false", message: "Payment is still pending" });
+  } catch (error) {
+    return res.json({
+      status: "false",
+      message: error && error.message ? error.message : "Unable to verify Selcom payment"
+    });
+  }
+});
+
+router.get("/destinationbroadcasts/requests/:userid", function (req, res) {
+  passport.authenticate("jwt", { session: false }, async function (err, driver) {
+    if (err === "AccountDeleted") {
+      return res.json({
+        status: "error",
+        message: "Account has been deleted successfully"
+      });
+    }
+    if (!driver) {
+      return res.json({
+        status: "error",
+        message: "Unauthorized access"
+      });
+    }
+    if (String(driver._id) !== String(req.params.userid)) {
+      return res.json({
+        status: "false",
+        message: "Unauthorized access"
+      });
+    }
+
+    try {
+      const broadcasts = await DriverDestinationBroadcast.find({
+        driver_id: String(driver._id)
+      }).select("_id destination_label remaining_seats departure_time status").exec();
+      const requests = await DriverDestinationJoinRequest.find({
+        broadcast_id: { $in: broadcasts.map(function (item) { return String(item._id); }) }
+      }).sort({ created_at: -1 }).limit(50).exec();
+      const users = await User.find({
+        _id: { $in: requests.map(function (item) { return String(item.passenger_id); }) }
+      }).select("_id full_name profile_image").exec();
+
+      return res.json({
+        status: "true",
+        result: requests.map(function (item) {
+          const broadcast = broadcasts.find(function (entry) {
+            return String(entry._id) === String(item.broadcast_id);
+          });
+          const passenger = users.find(function (entry) {
+            return String(entry._id) === String(item.passenger_id);
+          });
+          return {
+            _id: String(item._id),
+            broadcast_id: String(item.broadcast_id),
+            passenger_id: String(item.passenger_id),
+            passenger_name: passenger ? String(passenger.full_name || "") : "",
+            passenger_image: passenger ? String(passenger.profile_image || "") : "",
+            pickup_label: item.pickup_label,
+            pickup_lat: item.pickup_lat,
+            pickup_lng: item.pickup_lng,
+            requested_seats: item.requested_seats,
+            status: item.status,
+            destination_label: broadcast ? broadcast.destination_label : "",
+            departure_time: broadcast ? broadcast.departure_time : null,
+            remaining_seats: broadcast ? broadcast.remaining_seats : 0,
+            broadcast_status: broadcast ? broadcast.status : ""
+          };
+        })
+      });
+    } catch (_error) {
+      return senderr(res);
+    }
+  })(req, res);
+});
+
+router.post("/destinationbroadcasts/requests/decision", function (req, res) {
+  passport.authenticate("jwt", { session: false }, async function (err, driver) {
+    if (err === "AccountDeleted") {
+      return res.json({
+        status: "error",
+        message: "Account has been deleted successfully"
+      });
+    }
+    if (!driver) {
+      return res.json({
+        status: "error",
+        message: "Unauthorized access"
+      });
+    }
+    if (!req.body.user_id || String(driver._id) !== String(req.body.user_id)) {
+      return res.json({
+        status: "false",
+        message: "Unauthorized access"
+      });
+    }
+
+    try {
+      const result = await decideJoinRequest({
+        driverId: driver._id,
+        joinRequestId: req.body.join_request_id,
+        decision: req.body.decision,
+        now: new Date()
+      });
+      if (!result.ok) {
+        return res.json({
+          status: "false",
+          message: result.message,
+          error_code: result.code
+        });
+      }
+
+      userNotific([String(result.joinRequest.passenger_id)], result.joinRequest.status === "ACCEPTED"
+        ? "Your destination trip request was accepted"
+        : "Your destination trip request was rejected", {
+        type: result.joinRequest.status === "ACCEPTED"
+          ? "destination_join_request_accepted"
+          : "destination_join_request_rejected",
+        broadcast_id: String(result.broadcast._id),
+        join_request_id: String(result.joinRequest._id),
+        status: result.joinRequest.status,
+        destination_label: result.broadcast.destination_label,
+        remaining_seats: String(result.broadcast.remaining_seats),
+        message: result.joinRequest.status === "ACCEPTED"
+          ? "Your destination trip request was accepted"
+          : "Your destination trip request was rejected"
+      });
+
+      return res.json({
+        status: "true",
+        message: result.joinRequest.status === "ACCEPTED"
+          ? "Passenger request accepted"
+          : "Passenger request rejected",
+        result: {
+          join_request_id: String(result.joinRequest._id),
+          status: result.joinRequest.status,
+          remaining_seats: result.broadcast.remaining_seats,
+          broadcast_status: result.broadcast.status
+        }
+      });
+    } catch (_error) {
+      return senderr(res);
+    }
+  })(req, res);
+});
+
+router.post("/destinationbroadcasts/status", function (req, res) {
+  passport.authenticate("jwt", { session: false }, async function (err, driver) {
+    if (err === "AccountDeleted") {
+      return res.json({
+        status: "error",
+        message: "Account has been deleted successfully"
+      });
+    }
+    if (!driver) {
+      return res.json({
+        status: "error",
+        message: "Unauthorized access"
+      });
+    }
+    if (!req.body.user_id || String(driver._id) !== String(req.body.user_id)) {
+      return res.json({
+        status: "false",
+        message: "Unauthorized access"
+      });
+    }
+
+    try {
+      const result = await updateBroadcastStatus({
+        broadcastId: req.body.broadcast_id,
+        driverId: driver._id,
+        status: req.body.status
+      });
+      if (!result.ok) {
+        return res.json({
+          status: "false",
+          message: result.message,
+          error_code: result.code
+        });
+      }
+      return res.json({
+        status: "true",
+        message: "Broadcast updated",
+        result: result.broadcast
+      });
+    } catch (_error) {
+      return senderr(res);
+    }
   })(req, res);
 });
 

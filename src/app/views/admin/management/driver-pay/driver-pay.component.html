@@ -3,10 +3,13 @@
             <div class="col-12">
                 <div class="card">
                     <div class="card-header">
-                        <h4 class="card-title">Driver-Payment Management</h4>
+                        <h4 class="card-title">{{ commissionEnabled ? 'Driver-Payment Management' : 'Legacy Driver Settlement Queue' }}</h4>
                     </div>
                     <div class="card-body collapse show">
                         <div class="card-block card-dashboard">
+                            <div *ngIf="!commissionEnabled" class="alert alert-warning">
+                                Commission is disabled for new rides. Only historical commission settlements appear here, and approval is disabled.
+                            </div>
                             <div class="actions float-right dataTables_filter">
 
                                 <br>
@@ -17,7 +20,7 @@
                                         <th>Driver Name</th>
                                         <th>Payment type</th>
                                         <th>Ridefare</th>
-                                        <th>Commission</th>                           
+                                        <th>{{ commissionEnabled ? 'Commission' : 'Legacy Commission' }}</th>                           
                                         <th>Tax</th>     
                                         <th>Earning</th>     
                                         <th>Total Ride</th>     
@@ -45,7 +48,14 @@
                                             <a class="btn btn-raised btn-icon btn-info mr-1"  [routerLink]="['/admin/management/driverPaymentDetails',page._id]">
                                                 <i class="fa fa-eye"></i></a>
                                             </td> -->
-                                             <td><button type="button" (click)="payDriver(page.id,page.totalbaseprice,page.totalcommissionamount,page.totaltax,page.totalearnings,page.count)" class="btn btn-raised btn-dark square btn-min-width mr-1 mb-1">Approval</button></td>
+                                             <td>
+                                               <button
+                                                 *ngIf="commissionEnabled"
+                                                 type="button"
+                                                 (click)="payDriver(page.id,page.totalbaseprice,page.totalcommissionamount,page.totaltax,page.totalearnings,page.count)"
+                                                 class="btn btn-raised btn-dark square btn-min-width mr-1 mb-1">Approval</button>
+                                               <span *ngIf="!commissionEnabled" class="badge badge-secondary">Legacy only</span>
+                                             </td>
                                         </tr>
                                         <tr *ngIf="!loading && payment.length === 0 ">
                                             <td colspan="9" style="text-align:center;">No result found</td>            

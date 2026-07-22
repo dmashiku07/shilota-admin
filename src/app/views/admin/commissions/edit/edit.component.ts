@@ -3,6 +3,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { CommissionsService } from '../../../../service/commissions.service';
 import { UntypedFormGroup,  UntypedFormBuilder,UntypedFormControl, Validators, FormArray, NgForm,FormsModule, ReactiveFormsModule} from '@angular/forms';
 import { ToastrService } from 'ngx-toastr';
+import { environment } from '../../../../../environments/environment';
 @Component({
   standalone: false,
 selector: 'app-edit',
@@ -13,6 +14,7 @@ export class EditComponent implements OnInit {
   tax: any = {};
   Form: UntypedFormGroup;
   isLoading = false;
+  readonly commissionEnabled = environment.featureFlags.commission_enabled;
   constructor(private route: ActivatedRoute,
     private router: Router,
     private service: CommissionsService, private fb: UntypedFormBuilder,
@@ -22,6 +24,10 @@ export class EditComponent implements OnInit {
       this.createForm(); }
 
   ngOnInit() {
+      if (!this.commissionEnabled) {
+      this.router.navigate(['admin/commissions/view']);
+      return;
+    }
       this.route.params.subscribe(params => {
       this.service.edit(params['id']).subscribe(res => {
         this.tax = res || {};
@@ -43,6 +49,9 @@ export class EditComponent implements OnInit {
   }
 
   update(page) {
+    if (!this.commissionEnabled) {
+      return;
+    }
     if (this.Form.valid) {
       this.isLoading = true;
       this.cdr.detectChanges();

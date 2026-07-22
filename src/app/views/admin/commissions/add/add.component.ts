@@ -4,6 +4,7 @@ import { CommissionsService } from '../../../../service/commissions.service';
 import { Router } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
 import { ToastrService } from 'ngx-toastr';
+import { environment } from '../../../../../environments/environment';
 @Component({
   standalone: false,
 selector: 'app-add',
@@ -12,6 +13,7 @@ selector: 'app-add',
 })
 export class AddComponent implements OnInit {
   Form:UntypedFormGroup;
+  readonly commissionEnabled = environment.featureFlags.commission_enabled;
   constructor(private service:CommissionsService,
     private http: HttpClient,
     private fb:UntypedFormBuilder,
@@ -20,6 +22,10 @@ export class AddComponent implements OnInit {
    ) {   }
 
   ngOnInit() {
+    if (!this.commissionEnabled) {
+      this.router.navigate(['admin/commissions/view']);
+      return;
+    }
     this.createForm();
   }
 
@@ -34,6 +40,9 @@ export class AddComponent implements OnInit {
 
 
 add(Form){
+  if (!this.commissionEnabled) {
+    return;
+  }
   if (this.Form.valid) {
     this.service.add(Form).subscribe(data=>{ 
       if(data['success']) {

@@ -1,0 +1,99 @@
+<section class="row">
+  <div class="col-lg-8">
+    <div class="card">
+      <div class="card-header">
+        <h4 class="card-title">{{ pageTitle }}</h4>
+      </div>
+      <div class="card-body">
+        <form [formGroup]="form" (ngSubmit)="save()">
+          <div class="form-row">
+            <div class="form-group col-md-6">
+              <label>Plan name</label>
+              <input class="form-control" formControlName="name">
+              <small class="text-danger" *ngIf="form.controls.name.touched && form.controls.name.invalid">Plan name is required</small>
+              <small class="text-danger" *ngIf="serverErrors.name">{{ serverErrors.name }}</small>
+            </div>
+            <div class="form-group col-md-6">
+              <label>Currency</label>
+              <input class="form-control" formControlName="currency">
+              <small class="text-danger" *ngIf="form.controls.currency.touched && form.controls.currency.invalid">Currency is required</small>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Description</label>
+            <textarea class="form-control" rows="3" formControlName="description"></textarea>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group col-md-4">
+              <label>Price</label>
+              <input class="form-control" type="number" formControlName="price">
+              <small class="text-danger" *ngIf="form.controls.price.touched && form.controls.price.invalid">Price must be zero or greater</small>
+              <small class="text-danger" *ngIf="serverErrors.price">{{ serverErrors.price }}</small>
+            </div>
+            <div class="form-group col-md-4">
+              <label>Duration unit</label>
+              <select class="form-control" formControlName="duration_unit">
+                <option value="DAY">Day</option>
+                <option value="WEEK">Week</option>
+                <option value="MONTH">Month</option>
+              </select>
+            </div>
+            <div class="form-group col-md-4">
+              <label>Duration value</label>
+              <input class="form-control" type="number" formControlName="duration_value">
+              <small class="text-danger" *ngIf="form.controls.duration_value.touched && form.controls.duration_value.invalid">Duration value must be greater than zero</small>
+              <small class="text-danger" *ngIf="serverErrors.duration_value">{{ serverErrors.duration_value }}</small>
+            </div>
+          </div>
+
+          <div class="form-row align-items-end">
+            <div class="form-group col-md-4">
+              <label>Display order</label>
+              <input class="form-control" type="number" formControlName="display_order">
+            </div>
+            <div class="form-group col-md-4" *ngIf="!isPassenger">
+              <label>Daily completed rides</label>
+              <input class="form-control" type="number" formControlName="daily_ride_limit" [disabled]="form.value.is_unlimited">
+              <small class="text-danger" *ngIf="serverErrors.daily_ride_limit">{{ serverErrors.daily_ride_limit }}</small>
+            </div>
+            <div class="form-group col-md-4" *ngIf="!isPassenger">
+              <div class="form-check mt-4">
+                <input class="form-check-input" type="checkbox" id="isUnlimitedCreate" formControlName="is_unlimited">
+                <label class="form-check-label" for="isUnlimitedCreate">Unlimited plan</label>
+              </div>
+            </div>
+          </div>
+
+          <div class="border rounded p-3 mb-3" *ngIf="isPassenger">
+            <h5 class="mb-3">Passenger premium features</h5>
+            <div class="form-group" *ngFor="let feature of featureCatalog">
+              <div class="form-check" *ngIf="feature.type === 'boolean'">
+                <input class="form-check-input" type="checkbox" [id]="'create-' + feature.feature_code" [checked]="featureEnabled(feature.feature_code)" (change)="toggleFeature(feature.feature_code, $event.target.checked)">
+                <label class="form-check-label" [for]="'create-' + feature.feature_code">{{ feature.label }}</label>
+              </div>
+              <div *ngIf="feature.type === 'number'">
+                <label>{{ feature.label }}</label>
+                <input class="form-control" type="number" [value]="getFeatureValue(feature.feature_code)" (input)="setFeatureValue(feature.feature_code, $any($event.target).value)">
+                <small class="text-danger" *ngIf="serverErrors['features.' + feature.feature_code]">{{ serverErrors['features.' + feature.feature_code] }}</small>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="isActiveCreate" formControlName="is_active">
+              <label class="form-check-label" for="isActiveCreate">Active on save</label>
+            </div>
+          </div>
+
+          <div class="d-flex">
+            <button class="btn btn-primary mr-2" type="submit" [disabled]="saving">{{ saving ? 'Saving...' : 'Create plan' }}</button>
+            <a class="btn btn-outline-secondary" [routerLink]="['/admin/subscription-plans/view']" [queryParams]="cancelQueryParams">Cancel</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</section>

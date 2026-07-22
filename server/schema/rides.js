@@ -13,6 +13,10 @@ var RidesSchema = new Schema({
         type: String, /* schedule / ridenow */
         required: true,
     },
+    request_type: {
+        type: String,
+        default: 'STANDARD'
+    },
     payment_type: {
         type: String, /* cash / payment / wallet */
         required: true,
@@ -118,6 +122,33 @@ var RidesSchema = new Schema({
     vehicle_no: {
         type: String,
     },
+    pricing_mode: {
+        type: String,
+        default: 'platform'
+    },
+    passenger_offered_price: {
+        type: Number,
+        default: null
+    },
+    broadcast_radius: {
+        type: Number,
+        default: null
+    },
+    broadcast_expires_at: {
+        type: Date
+    },
+    accepted_offer_id: {
+        type: String,
+        ref: 'RideOffer',
+        default: ''
+    },
+    final_agreed_currency: {
+        type: String,
+        default: 'TZS'
+    },
+    offer_expires_at: {
+        type: Date
+    },
     baseprice: {
         type: Number
     },
@@ -129,6 +160,26 @@ var RidesSchema = new Schema({
     },
     total: {
         type: Number
+    },
+    final_ride_amount: {
+        type: Number
+    },
+    final_agreed_price: {
+        type: Number
+    },
+    payment_status: {
+        type: String,
+        default: 'unpaid'
+    },
+    payment_direct_to_driver: {
+        type: Number,
+        default: 0
+    },
+    payment_recorded_at: {
+        type: Date
+    },
+    subscription_usage_counted_at: {
+        type: Date
     },
     review_id: {
         type: String,

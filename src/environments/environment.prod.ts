@@ -7,6 +7,7 @@ declare const window: any;
 
 const runtimeConfig = window.__shilotaConfig || {};
 const runtimeFirebase = runtimeConfig.firebase || {};
+const runtimeFeatureFlags = runtimeConfig.featureFlags || {};
 
 export const environment = {
   production: true,
@@ -17,6 +18,16 @@ export const environment = {
   googleapiKey: runtimeConfig.googleapiKey || "REPLACE_GOOGLE_MAPS_API_KEY",
   googleloginClientid: runtimeConfig.googleloginClientid || "REPLACE_GOOGLE_LOGIN_CLIENT_ID",
   facebookloginClientid: "",
+  featureFlags: {
+    commission_enabled: String(runtimeFeatureFlags.commission_enabled || "true") === "true",
+    driver_subscriptions_enabled:
+      String(runtimeFeatureFlags.driver_subscriptions_enabled || "false") === "true",
+    driver_pricing_enabled: String(runtimeFeatureFlags.driver_pricing_enabled || "false") === "true",
+    passenger_price_broadcast_enabled:
+      String(runtimeFeatureFlags.passenger_price_broadcast_enabled || "false") === "true",
+    driver_destination_broadcast_enabled:
+      String(runtimeFeatureFlags.driver_destination_broadcast_enabled || "false") === "true"
+  },
   firebase: {
     apiKey: runtimeFirebase.apiKey || "REPLACE_FIREBASE_API_KEY",
     authDomain: runtimeFirebase.authDomain || "REPLACE_FIREBASE_AUTH_DOMAIN",

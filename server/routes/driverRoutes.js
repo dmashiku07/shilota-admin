@@ -5,6 +5,8 @@ var Driver = require('../schema/driver');
 var nodemailer = require('nodemailer');
 var User = require('../models/admin');
 var cetsSyncService = require('../services/cetsSyncService');
+var { logAuditFromRequest } = require('../services/auditLogService');
+var { evaluateDriverEligibility } = require('../services/driverEligibilityService');
 var {
   buildPaginationResult,
   buildSearchQuery,
@@ -32,7 +34,18 @@ router.route('/').get(async function (req, res) {
       .populate("category_id")
       .exec();
 
-    return res.json(buildPaginationResult(drivers, totalItems, params));
+    const items = await Promise.all((drivers || []).map(async function (driver) {
+      const record = driver.toObject();
+      const eligibility = await evaluateDriverEligibility(driver, {
+        now: new Date()
+      });
+      record.subscription_eligible = eligibility.eligible;
+      record.subscription_error_code = eligibility.code || "";
+      record.subscription_message = eligibility.message || "";
+      return record;
+    }));
+
+    return res.json(buildPaginationResult(items, totalItems, params));
   } catch (_error) {
     return res.json({
       error: true,
@@ -48,6 +61,15 @@ router.route('/deactive/:id').post(function (req, res) {
     else {
       driver.approval = '0';
       driver.save().then(driver => {
+        logAuditFromRequest(req, {
+          action: 'driver.deactivated',
+          target_type: 'driver',
+          target_id: driver._id,
+          metadata: {
+            driver_name: driver.full_name,
+            email: driver.email
+          }
+        });
         cetsSyncService.enqueueDriverSync(driver._id, "admin_driver_deactivate").catch(function (syncError) {
           console.error("CeTS driver deactivate enqueue failed:", syncError);
         });
@@ -74,6 +96,15 @@ router.route('/active/:id').post(function (req, res) {
     else {
       driver.approval = "1";
       driver.save().then(driver => {
+        logAuditFromRequest(req, {
+          action: 'driver.activated',
+          target_type: 'driver',
+          target_id: driver._id,
+          metadata: {
+            driver_name: driver.full_name,
+            email: driver.email
+          }
+        });
         cetsSyncService.enqueueDriverSync(driver._id, "admin_driver_activate").catch(function (syncError) {
           console.error("CeTS driver activate enqueue failed:", syncError);
         });

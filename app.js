@@ -22,11 +22,16 @@ var express = require('express'),
   tax = require('./server/routes/commissionsRoutes'),
   user = require('./server/routes/usermanagementRoutes'),
   payment = require('./server/routes/paymentRoutes'),
+  reporting = require('./server/routes/reportingRoutes'),
+  subscriptionPlans = require('./server/routes/subscriptionPlanRoutes'),
+  subscriptions = require('./server/routes/subscriptionRoutes'),
   vehicle = require('./server/routes/vehicleManagement'),
   rides = require('./server/routes/ridesManagement'),
   settlement = require('./server/routes/settlementRoutes'),
   cetsRoutes = require('./server/routes/cetsRoutes'),
-  safetyRoutes = require('./server/routes/safetyRoutes');
+  safetyRoutes = require('./server/routes/safetyRoutes'),
+  driverSubscriptionService = require('./server/services/driverSubscriptionService'),
+  passengerSubscriptionService = require('./server/services/passengerSubscriptionService');
 
 var api = require('./server/apiroutes/api');
 var driverapi = require('./server/apiroutes/driverapi');
@@ -62,6 +67,9 @@ const noCachePrefixes = [
   '/chat',
   '/tax',
   '/payment',
+  '/reporting',
+  '/subscription-plans',
+  '/subscriptions',
   '/settlement',
   '/cets',
   '/safety'
@@ -113,10 +121,15 @@ app.use('/driverapi', driverapi);
 app.use('/chat', chat);
 app.use('/tax', tax);
 app.use('/payment', payment);
+app.use('/reporting', reporting);
+app.use('/subscription-plans', subscriptionPlans);
+app.use('/subscriptions', subscriptions);
 app.use('/settlement', settlement);
 app.use('/safety', safetyRoutes);
 app.use('/', cetsRoutes);
 cetsSyncService.initializeSchedulers();
+driverSubscriptionService.initializeSchedulers();
+passengerSubscriptionService.initializeSchedulers();
 app.use(express.static(distRoot));
 app.use(express.static(distShilotaRoot));
 app.use(express.static(__dirname + '/src'));
