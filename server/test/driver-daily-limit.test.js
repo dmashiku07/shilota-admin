@@ -73,6 +73,7 @@ function createRideStore(rides) {
 
 function createSubscriptionMocks(subscriptionState, rideStore) {
   const originalRideFindOneAndUpdate = Rides.findOneAndUpdate;
+  const originalSubscriptionFind = Subscription.find;
   const originalSubscriptionFindOne = Subscription.findOne;
   const originalSubscriptionUpdateOne = Subscription.updateOne;
   const originalSubscriptionUpdateMany = Subscription.updateMany;
@@ -94,6 +95,18 @@ function createSubscriptionMocks(subscriptionState, rideStore) {
         }
         ride.subscription_usage_counted_at = update.$set.subscription_usage_counted_at;
         return ride;
+      }
+    };
+  };
+
+  Subscription.find = function () {
+    return {
+      select: function () {
+        return {
+          exec: async function () {
+            return [];
+          }
+        };
       }
     };
   };
@@ -166,6 +179,7 @@ function createSubscriptionMocks(subscriptionState, rideStore) {
 
   return function restore() {
     Rides.findOneAndUpdate = originalRideFindOneAndUpdate;
+    Subscription.find = originalSubscriptionFind;
     Subscription.findOne = originalSubscriptionFindOne;
     Subscription.updateOne = originalSubscriptionUpdateOne;
     Subscription.updateMany = originalSubscriptionUpdateMany;

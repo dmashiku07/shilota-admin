@@ -78,9 +78,9 @@ test("driver destination broadcast schemas expose broadcast and join-request fie
   });
 });
 
-test("driver destination broadcast feature stays disabled by default", function () {
-  assert.equal(config.featureFlags.driver_destination_broadcast_enabled, false);
-  assert.equal(service.isDriverDestinationBroadcastEnabled(), false);
+test("driver destination broadcast feature is enabled by default", function () {
+  assert.equal(config.featureFlags.driver_destination_broadcast_enabled, true);
+  assert.equal(service.isDriverDestinationBroadcastEnabled(), true);
 });
 
 test("expiry job marks open broadcasts and pending join requests as expired", async function () {

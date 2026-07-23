@@ -63,13 +63,13 @@ const runtimeConfig = {
   googleloginClientid: stringValue(process.env.GOOGLE_LOGIN_CLIENT_ID),
   enablePhoneVerification: stringValue(process.env.ENABLE_PHONE_VERIFICATION, "false"),
   featureFlags: {
-    commission_enabled: stringValue(process.env.COMMISSION_ENABLED, "true"),
-    driver_subscriptions_enabled: stringValue(process.env.DRIVER_SUBSCRIPTIONS_ENABLED, "false"),
-    driver_pricing_enabled: stringValue(process.env.DRIVER_PRICING_ENABLED, "false"),
-    passenger_price_broadcast_enabled: stringValue(process.env.PASSENGER_PRICE_BROADCAST_ENABLED, "false"),
+    commission_enabled: stringValue(process.env.COMMISSION_ENABLED, "false"),
+    driver_subscriptions_enabled: stringValue(process.env.DRIVER_SUBSCRIPTIONS_ENABLED, "true"),
+    driver_pricing_enabled: stringValue(process.env.DRIVER_PRICING_ENABLED, "true"),
+    passenger_price_broadcast_enabled: stringValue(process.env.PASSENGER_PRICE_BROADCAST_ENABLED, "true"),
     driver_destination_broadcast_enabled: stringValue(
       process.env.DRIVER_DESTINATION_BROADCAST_ENABLED,
-      "false"
+      "true"
     )
   },
   firebase: {

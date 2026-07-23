@@ -5,11 +5,11 @@ window.__shilotaConfig = {
   googleloginClientid: "REPLACE_GOOGLE_LOGIN_CLIENT_ID",
   enablePhoneVerification: "false",
   featureFlags: {
-    commission_enabled: "true",
-    driver_subscriptions_enabled: "false",
-    driver_pricing_enabled: "false",
-    passenger_price_broadcast_enabled: "false",
-    driver_destination_broadcast_enabled: "false"
+    commission_enabled: "false",
+    driver_subscriptions_enabled: "true",
+    driver_pricing_enabled: "true",
+    passenger_price_broadcast_enabled: "true",
+    driver_destination_broadcast_enabled: "true"
   },
   firebase: {
     apiKey: "REPLACE_FIREBASE_API_KEY",

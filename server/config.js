@@ -84,22 +84,22 @@ loadEnvFiles();
 const localConfig = readLegacyLocalConfig();
 const resolvedApiPort = asNumber(process.env.API_PORT || process.env.PORT || localConfig.apiPort, 3000);
 const featureFlags = {
-  commission_enabled: asBoolean(process.env.COMMISSION_ENABLED || localConfig.commissionEnabled, true),
+  commission_enabled: asBoolean(process.env.COMMISSION_ENABLED || localConfig.commissionEnabled, false),
   driver_subscriptions_enabled: asBoolean(
     process.env.DRIVER_SUBSCRIPTIONS_ENABLED || localConfig.driverSubscriptionsEnabled,
-    false
+    true
   ),
   driver_pricing_enabled: asBoolean(
     process.env.DRIVER_PRICING_ENABLED || localConfig.driverPricingEnabled,
-    false
+    true
   ),
   passenger_price_broadcast_enabled: asBoolean(
     process.env.PASSENGER_PRICE_BROADCAST_ENABLED || localConfig.passengerPriceBroadcastEnabled,
-    false
+    true
   ),
   driver_destination_broadcast_enabled: asBoolean(
     process.env.DRIVER_DESTINATION_BROADCAST_ENABLED || localConfig.driverDestinationBroadcastEnabled,
-    false
+    true
   )
 };
 

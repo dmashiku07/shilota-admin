@@ -19,14 +19,14 @@ export const environment = {
   googleloginClientid: runtimeConfig.googleloginClientid || "REPLACE_GOOGLE_LOGIN_CLIENT_ID",
   facebookloginClientid: "",
   featureFlags: {
-    commission_enabled: String(runtimeFeatureFlags.commission_enabled || "true") === "true",
+    commission_enabled: String(runtimeFeatureFlags.commission_enabled || "false") === "true",
     driver_subscriptions_enabled:
-      String(runtimeFeatureFlags.driver_subscriptions_enabled || "false") === "true",
-    driver_pricing_enabled: String(runtimeFeatureFlags.driver_pricing_enabled || "false") === "true",
+      String(runtimeFeatureFlags.driver_subscriptions_enabled || "true") === "true",
+    driver_pricing_enabled: String(runtimeFeatureFlags.driver_pricing_enabled || "true") === "true",
     passenger_price_broadcast_enabled:
-      String(runtimeFeatureFlags.passenger_price_broadcast_enabled || "false") === "true",
+      String(runtimeFeatureFlags.passenger_price_broadcast_enabled || "true") === "true",
     driver_destination_broadcast_enabled:
-      String(runtimeFeatureFlags.driver_destination_broadcast_enabled || "false") === "true"
+      String(runtimeFeatureFlags.driver_destination_broadcast_enabled || "true") === "true"
   },
   firebase: {
     apiKey: runtimeFirebase.apiKey || "REPLACE_FIREBASE_API_KEY",
