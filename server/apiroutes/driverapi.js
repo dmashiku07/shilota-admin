@@ -807,7 +807,7 @@ router.post("/getotp", async function (req, res) {
     length: 6,
     charset: "numeric"
   });
-  const message = `Your CABI verification code is ${otp}`;
+  const message = `Your Shilota verification code is ${otp}`;
 
   const smsResult = await smsService.sendSms(phoneParts.normalizedPhoneNumber, message);
   if (!smsResult.success && !smsResult.skipped) {
@@ -1025,7 +1025,12 @@ router.get('/profile/:userid', function (req, res) {
         Driver.findOne({
           _id: req.params.userid
         }, function (err, driver) {
-          if (err) throw err;
+          if (err) {
+            return res.json({
+              status: "false",
+              message: "Unable to load profile"
+            });
+          }
           if (!driver) {
             res.json({
               status: "false",
@@ -1033,8 +1038,8 @@ router.get('/profile/:userid', function (req, res) {
             });
           } else {
             let profile_image = driver.profile_image;
-            if (typeof driver.profile_image == 'undefined') {
-              let profile_image = 'driver.png';
+            if (!profile_image) {
+              profile_image = 'driver.png';
             }
 
             let result = {};
@@ -1045,7 +1050,7 @@ router.get('/profile/:userid', function (req, res) {
             result.user_image = base_url + "/gallery/drivers/" + profile_image;
             result.country_code = driver.country_code;
             result.phone_number = driver.phone_number;
-            result.emergency_contact = driver.emergency_contact;
+            result.emergency_contact = Array.isArray(driver.emergency_contact) ? driver.emergency_contact : [];
             result.nextinspectionon = driver.inspectionon;
             result.walletmoney = getDriverWalletAmount(driver);
             result.service_types = driver.service_types && driver.service_types.length ? driver.service_types : ["ride"];
@@ -2276,7 +2281,7 @@ router.post('/getselcomurl', function (req, res) {
         user: driver,
         userId: req.body.user_id,
         returnUrl: returnUrl,
-        remarks: "CABi driver wallet payment"
+        remarks: "Shilota driver wallet payment"
       });
 
       await SelcomPaymentSession.findOneAndUpdate(
@@ -4506,7 +4511,7 @@ router.post('/testpush', function (req, res) {
 
     try {
       const targetDriverId = String(driver._id);
-      const message = String(req.body.message || 'Test push notification from CABi driver API').trim();
+      const message = String(req.body.message || 'Test push notification from Shilota driver API').trim();
       const admin = await Admin.findOne({}).sort({ _id: -1 }).exec();
       const devices = await UserDevices.find({ user_id: targetDriverId }).exec();
       const tokens = devices.map(rec => rec.device_token).filter(Boolean);
@@ -4533,7 +4538,7 @@ router.post('/testpush', function (req, res) {
       let newNotifications = new Notifications({
         user_id: "0",
         notify_to: targetDriverId,
-        title: admin && admin.siteName ? admin.siteName : "CABi",
+        title: admin && admin.siteName ? admin.siteName : "Shilota",
         message: message,
         notified_at: timeZone()
       });

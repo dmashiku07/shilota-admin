@@ -190,17 +190,17 @@ function isSuccessfulWebhookPayload(payload) {
 }
 
 function splitFullName(fullName) {
-  const cleanedName = String(fullName || "CABi User").trim().replace(/\s+/g, " ");
+  const cleanedName = String(fullName || "Shilota User").trim().replace(/\s+/g, " ");
   if (!cleanedName) {
     return {
-      firstName: "CABi",
+      firstName: "Shilota",
       lastName: "User"
     };
   }
 
   const parts = cleanedName.split(" ");
   return {
-    firstName: parts.shift() || "CABi",
+    firstName: parts.shift() || "Shilota",
     lastName: parts.join(" ") || "User"
   };
 }
@@ -240,8 +240,8 @@ async function createOrder(options) {
     vendor: selcomConfig.vendorId,
     order_id: orderId,
     buyer_userid: String(user._id || options.userId || ""),
-    buyer_email: user.email || `user-${String(user._id || "guest")}@cabi.local`,
-    buyer_name: user.full_name || "CABi User",
+    buyer_email: user.email || `user-${String(user._id || "guest")}@shilota.local`,
+    buyer_name: user.full_name || "Shilota User",
     buyer_phone: buyerPhone,
     gateway_buyer_uuid: "",
     amount,
@@ -259,8 +259,8 @@ async function createOrder(options) {
     "billing.postcode_or_pobox": "00000",
     "billing.country": "TZ",
     "billing.phone": buyerPhone,
-    buyer_remarks: options && options.remarks ? String(options.remarks) : "CABi payment",
-    merchant_remarks: options && options.remarks ? String(options.remarks) : "CABi payment",
+    buyer_remarks: options && options.remarks ? String(options.remarks) : "Shilota payment",
+    merchant_remarks: options && options.remarks ? String(options.remarks) : "Shilota payment",
     no_of_items: 1
   };
 

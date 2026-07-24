@@ -93,7 +93,7 @@ async function sendModernNotification(options) {
     return { successCount: 0, failureCount: 0, responses: [] };
   }
 
-  const notificationTitle = options.title || options.siteName || "CABi";
+  const notificationTitle = options.title || options.siteName || "Shilota";
   const notificationBody = options.message || "";
   const payload = {
     tokens: tokens,

@@ -837,7 +837,7 @@ router.post("/demandheatmap/incentives", function (req, res) {
           radius_km: String(radiusKm)
         },
         mobile: true,
-        siteName: "CABi"
+        siteName: "Shilota"
       }).catch(function (_error) {});
 
       return res.json({

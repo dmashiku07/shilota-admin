@@ -132,7 +132,7 @@ router.post("/testpush/driver", async (req, res) => {
     }
 
     const driverId = String(req.body.driver_id || "").trim();
-    const message = String(req.body.message || "Test push notification from CABi admin API").trim();
+    const message = String(req.body.message || "Test push notification from Shilota admin API").trim();
     if (!driverId) {
       return res.json({
         success: false,
@@ -177,7 +177,7 @@ router.post("/testpush/driver", async (req, res) => {
     await new Notifications({
       user_id: "0",
       notify_to: driverId,
-      title: admin.siteName || "CABi",
+      title: admin.siteName || "Shilota",
       message: message,
       notified_at: adminNotifyTimestamp()
     }).save();

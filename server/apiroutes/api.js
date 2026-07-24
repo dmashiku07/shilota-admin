@@ -134,6 +134,8 @@ const FORGOT_PASSWORD_OTP_PURPOSE = "forgot_password";
 const SCHEDULE_MAX_DAYS = 7;
 const SCHEDULE_DISPATCH_LEAD_MINUTES = 30;
 const SCHEDULE_REMINDER_LEAD_MINUTES = 60;
+const ACTIVE_RIDE_STATUSES = ["requested", "accepted", "ontheway", "onride"];
+const STALE_REQUESTED_RIDE_MINUTES = 15;
 
 function normalizeSavedPlaceType(value) {
   value = String(value || "").trim();
@@ -199,6 +201,54 @@ function isPassengerBroadcastRequest(body) {
     String(body && body.pricing_mode || "").trim().toLowerCase() === "passenger_broadcast" ||
     String(body && body.passenger_price_broadcast || "").trim().toLowerCase() === "true"
   );
+}
+
+async function cancelStaleRequestedRideBlockers(userId, now) {
+  if (!userId) {
+    return [];
+  }
+
+  const comparisonDate = now instanceof Date ? now : new Date();
+  const cutoff = new Date(comparisonDate.getTime() - (STALE_REQUESTED_RIDE_MINUTES * 60 * 1000));
+  const candidates = await Rides.find({
+    user_id: userId,
+    ridestatus: "requested",
+    created_at: { $lte: cutoff },
+    $or: [
+      { driver_id: { $exists: false } },
+      { driver_id: null },
+      { driver_id: "" }
+    ]
+  }).select("_id").exec();
+
+  const cancelledRideIds = [];
+  for (const ride of candidates) {
+    const paymentCount = await Payments.count({ onride_id: ride._id }).exec();
+    if (paymentCount > 0) {
+      continue;
+    }
+
+    const updateResult = await Rides.updateOne({
+      _id: ride._id,
+      ridestatus: "requested",
+      $or: [
+        { driver_id: { $exists: false } },
+        { driver_id: null },
+        { driver_id: "" }
+      ]
+    }, {
+      $set: {
+        ridestatus: "cancelled",
+        ridestatusat: timeZone()
+      }
+    }).exec();
+
+    if (updateResult && (updateResult.modifiedCount || updateResult.nModified)) {
+      cancelledRideIds.push(String(ride._id));
+    }
+  }
+
+  return cancelledRideIds;
 }
 
 function toPositiveNumber(value) {
@@ -1105,7 +1155,12 @@ router.get("/profile/:userid", function (req, res) {
           _id: req.params.userid
         },
         function (err, user) {
-          if (err) throw err;
+          if (err) {
+            return res.json({
+              status: "false",
+              message: "Unable to load profile"
+            });
+          }
           if (!user) {
             res.json({
               status: "false",
@@ -1113,8 +1168,8 @@ router.get("/profile/:userid", function (req, res) {
             });
           } else {
             let profile_image = user.profile_image;
-            if (typeof user.profile_image == "undefined") {
-              let profile_image = "user.png";
+            if (!profile_image) {
+              profile_image = "user.png";
             }
             let result = {};
             result.status = "true";
@@ -1129,7 +1184,8 @@ router.get("/profile/:userid", function (req, res) {
             if (typeof user.walletmoney != "undefined" && user.walletmoney != null) {
               result.walletmoney = Math.round(user.walletmoney * 100) / 100;
             }
-            (result.emergency_contact = user.emergency_contact ? user.emergency_contact : []), res.json(result);
+            result.emergency_contact = Array.isArray(user.emergency_contact) ? user.emergency_contact : [];
+            res.json(result);
           }
         }
       );
@@ -1326,7 +1382,7 @@ router.post("/getotp", async function (req, res) {
     length: 6,
     charset: "numeric"
   });
-  const message = `Your CABI verification code is ${otp}`;
+  const message = `Your Shilota verification code is ${otp}`;
 
   const smsResult = await smsService.sendSms(normalizedPhoneNumber, message);
   if (!smsResult.success && !smsResult.skipped) {
@@ -2472,7 +2528,7 @@ router.post("/testpush", function (req, res) {
 
     try {
       const targetUserId = String(user._id);
-      const message = String(req.body.message || "Test push notification from CABi API").trim();
+      const message = String(req.body.message || "Test push notification from Shilota API").trim();
       const admin = await Admin.findOne({}).sort({ _id: -1 }).exec();
       const mobileDevices = await UserDevices.find({ user_id: targetUserId }).exec();
       const webDevices = await WebUsers.find({ user_id: targetUserId }).exec();
@@ -2509,7 +2565,7 @@ router.post("/testpush", function (req, res) {
         tasks.push(
           pushService.sendNotification({
             tokens: webTokens,
-            title: admin && admin.siteName ? admin.siteName : "CABi",
+            title: admin && admin.siteName ? admin.siteName : "Shilota",
             message: message,
             data: data,
             web: true,
@@ -2524,7 +2580,7 @@ router.post("/testpush", function (req, res) {
       notifyTo({
         user_id: "0",
         notify_to: targetUserId,
-        title: admin && admin.siteName ? admin.siteName : "CABi",
+        title: admin && admin.siteName ? admin.siteName : "Shilota",
         message: message
       });
 
@@ -3075,53 +3131,64 @@ router.post(
               }
             }
 
-          if (req.body.type == "schedule") {
-            prepareAndSaveRide();
-          } else {
-            Rides.findOne({
-              user_id: req.body.user_id,
-              ridestatus: { $in: ["requested", "accepted", "ontheway", "onride"] }
-            }).exec(function (err, activeRide) {
-              if (err) {
-                senderr(res);
-              } else if (activeRide) {
-                Payments.count({
-                  onride_id: activeRide._id
-                }, function (paymentErr, paymentCount) {
-                  if (paymentErr) {
-                    senderr(res);
-                  } else if (paymentCount > 0) {
-                    Rides.updateMany({
-                      user_id: req.body.user_id,
-                      ridestatus: { $in: ["requested", "accepted", "ontheway", "onride"] }
-                    }, {
-                      $set: {
-                        ridestatus: "completed",
-                        ridestatusat: timeZone(),
-                        ride_completed_at: new Date()
-                      }
-                    }).exec(function (updateErr) {
-                      if (updateErr) {
-                        senderr(res);
-                      } else {
-                        if (activeRide.driver_id) {
-                          setDriverAvailableIfEligible(activeRide.driver_id, function () {});
-                        }
-                        prepareAndSaveRide();
-                      }
-                    });
-                  } else {
-                    res.json({
-                      status: "false",
-                      message: "You already have an active ride"
-                    });
-                  }
-                });
-              } else {
-                prepareAndSaveRide();
+            if (req.body.type == "schedule") {
+              prepareAndSaveRide();
+            } else {
+              try {
+                await cancelStaleRequestedRideBlockers(req.body.user_id, new Date());
+              } catch (cleanupError) {
+                console.error("Unable to cancel stale requested ride blockers:", cleanupError);
+                return senderr(res);
               }
-            });
-          }
+              Rides.findOne({
+                user_id: req.body.user_id,
+                ridestatus: { $in: ACTIVE_RIDE_STATUSES }
+              }).exec(function (err, activeRide) {
+                if (err) {
+                  senderr(res);
+                } else if (activeRide) {
+                  Payments.count({
+                    onride_id: activeRide._id
+                  }, function (paymentErr, paymentCount) {
+                    if (paymentErr) {
+                      senderr(res);
+                    } else if (paymentCount > 0) {
+                      Rides.updateMany({
+                        user_id: req.body.user_id,
+                        ridestatus: { $in: ACTIVE_RIDE_STATUSES }
+                      }, {
+                        $set: {
+                          ridestatus: "completed",
+                          ridestatusat: timeZone(),
+                          ride_completed_at: new Date()
+                        }
+                      }).exec(function (updateErr) {
+                        if (updateErr) {
+                          senderr(res);
+                        } else {
+                          if (activeRide.driver_id) {
+                            setDriverAvailableIfEligible(activeRide.driver_id, function () {});
+                          }
+                          prepareAndSaveRide();
+                        }
+                      });
+                    } else {
+                      res.json({
+                        status: "false",
+                        message: "You already have an active ride",
+                        error_code: "ACTIVE_RIDE_EXISTS",
+                        onride_id: activeRide._id,
+                        ridestatus: activeRide.ridestatus,
+                        driver_id: activeRide.driver_id || "",
+                        created_at: activeRide.created_at || null
+                      });
+                    }
+                  });
+                } else {
+                  prepareAndSaveRide();
+                }
+              });
+            }
         }
       }
     })(req, res);
@@ -5824,7 +5891,7 @@ router.post(
           user: user,
           userId: req.body.user_id,
           returnUrl: returnUrl,
-          remarks: "CABi payment"
+          remarks: "Shilota payment"
         });
 
         await SelcomPaymentSession.findOneAndUpdate(
