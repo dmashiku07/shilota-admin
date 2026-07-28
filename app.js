@@ -44,11 +44,11 @@ var logger = require('morgan');
 
 
 const app = express();
-const distRoot = path.join(__dirname, 'dist');
-const distShilotaRoot = path.join(__dirname, 'dist', 'shilota');
-const distIndex = path.join(distRoot, 'index.html');
-const distShilotaIndex = path.join(distShilotaRoot, 'index.html');
-const srcIndex = path.join(__dirname, 'src', 'index.html');
+const adminDistRoot = path.join(__dirname, 'dist', 'shilota');
+const adminDistIndex = path.join(adminDistRoot, 'index.html');
+const mediaRoot = path.join(__dirname, 'src', 'assets', 'media');
+const uploadsRoot = path.join(__dirname, 'src', 'assets', 'uploads');
+const apiAssetsRoot = path.join(__dirname, 'src', 'assets');
 const noCachePrefixes = [
   '/admin',
   '/page',
@@ -98,7 +98,6 @@ app.use(function (req, res, next) {
 });
 
 require('./server/passport')(passport);
-app.use('/admin', admin);
 app.use('/page', pageRoutes);
 app.use('/home', homeRoutes);
 app.use('/banner', bannerRoutes);
@@ -110,29 +109,51 @@ app.use('/user', user);
 app.use('/driverRoutes', driver);
 app.use('/vehicleRoutes', vehicle);
 app.use('/rides', rides);
-app.use('/gallery', express.static(__dirname + '/src/assets/media'));
-app.use('/imagegallery', express.static(__dirname + '/src/assets/uploads'));
-app.get('/assets/runtime-config.local.js', function (_req, res) {
-  const runtimeConfigPath = path.join(__dirname, 'src', 'assets', 'runtime-config.local.js');
-  return res.type('application/javascript').sendFile(runtimeConfigPath);
-});
+app.use('/gallery', express.static(mediaRoot));
+app.use('/imagegallery', express.static(uploadsRoot));
 app.use('/api', api);
+app.use('/api/admin', admin);
+app.use('/api/page', pageRoutes);
+app.use('/api/home', homeRoutes);
+app.use('/api/banner', bannerRoutes);
+app.use('/api/faqroutes', faqRoutes);
+app.use('/api/bodytype', bodytypes);
+app.use('/api/amenities', amenities);
+app.use('/api/category', category);
+app.use('/api/user', user);
+app.use('/api/driverRoutes', driver);
+app.use('/api/vehicleRoutes', vehicle);
+app.use('/api/rides', rides);
+app.use('/api/gallery', express.static(mediaRoot));
+app.use('/api/imagegallery', express.static(uploadsRoot));
+app.use('/api/assets', express.static(apiAssetsRoot));
+app.use('/api/api', api);
 app.use('/driverapi', driverapi);
+app.use('/api/driverapi', driverapi);
 app.use('/chat', chat);
+app.use('/api/chat', chat);
 app.use('/tax', tax);
+app.use('/api/tax', tax);
 app.use('/payment', payment);
+app.use('/api/payment', payment);
 app.use('/reporting', reporting);
+app.use('/api/reporting', reporting);
 app.use('/subscription-plans', subscriptionPlans);
+app.use('/api/subscription-plans', subscriptionPlans);
 app.use('/subscriptions', subscriptions);
+app.use('/api/subscriptions', subscriptions);
 app.use('/settlement', settlement);
+app.use('/api/settlement', settlement);
 app.use('/safety', safetyRoutes);
+app.use('/api/safety', safetyRoutes);
 app.use('/', cetsRoutes);
+app.use('/api', cetsRoutes);
 cetsSyncService.initializeSchedulers();
 driverSubscriptionService.initializeSchedulers();
 passengerSubscriptionService.initializeSchedulers();
-app.use(express.static(distRoot));
-app.use(express.static(distShilotaRoot));
-app.use(express.static(__dirname + '/src'));
+app.use('/admin', express.static(adminDistRoot, {
+  index: false
+}));
 
 // app.set('view engine', 'ejs');
 // app.set('views', path.join(__dirname, 'views'));
@@ -145,20 +166,32 @@ app.use(function (req, res, next) {
   next();
 });
 
-app.get('*', (req, res) => {
-  if (fs.existsSync(distIndex)) {
-    return res.sendFile(distIndex);
-  }
-  if (fs.existsSync(distShilotaIndex)) {
-    return res.sendFile(distShilotaIndex);
-  }
-  if (fs.existsSync(srcIndex)) {
-    return res.sendFile(srcIndex);
+function sendAdminIndex(_req, res) {
+  if (fs.existsSync(adminDistIndex)) {
+    return res.sendFile(adminDistIndex);
   }
   return res.status(503).json({
     error: true,
-    message: 'Frontend build not found. Run Angular build to generate dist output.'
+    message: 'Admin frontend build not found. Run npm run build:admin to generate dist/shilota.'
   });
+}
+
+app.get(['/admin', '/admin/'], sendAdminIndex);
+app.get('/admin/*', (req, res, next) => {
+  if (path.extname(req.path)) {
+    return next();
+  }
+  return sendAdminIndex(req, res);
+});
+
+app.use(function (req, res) {
+  if (req.originalUrl && req.originalUrl.startsWith('/api')) {
+    return res.status(404).json({
+      error: true,
+      message: 'API route not found'
+    });
+  }
+  return res.status(404).send('Not Found');
 });
 
 mongoose.Promise = global.Promise;

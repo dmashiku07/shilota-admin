@@ -21,7 +21,7 @@
             "optimization": false,
             "assets": [
               "src/assets",
-              "src/favicon.ico",
+              "src/favicon.png",
               "src/manifest.json",
               "src/firebase-messaging-sw.js"
             ],
@@ -40,7 +40,18 @@
           },
           "configurations": {
             "production": {
-              "optimization": true,
+              "baseHref": "/admin/",
+              "deployUrl": "/admin/",
+              "optimization": {
+                "scripts": true,
+                "styles": {
+                  "minify": true,
+                  "inlineCritical": true
+                },
+                "fonts": {
+                  "inline": false
+                }
+              },
               "outputHashing": "all",
               "sourceMap": false,
               "namedChunks": false,
@@ -95,7 +106,7 @@
             ],
             "assets": [
               "src/assets",
-              "src/favicon.ico",
+              "src/favicon.png",
               "src/firebase-messaging-sw.js",
               "src/manifest.json"
             ]

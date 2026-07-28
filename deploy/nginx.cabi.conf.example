@@ -2,7 +2,23 @@ server {
     listen 80;
     server_name your-domain.com;
 
+    # WordPress should own /, /wp-admin/, /wp-content/, and other non-app paths.
     location / {
+        try_files $uri $uri/ /index.php?$args;
+    }
+
+    # Express API routes for the admin frontend and mobile apps.
+    location /api/ {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Angular admin SPA and its static assets.
+    location /admin/ {
         proxy_pass http://127.0.0.1:3000;
         proxy_http_version 1.1;
         proxy_set_header Host $host;

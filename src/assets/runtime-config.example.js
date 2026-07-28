@@ -1,6 +1,6 @@
 window.__shilotaConfig = {
-  apiUrl: "http://localhost:3000",
-  socketUrl: "http://localhost:8081",
+  apiUrl: "/api",
+  socketUrl: "/",
   googleapiKey: "REPLACE_GOOGLE_MAPS_API_KEY",
   googleloginClientid: "REPLACE_GOOGLE_LOGIN_CLIENT_ID",
   enablePhoneVerification: "false",

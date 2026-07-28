@@ -54,11 +54,9 @@ function stringValue(value, fallback = "") {
 const rootDir = path.resolve(__dirname, "..");
 loadEnvFiles(rootDir);
 
-const apiPort = stringValue(process.env.API_PORT || process.env.PORT, "3000");
-const socketPort = stringValue(process.env.SOCKET_PORT, "8081");
 const runtimeConfig = {
-  apiUrl: stringValue(process.env.RUNTIME_API_URL || process.env.BASE_URL, `http://localhost:${apiPort}`),
-  socketUrl: stringValue(process.env.RUNTIME_SOCKET_URL, `http://localhost:${socketPort}`),
+  apiUrl: stringValue(process.env.RUNTIME_API_URL, "/api"),
+  socketUrl: stringValue(process.env.RUNTIME_SOCKET_URL, "/"),
   googleapiKey: stringValue(process.env.GOOGLE_MAPS_API_KEY),
   googleloginClientid: stringValue(process.env.GOOGLE_LOGIN_CLIENT_ID),
   enablePhoneVerification: stringValue(process.env.ENABLE_PHONE_VERIFICATION, "false"),

@@ -13,7 +13,7 @@ export const environment = {
   production: false,
   enablePhoneVerification: String(runtimeConfig.enablePhoneVerification || "false") === "true",
   domain: "",
-  apiUrl: runtimeConfig.apiUrl || "http://localhost:3000",
+  apiUrl: runtimeConfig.apiUrl || "/api",
   socketUrl: runtimeConfig.socketUrl || "http://localhost:8081",
   googleapiKey: runtimeConfig.googleapiKey || "REPLACE_GOOGLE_MAPS_API_KEY",
   googleloginClientid: runtimeConfig.googleloginClientid || "REPLACE_GOOGLE_LOGIN_CLIENT_ID",

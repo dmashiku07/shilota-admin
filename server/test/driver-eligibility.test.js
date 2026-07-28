@@ -312,3 +312,23 @@ test("phase 4 routes are guarded by the centralized eligibility policy", functio
   assert.match(driverApiRouteSource, /buildEligibilityErrorPayload\(/);
   assert.match(apiRouteSource, /filterEligibleDrivers\(/);
 });
+
+test("passenger ride notification paths filter subscription-ineligible drivers before push", function () {
+  const driverOfferNotifyIndex = apiRouteSource.indexOf("nearBy(availdrivers, rides._id);");
+  assert.notEqual(driverOfferNotifyIndex, -1, "expected driver-offer notification dispatch");
+  const driverOfferFilterIndex = apiRouteSource.lastIndexOf("filterEligibleDrivers(driver", driverOfferNotifyIndex);
+  assert.notEqual(driverOfferFilterIndex, -1, "expected driver-offer path to filter eligible drivers before notification");
+  assert.ok(driverOfferFilterIndex < driverOfferNotifyIndex);
+
+  const standardNotifyIndex = apiRouteSource.indexOf("nearBy(availdrivers, rides._id);", driverOfferNotifyIndex + 1);
+  assert.notEqual(standardNotifyIndex, -1, "expected standard ride notification dispatch");
+  const standardFilterIndex = apiRouteSource.lastIndexOf("filterEligibleDrivers(driver", standardNotifyIndex);
+  assert.notEqual(standardFilterIndex, -1, "expected standard path to filter eligible drivers before notification");
+  assert.ok(standardFilterIndex < standardNotifyIndex);
+
+  const scheduleNotifyIndex = apiRouteSource.indexOf("schedulenearBy(availdrivers, rides);");
+  assert.notEqual(scheduleNotifyIndex, -1, "expected scheduled ride notification dispatch");
+  const scheduleFilterIndex = apiRouteSource.lastIndexOf("filterEligibleDrivers(driver", scheduleNotifyIndex);
+  assert.notEqual(scheduleFilterIndex, -1, "expected scheduled path to filter eligible drivers before notification");
+  assert.ok(scheduleFilterIndex < scheduleNotifyIndex);
+});
