@@ -54,8 +54,9 @@
               <input class="form-control" type="number" formControlName="display_order">
             </div>
             <div class="form-group col-md-4" *ngIf="!isPassenger">
-              <label>Daily completed rides</label>
+              <label>Total completed rides in bundle</label>
               <input class="form-control" type="number" formControlName="daily_ride_limit" [disabled]="form.value.is_unlimited">
+              <small class="form-text text-muted">This is the total ride allowance for the whole plan period.</small>
               <small class="text-danger" *ngIf="serverErrors.daily_ride_limit">{{ serverErrors.daily_ride_limit }}</small>
             </div>
             <div class="form-group col-md-4" *ngIf="!isPassenger">

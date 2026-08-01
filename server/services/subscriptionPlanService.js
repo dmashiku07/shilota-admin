@@ -179,11 +179,11 @@ function validateSubscriptionPlanPayload(payload) {
   }
   if (customerType === "DRIVER" && !isUnlimited) {
     if (!Number.isFinite(dailyRideLimit) || dailyRideLimit <= 0) {
-      errors.daily_ride_limit = "Daily ride limit must be greater than zero for limited driver plans";
+      errors.daily_ride_limit = "Bundle ride limit must be greater than zero for limited driver plans";
     }
   }
   if (isUnlimited && dailyRideLimit !== null && dailyRideLimit <= 0) {
-    errors.daily_ride_limit = "Unlimited plans may omit the daily ride limit or use a positive number";
+    errors.daily_ride_limit = "Unlimited plans may omit the bundle ride limit or use a positive number";
   }
   if (customerType === "PASSENGER") {
     Object.assign(errors, validatePassengerPlanFeatures(payload.features || []));

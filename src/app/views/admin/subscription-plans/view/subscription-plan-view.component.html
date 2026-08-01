@@ -15,7 +15,7 @@
                 <th>Name</th>
                 <th>Price</th>
                 <th>Validity</th>
-                <th>{{ isPassenger ? 'Premium features' : 'Rides / day' }}</th>
+                <th>{{ isPassenger ? 'Premium features' : 'Bundle rides' }}</th>
                 <th *ngIf="isPassenger">Active subscribers</th>
                 <th>Status</th>
                 <th></th>
@@ -38,7 +38,7 @@
                 <td>{{ validityLabel(plan) }}</td>
                 <td *ngIf="!isPassenger">
                   <span class="badge badge-warning mr-1" *ngIf="plan.is_unlimited">Unlimited</span>
-                  <span>{{ ridesPerDayLabel(plan) }}</span>
+                  <span>{{ bundleRidesLabel(plan) }}</span>
                 </td>
                 <td *ngIf="isPassenger">
                   <small>{{ featureSummary(plan) }}</small>

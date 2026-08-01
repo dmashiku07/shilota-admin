@@ -55,7 +55,7 @@ var SubscriptionPlanSchema = new Schema(
           }
           return value === null || typeof value === "undefined" || Number(value) > 0;
         },
-        message: "Daily ride limit is invalid for the selected plan type"
+        message: "Bundle ride limit is invalid for the selected plan type"
       }
     },
     is_unlimited: {

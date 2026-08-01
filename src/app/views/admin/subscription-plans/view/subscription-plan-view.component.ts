@@ -106,8 +106,8 @@ export class SubscriptionPlanViewComponent implements OnInit {
     this.swapAndPersist(index, index + 1);
   }
 
-  ridesPerDayLabel(plan: any) {
-    return plan.is_unlimited ? 'Unlimited' : (plan.daily_ride_limit || '-') + ' rides/day';
+  bundleRidesLabel(plan: any) {
+    return plan.is_unlimited ? 'Unlimited' : (plan.daily_ride_limit || '-') + ' rides';
   }
 
   featureSummary(plan: any) {

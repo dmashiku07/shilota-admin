@@ -5493,38 +5493,7 @@ router.post("/destinationbroadcasts", function (req, res) {
         });
       }
 
-      const nearbyPassengers = await User.find({
-        loc: {
-          $near: {
-            $geometry: {
-              type: "Point",
-              coordinates: [Number(result.broadcast.origin_lng || 0), Number(result.broadcast.origin_lat || 0)]
-            },
-            $maxDistance: Number(result.broadcast.notification_radius || 0) * 1000
-          }
-        },
-        deletion_status: 0
-      }).select("_id").limit(100).exec().catch(function () {
-        return [];
-      });
-
-      const nearbyPassengerIds = nearbyPassengers.map(function (item) {
-        return String(item._id);
-      });
-      if (nearbyPassengerIds.length > 0) {
-        userNotific(nearbyPassengerIds, "A driver is headed your way", {
-          type: "driver_destination_broadcast",
-          broadcast_id: String(result.broadcast._id),
-          driver_id: String(driver._id),
-          driver_name: String(driver.full_name || ""),
-          origin_label: result.broadcast.origin_label,
-          destination_label: result.broadcast.destination_label,
-          departure_time: result.broadcast.departure_time,
-          price_per_passenger: String(result.broadcast.price_per_passenger),
-          remaining_seats: String(result.broadcast.remaining_seats),
-          message: "A driver is headed your way"
-        });
-      }
+      await notifyDriverDestinationBroadcastPassengers(result.broadcast, driver);
 
       return res.json({
         status: "true",
@@ -5672,6 +5641,12 @@ router.get('/destinationbroadcasts/verifyselcom/:transid', async function (req, 
         session.status = "completed";
         session.consumed_at = new Date();
         await session.save();
+      }
+      if (finalized.activated) {
+        const broadcastDriver = await Driver.findById(finalized.broadcast.driver_id).exec().catch(function () {
+          return null;
+        });
+        await notifyDriverDestinationBroadcastPassengers(finalized.broadcast, broadcastDriver);
       }
 
       return res.json({
@@ -5873,6 +5848,57 @@ router.post("/destinationbroadcasts/status", function (req, res) {
     }
   })(req, res);
 });
+
+async function notifyDriverDestinationBroadcastPassengers(broadcast, driver) {
+  if (!broadcast || String(broadcast.status || "").toUpperCase() !== "ACTIVE") {
+    return 0;
+  }
+
+  const originLat = Number(broadcast.origin_lat || 0);
+  const originLng = Number(broadcast.origin_lng || 0);
+  const radiusKm = Number(broadcast.notification_radius || 0);
+  if (!Number.isFinite(originLat) || !Number.isFinite(originLng) || !Number.isFinite(radiusKm) || radiusKm <= 0) {
+    return 0;
+  }
+
+  const nearbyPassengers = await User.find({
+    loc: {
+      $near: {
+        $geometry: {
+          type: "Point",
+          coordinates: [originLng, originLat]
+        },
+        $maxDistance: radiusKm * 1000
+      }
+    },
+    deletion_status: 0
+  }).select("_id").limit(100).exec().catch(function () {
+    return [];
+  });
+
+  const nearbyPassengerIds = nearbyPassengers.map(function (item) {
+    return String(item._id);
+  });
+  if (nearbyPassengerIds.length === 0) {
+    return 0;
+  }
+
+  userNotific(nearbyPassengerIds, "A driver is headed your way", {
+    type: "driver_destination_broadcast",
+    broadcast_id: String(broadcast._id),
+    driver_id: String(broadcast.driver_id || (driver && driver._id) || ""),
+    driver_name: String((driver && driver.full_name) || ""),
+    origin_label: broadcast.origin_label,
+    destination_label: broadcast.destination_label,
+    departure_time: broadcast.departure_time,
+    price_per_passenger: String(broadcast.price_per_passenger),
+    remaining_seats: String(broadcast.remaining_seats),
+    notification_radius: String(broadcast.notification_radius),
+    message: "A driver is headed your way"
+  });
+
+  return nearbyPassengerIds.length;
+}
 
 notifyTo = function (notifications) {
   notifications.notified_at = timeZone();

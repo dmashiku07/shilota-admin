@@ -339,7 +339,28 @@ test("destination broadcast routes are exposed in passenger, driver, and admin A
   assert.match(driverApiRouteSource, /router\.post\(\"\/destinationbroadcasts\/retrypayment\"/);
   assert.match(driverApiRouteSource, /router\.post\(\"\/destinationbroadcasts\/requests\/decision\"/);
   assert.match(driverApiRouteSource, /router\.post\(\"\/destinationbroadcasts\/status\"/);
+  assert.match(driverApiRouteSource, /notifyDriverDestinationBroadcastPassengers\(result\.broadcast, driver\)/);
+  assert.match(driverApiRouteSource, /notifyDriverDestinationBroadcastPassengers\(finalized\.broadcast, broadcastDriver\)/);
   assert.match(safetyRouteSource, /router\.get\(\"\/destinationbroadcasts\"/);
   assert.match(safetyRouteSource, /router\.get\(\"\/destinationbroadcastsettings\"/);
   assert.match(safetyRouteSource, /router\.get\(\"\/destinationbroadcastrevenues\"/);
+});
+
+test("driver ride broadcasts are visible and notified without passenger subscription gating", function () {
+  const nearbyRouteStart = apiRouteSource.indexOf('router.get("/destinationbroadcasts/nearby/:userid"');
+  const nearbyRouteEnd = apiRouteSource.indexOf('router.post("/destinationbroadcasts/join"', nearbyRouteStart);
+  const notifyHelperStart = driverApiRouteSource.indexOf("async function notifyDriverDestinationBroadcastPassengers");
+  const notifyHelperEnd = driverApiRouteSource.indexOf("notifyTo = function", notifyHelperStart);
+
+  assert.notEqual(nearbyRouteStart, -1, "expected passenger nearby route");
+  assert.notEqual(nearbyRouteEnd, -1, "expected passenger nearby route end");
+  assert.notEqual(notifyHelperStart, -1, "expected broadcast notification helper");
+  assert.notEqual(notifyHelperEnd, -1, "expected broadcast notification helper end");
+
+  const nearbyRouteSource = apiRouteSource.slice(nearbyRouteStart, nearbyRouteEnd);
+  const notifyHelperSource = driverApiRouteSource.slice(notifyHelperStart, notifyHelperEnd);
+
+  assert.doesNotMatch(nearbyRouteSource, /Subscription|subscription|plan_features_snapshot|PASSENGER_FEATURE/i);
+  assert.doesNotMatch(notifyHelperSource, /Subscription|subscription|plan_features_snapshot|PASSENGER_FEATURE/i);
+  assert.match(notifyHelperSource, /deletion_status: 0/);
 });

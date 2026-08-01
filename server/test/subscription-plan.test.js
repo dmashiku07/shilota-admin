@@ -17,6 +17,22 @@ const routeSource = fs.readFileSync(
   path.join(__dirname, "..", "routes", "subscriptionPlanRoutes.js"),
   "utf8"
 );
+const planViewTemplateSource = fs.readFileSync(
+  path.join(__dirname, "..", "..", "src", "app", "views", "admin", "subscription-plans", "view", "subscription-plan-view.component.html"),
+  "utf8"
+);
+const planViewComponentSource = fs.readFileSync(
+  path.join(__dirname, "..", "..", "src", "app", "views", "admin", "subscription-plans", "view", "subscription-plan-view.component.ts"),
+  "utf8"
+);
+const planAddTemplateSource = fs.readFileSync(
+  path.join(__dirname, "..", "..", "src", "app", "views", "admin", "subscription-plans", "add", "subscription-plan-add.component.html"),
+  "utf8"
+);
+const planEditTemplateSource = fs.readFileSync(
+  path.join(__dirname, "..", "..", "src", "app", "views", "admin", "subscription-plans", "edit", "subscription-plan-edit.component.html"),
+  "utf8"
+);
 
 test("driver subscription plan validation rejects invalid values", function () {
   let errors = validateSubscriptionPlanPayload({
@@ -33,11 +49,11 @@ test("driver subscription plan validation rejects invalid values", function () {
 
   assert.equal(errors.price, "Price must be zero or greater");
   assert.equal(errors.duration_value, "Duration value must be greater than zero");
-  assert.equal(errors.daily_ride_limit, "Daily ride limit must be greater than zero for limited driver plans");
+  assert.equal(errors.daily_ride_limit, "Bundle ride limit must be greater than zero for limited driver plans");
   assert.equal(errors.display_order, "Display order must be zero or greater");
 });
 
-test("unlimited driver plan may omit daily ride limit", function () {
+test("unlimited driver plan may omit bundle ride limit", function () {
   const plan = new SubscriptionPlan({});
   applySubscriptionPlanFields(plan, {
     customer_type: "DRIVER",
@@ -58,7 +74,7 @@ test("unlimited driver plan may omit daily ride limit", function () {
   assert.equal(plan.daily_ride_limit, null);
 });
 
-test("limited driver plan requires a positive daily ride limit", function () {
+test("limited driver plan requires a positive bundle ride limit", function () {
   const plan = new SubscriptionPlan({
     customer_type: "DRIVER",
     name: "Daily 3",
@@ -76,6 +92,20 @@ test("limited driver plan requires a positive daily ride limit", function () {
   const validationError = plan.validateSync();
   assert.ok(validationError);
   assert.ok(validationError.errors.daily_ride_limit);
+});
+
+test("driver plan admin UI labels rides as total bundle allowance", function () {
+  assert.match(planViewTemplateSource, /Bundle rides/);
+  assert.match(planViewComponentSource, /\+ ' rides'/);
+  assert.doesNotMatch(planViewTemplateSource, /Rides \/ day/);
+  assert.doesNotMatch(planViewComponentSource, /rides\/day/);
+
+  assert.match(planAddTemplateSource, /Total completed rides in bundle/);
+  assert.match(planEditTemplateSource, /Total completed rides in bundle/);
+  assert.match(planAddTemplateSource, /total ride allowance for the whole plan period/i);
+  assert.match(planEditTemplateSource, /total ride allowance for the whole plan period/i);
+  assert.doesNotMatch(planAddTemplateSource, /Daily completed rides/);
+  assert.doesNotMatch(planEditTemplateSource, /Daily completed rides/);
 });
 
 test("activation and deactivation update plan state without changing pricing fields", function () {
