@@ -19,6 +19,47 @@ function isValidDate(value) {
   return value instanceof Date && !Number.isNaN(value.getTime());
 }
 
+function sendVehicleApprovalMail(driver, callback) {
+  User.findOne({}).sort({
+    _id: -1
+  }).exec(function (err, user) {
+    if (err || !user) {
+      console.error("Vehicle approval email skipped: admin email settings not found", err);
+      return callback();
+    }
+
+    let transporter = nodemailer.createTransport({
+      host: user.smptHost,
+      port: user.smtpPort,
+      secure: false,
+      auth: {
+        user: user.smtpUsername,
+        pass: user.smtpPassword
+      }
+    });
+
+    let mailOptions = {
+      to: driver.email,
+      subject: "Vehicle approved message",
+      html: "Your registered vehicle approved sucessfully" + "<br><br> Regards, <br><br>" + user.siteName
+    };
+
+    transporter.verify(function (error) {
+      if (error) {
+        console.error("Vehicle approval email SMTP verification failed:", error);
+        return callback();
+      }
+
+      transporter.sendMail(mailOptions, function (mailError) {
+        if (mailError) {
+          console.error("Vehicle approval email send failed:", mailError);
+        }
+        return callback();
+      });
+    });
+  });
+}
+
 router.route('/').get(async function (req, res) {
   try {
     const params = getPaginationParams(req, {
@@ -184,65 +225,19 @@ router.route('/update/:id').post(function (req, res) {
                     cetsSyncService.enqueueDriverSync(driver._id, "admin_vehicle_driver_update").catch(function (syncError) {
                       console.error("CeTS driver enqueue after vehicle update failed:", syncError);
                     });
-                    //start mail sending
                     if (driver.approval == 1) {
-                      User.findOne({}).sort({
-                        _id: -1
-                      }).exec(function (err, user) {
-                        if (!user)
-                          return next(new Error('Could not load Document'));
-                        else {
-                          let mailOptions = {
-                            to: driver.email, // list of receivers
-                            subject: "Vehicle approved message", // Subject line
-                            html: "Your registered vehicle approved sucessfully" + "<br><br> Regards, <br><br>" + user.siteName // html body
-                          };
-
-                          let transporter = nodemailer.createTransport({
-                            host: user.smptHost,
-                            port: user.smtpPort,
-                            secure: false, // true for 465, false for other ports
-                            auth: {
-                              user: user.smtpUsername, // generated ethereal user
-                              pass: user.smtpPassword // generated ethereal password
-                            }
-                          });
-
-                          //send mail with defined transport object
-                          transporter.verify(function (error, success) {
-                            if (error) {
-                              if (error) res.json({
-                                error: true,
-                                msg: "Sorry, SMTP Connection error check email setting"
-                              });
-                            } else {
-
-                              transporter.sendMail(mailOptions, (err, result) => {
-                                if (err) res.json({
-                                  error: true,
-                                  msg: "Message not send"
-                                });
-                                else
-                                  //  console.log(result);
-                                  // return res.json({success: true, msg: 'Vehicle activation message send to driver'});      
-                                  return res.json({
-                                    success: true,
-                                    msg: 'Vehicle activation message send to driver'
-                                  });
-                              });
-                            }
-                          });
-
-                        }
-                      })
+                      return sendVehicleApprovalMail(driver, function () {
+                        return res.json({
+                          success: true,
+                          msg: 'Vehicle Status Updated'
+                        });
+                      });
                     } else {
                       return res.json({
                         success: true,
                         msg: 'Vehicle Status Updated'
                       });
                     }
-
-                    //end mail sending
                   })
                   .catch(err => {
                     return res.json({

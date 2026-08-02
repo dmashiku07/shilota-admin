@@ -15,6 +15,46 @@ var {
   mergeMatch
 } = require('../utils/pagination');
 
+function sendDriverActivationMail(driver, callback) {
+  User.findOne({}).sort({
+    _id: -1
+  }).exec(function (err, user) {
+    if (err || !user) {
+      console.error("Driver activation email skipped: admin email settings not found", err);
+      return callback();
+    }
+
+    let transporter = nodemailer.createTransport({
+      host: user.smptHost,
+      port: user.smtpPort,
+      secure: false,
+      auth: {
+        user: user.smtpUsername,
+        pass: user.smtpPassword
+      }
+    });
+
+    let mailOptions = {
+      to: driver.email,
+      subject: "Vehicle approved message",
+      html: "Your registered vehicle approved sucessfully" + "<br><br> Regards, <br><br>" + user.siteName
+    };
+
+    transporter.verify(function (error) {
+      if (error) {
+        console.error("Driver activation email SMTP verification failed:", error);
+        return callback();
+      }
+
+      transporter.sendMail(mailOptions, function (mailError) {
+        if (mailError) {
+          console.error("Driver activation email send failed:", mailError);
+        }
+        return callback();
+      });
+    });
+  });
+}
 
 router.route('/').get(async function (req, res) {
   try {
@@ -108,58 +148,12 @@ router.route('/active/:id').post(function (req, res) {
         cetsSyncService.enqueueDriverSync(driver._id, "admin_driver_activate").catch(function (syncError) {
           console.error("CeTS driver activate enqueue failed:", syncError);
         });
-        // return res.json({success: true, msg: 'Driver Activated Successfully'});  
-        //start send mail
-        User.findOne({}).sort({
-          _id: -1
-        }).exec(function (err, user) {
-          if (!user)
-            return next(new Error('Could not load Document'));
-          else {
-            let mailOptions = {
-              to: driver.email, // list of receivers
-              subject: "Vehicle approved message", // Subject line
-              html: "Your registered vehicle approved sucessfully" + "<br><br> Regards, <br><br>" + user.siteName // html body
-            };
-
-            let transporter = nodemailer.createTransport({
-              host: user.smptHost,
-              port: user.smtpPort,
-              secure: false,
-              auth: {
-                user: user.smtpUsername,
-                pass: user.smtpPassword
-              }
-            });
-
-
-            //send mail with defined transport object
-            transporter.verify(function (error, success) {
-              if (error) {
-                if (error) res.json({
-                  error: true,
-                  msg: "Sorry, SMTP Connection error check email setting"
-                });
-              } else {
-
-                transporter.sendMail(mailOptions, (err, result) => {
-                  if (err) res.json({
-                    error: true,
-                    msg: "Message not send"
-                  });
-                  else
-                    return res.json({
-                      success: true,
-                      msg: 'Vehicle activation message send to driver'
-                    });
-                });
-              }
-            });
-
-
-          }
-        })
-        //end mail
+        return sendDriverActivationMail(driver, function () {
+          return res.json({
+            success: true,
+            msg: 'Driver Activated Successfully'
+          });
+        });
       })
         .catch(err => {
           return res.json({
