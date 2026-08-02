@@ -3028,50 +3028,66 @@ router.post('/uploadprofileimage', function (req, res) {
 /* upload user documents */
 router.post('/uploaddoc', function (req, res) {
 
-  let result, colname;
+  const allowedDocFields = {
+    insurancedoc: "insurancedoc",
+    licensedoc: "licensedoc",
+    bookdoc: "bookdoc"
+  };
   let upload = multer({
     storage: storage,
     fileFilter: function (req, file, callback) {
-      let ext = path.extname(file.originalname)
+      let ext = path.extname(file.originalname).toLowerCase()
       if (ext !== '.jpg' && ext !== '.jpeg' && ext !== '.pdf') {
-        return callback(res.end('Only images & pdf are allowed'), null)
+        return callback(new Error('Only images & pdf are allowed'))
       }
       callback(null, true)
     }
   }).single('uploaddoc');
   upload(req, res, function (err) {
+    if (err) {
+      return res.json({
+        status: "false",
+        message: err.message || "Document upload failed"
+      });
+    }
+    if (!req.file) {
+      return res.json({
+        status: "false",
+        message: "Document file is required"
+      });
+    }
+    if (!req.body.user_id || !allowedDocFields[req.body.uploaddocfor]) {
+      return res.json({
+        status: "false",
+        message: "Invalid upload request"
+      });
+    }
+
+    let docField = allowedDocFields[req.body.uploaddocfor];
+    let result = {};
+    result[docField] = req.file.filename;
+
     Vehicles.findOne({
       user_id: req.body.user_id
     }, function (err, vehicles) {
-      if (req.body.uploaddocfor == "insurancedoc") {
-        if (vehicles && typeof vehicles.insurancedoc != 'undefined' && vehicles.insurancedoc != null) {
-          colname = vehicles.insurancedoc;
-        }
-        result = {
-          insurancedoc: res.req.file.filename
-        };
-      } else if (req.body.uploaddocfor == "licensedoc") {
-        if (vehicles && typeof vehicles.licensedoc != 'undefined' && vehicles.licensedoc != null) {
-          colname = vehicles.licensedoc;
-        }
-        result = {
-          licensedoc: res.req.file.filename
-        };
-      } else {
-        if (vehicles && typeof vehicles.bookdoc != 'undefined' && vehicles.bookdoc != null) {
-          colname = vehicles.bookdoc;
-        }
-        result = {
-          bookdoc: res.req.file.filename
-        };
+      if (err) {
+        return res.json({
+          status: "false",
+          message: "Something went to be wrong"
+        });
       }
-      if (vehicles && typeof colname != 'undefined' && colname != null) {
+      if (!vehicles) {
+        return res.json({
+          status: "false",
+          message: "Vehicle details not found"
+        });
+      }
+
+      let colname = vehicles[docField];
+      if (colname) {
         fs.unlink(driverassets + colname, function (error) {
           if (error) {
-            res.json({
-              status: "false",
-              message: "Something went to be wrong123"
-            });
+            console.log(error);
           }
         });
       }
@@ -3084,6 +3100,11 @@ router.post('/uploaddoc', function (req, res) {
           res.json({
             status: "false",
             message: "Something went to be wrong12"
+          });
+        } else if (!vehicles) {
+          res.json({
+            status: "false",
+            message: "Vehicle details not found"
           });
         } else {
           res.json({
