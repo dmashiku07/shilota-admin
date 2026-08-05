@@ -95,7 +95,7 @@ export class AuthenticationService {
       })
     };
     return this.http.get(API_URL + "/profile", httpOptions).pipe(
-      map(res => res),
+      map(res => this.normalizeBranding(res)),
       tap(res => {
         this.profileSubject.next(res);
         this.profileLoading = false;
@@ -180,7 +180,7 @@ export class AuthenticationService {
     this.loadToken();
     this.userInfoLoading = true;
     return this.http.get(API_URL + "/getProfile").pipe(
-      map(res => res),
+      map(res => this.normalizeBranding(res)),
       tap(res => {
         this.userInfoSubject.next(res);
         this.userInfoLoading = false;
@@ -191,6 +191,29 @@ export class AuthenticationService {
       })
     );
   }
+
+  private normalizeBranding(value: any): any {
+    if (typeof value === "string") {
+      return value
+        .replace(/cabi\.co\.tz/gi, "shilota.tz")
+        .replace(/\bcabi\b/gi, "Shilota")
+        .replace(/\bcabso\b/gi, "Shilota");
+    }
+
+    if (Array.isArray(value)) {
+      return value.map(item => this.normalizeBranding(item));
+    }
+
+    if (value && typeof value === "object") {
+      return Object.keys(value).reduce((next, key) => {
+        next[key] = this.normalizeBranding(value[key]);
+        return next;
+      }, {});
+    }
+
+    return value;
+  }
+
   sendMail(form) {
     return this.http.post(API_URL + "/sendMail/", form).pipe(
       map(res => {

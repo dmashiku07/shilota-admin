@@ -157,6 +157,67 @@ function normalizeDriverServiceTypes(value) {
   return serviceTypes;
 }
 
+function parseVehicleAmenities(value) {
+  if (Array.isArray(value)) {
+    return value;
+  }
+  if (typeof value === "string" && value.trim()) {
+    try {
+      return JSON.parse(value);
+    } catch (_error) {
+      return [];
+    }
+  }
+  return [];
+}
+
+function firstDefined() {
+  for (let i = 0; i < arguments.length; i++) {
+    if (typeof arguments[i] !== "undefined") {
+      return arguments[i];
+    }
+  }
+  return undefined;
+}
+
+function buildVehicleDetailsUpdate(body) {
+  let update = {
+    user_id: body.user_id,
+    vehicle_name: firstDefined(body.vehicle_name, body.driver_vehicle),
+    available_seats: body.available_seats,
+    body_type: firstDefined(body.body_type, body.vehicle_type),
+    amenities: parseVehicleAmenities(firstDefined(body.amenities, body.amenitites)),
+    amenitites: parseVehicleAmenities(firstDefined(body.amenitites, body.amenities)),
+    vehicle_number: firstDefined(body.vehicle_number, body.vehicle_registration_number),
+    licence_no: firstDefined(body.licence_no, body.license_no, body.driver_license_number),
+    licence_date: firstDefined(body.licence_date, body.license_date, body.license_expiry_date),
+    insurance_no: body.insurance_no,
+    insurance_date: body.insurance_date,
+    book_no: firstDefined(body.book_no, body.rcbook_no, body.rc_book_no),
+    book_date: firstDefined(body.book_date, body.rcbook_date, body.rc_book_date),
+    service_types: normalizeDriverServiceTypes(body.service_types),
+    vehicle_details: "Complete"
+  };
+
+  if (typeof body.licensedoc !== "undefined" || typeof body.licence_doc !== "undefined") {
+    update.licensedoc = firstDefined(body.licensedoc, body.licence_doc);
+  }
+  if (typeof body.insurancedoc !== "undefined" || typeof body.insurance_doc !== "undefined") {
+    update.insurancedoc = firstDefined(body.insurancedoc, body.insurance_doc);
+  }
+  if (typeof body.bookdoc !== "undefined" || typeof body.book_doc !== "undefined") {
+    update.bookdoc = firstDefined(body.bookdoc, body.book_doc);
+  }
+
+  Object.keys(update).forEach(function (key) {
+    if (typeof update[key] === "undefined") {
+      delete update[key];
+    }
+  });
+
+  return update;
+}
+
 function saveDriverCallLog(payload, callback) {
   let roomId = String(payload.room_id || "").trim();
   if (!roomId) {
@@ -1148,7 +1209,7 @@ router.get('/getvehicledetails/:userid', function (req, res) {
             user_id: req.params.userid
           }, function (err, vehicles) {
             if (!vehicles) {
-              res.json({
+              return res.json({
                 status: "false",
                 message: "Something went to be wrong"
               });
@@ -1183,17 +1244,18 @@ router.post('/postvehicledetails', function (req, res) {
       user_id: req.body.user_id
     })
       .then(function (c) {
-        req.body.amenities = JSON.parse(req.body.amenities);
-        req.body.service_types = normalizeDriverServiceTypes(req.body.service_types);
+        let vehicleUpdate = buildVehicleDetailsUpdate(req.body);
         if (c > 0) {
           Vehicles.findOneAndUpdate({
             "user_id": req.body.user_id
           }, {
-            "$set": req.body
+            "$set": vehicleUpdate
+          }, {
+            new: true
           }).exec(function (err, vehicles) {
             let result = {
               vehicle_details: "Complete",
-              service_types: req.body.service_types
+              service_types: vehicleUpdate.service_types
             };
             if (err) {
               res.json({
@@ -1245,7 +1307,7 @@ router.post('/postvehicledetails', function (req, res) {
             }
           });
         } else {
-          let newVehicle = new Vehicles(req.body);
+          let newVehicle = new Vehicles(vehicleUpdate);
           // save the vehicle details
           newVehicle.save(function (err, vehicles) {
             if (err) {
