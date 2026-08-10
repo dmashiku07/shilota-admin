@@ -2,9 +2,69 @@
   <div class="col-12">
     <div class="card">
       <div class="card-header">
-        <h4 class="card-title mb-0">Driver Subscriptions</h4>
+        <div class="d-flex justify-content-between align-items-center">
+          <h4 class="card-title mb-0">Driver Subscriptions</h4>
+          <button class="btn btn-primary btn-sm" type="button" (click)="openGrantForm()">Grant Subscription</button>
+        </div>
       </div>
       <div class="card-body">
+        <div class="card border-primary mb-4" *ngIf="showGrantForm">
+          <div class="card-header d-flex justify-content-between align-items-center">
+            <strong>Grant driver subscription</strong>
+            <button type="button" class="close" aria-label="Close" (click)="closeGrantForm()"><span aria-hidden="true">&times;</span></button>
+          </div>
+          <div class="card-body">
+            <div class="alert alert-warning">
+              This activates driver access without Selcom payment. It will be recorded as an admin grant and excluded from paid revenue.
+            </div>
+            <div class="form-row">
+              <div class="form-group col-md-6">
+                <label>Find driver</label>
+                <div class="input-group">
+                  <input class="form-control" [(ngModel)]="driverSearch" name="grantDriverSearch" placeholder="Name, email, or phone" (keyup.enter)="searchDrivers()">
+                  <div class="input-group-append">
+                    <button class="btn btn-outline-secondary" type="button" (click)="searchDrivers()" [disabled]="searchingDrivers">{{ searchingDrivers ? 'Searching...' : 'Search' }}</button>
+                  </div>
+                </div>
+              </div>
+              <div class="form-group col-md-6">
+                <label>Driver</label>
+                <select class="form-control" [(ngModel)]="grant.driver_id" name="grantDriverId">
+                  <option value="">Select a search result</option>
+                  <option *ngFor="let driver of driverResults" [value]="driver._id">{{ driver.full_name }} — {{ driver.phone_number || driver.email }}</option>
+                </select>
+              </div>
+              <div class="form-group col-md-4">
+                <label>Plan</label>
+                <select class="form-control" [(ngModel)]="grant.plan_id" name="grantPlanId">
+                  <option value="">Select an active driver plan</option>
+                  <option *ngFor="let plan of plans" [value]="plan._id" [disabled]="!plan.is_active">{{ plan.name }} ({{ plan.currency }} {{ plan.price }})</option>
+                </select>
+              </div>
+              <div class="form-group col-md-4">
+                <label>Start date</label>
+                <input class="form-control" type="date" [(ngModel)]="grant.starts_at" name="grantStartsAt">
+              </div>
+              <div class="form-group col-md-4">
+                <label>Custom expiry <small class="text-muted">(optional)</small></label>
+                <input class="form-control" type="date" [(ngModel)]="grant.expires_at" name="grantExpiresAt" [min]="grant.starts_at">
+                <small class="form-text text-muted">Leave blank to use the plan duration.</small>
+              </div>
+              <div class="form-group col-12">
+                <label>Grant reason</label>
+                <textarea class="form-control" rows="2" [(ngModel)]="grant.reason" name="grantReason" placeholder="Example: UAT access while payment due diligence is completed"></textarea>
+              </div>
+              <div class="form-group col-12 mb-2">
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" [(ngModel)]="grant.acknowledge" name="grantAcknowledge" id="grantAcknowledge">
+                  <label class="form-check-label" for="grantAcknowledge">I confirm that this grant does not represent a payment received.</label>
+                </div>
+              </div>
+            </div>
+            <button class="btn btn-primary mr-2" type="button" (click)="submitGrant()" [disabled]="granting">{{ granting ? 'Granting...' : 'Grant Subscription' }}</button>
+            <button class="btn btn-outline-secondary" type="button" (click)="closeGrantForm()" [disabled]="granting">Cancel</button>
+          </div>
+        </div>
         <form class="form-row mb-3" (ngSubmit)="loadSubscriptions()">
           <div class="form-group col-md-3">
             <label>Driver</label>
@@ -70,12 +130,14 @@
                 <th>Plan</th>
                 <th>Status</th>
                 <th>Payment</th>
+                <th>Source</th>
                 <th>Price</th>
                 <th>Validity</th>
                 <th>Daily limit</th>
                 <th>Usage</th>
                 <th>Remaining</th>
                 <th>Expires</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -90,6 +152,11 @@
                 </td>
                 <td>{{ subscription.status }}</td>
                 <td>{{ subscription.payment_status }}</td>
+                <td>
+                  <span class="badge badge-info" *ngIf="subscription.activation_source === 'ADMIN_GRANT'">Admin grant</span>
+                  <span *ngIf="subscription.activation_source !== 'ADMIN_GRANT'">Selcom</span>
+                  <br><small class="text-muted" *ngIf="subscription.grant_reason">{{ subscription.grant_reason }}</small>
+                </td>
                 <td>{{ subscription.currency_snapshot }} {{ subscription.price_snapshot }}</td>
                 <td>{{ subscription.duration_value_snapshot }} {{ subscription.duration_unit_snapshot }}</td>
                 <td>{{ subscription.is_unlimited_snapshot ? 'Unlimited' : (subscription.daily_limit_snapshot || '-') }}</td>
@@ -99,9 +166,12 @@
                   <span class="badge badge-warning" *ngIf="subscription.reached_daily_limit">Reached</span>
                 </td>
                 <td>{{ subscription.expires_at ? (subscription.expires_at | date:'medium') : '-' }}</td>
+                <td>
+                  <button class="btn btn-outline-danger btn-sm" type="button" *ngIf="subscription.activation_source === 'ADMIN_GRANT' && subscription.status === 'ACTIVE'" (click)="revoke(subscription)">Revoke</button>
+                </td>
               </tr>
               <tr *ngIf="subscriptions.length === 0">
-                <td colspan="10" class="text-muted">No driver subscriptions found</td>
+                <td colspan="12" class="text-muted">No driver subscriptions found</td>
               </tr>
             </tbody>
           </table>

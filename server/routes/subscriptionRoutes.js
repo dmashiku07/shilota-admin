@@ -1,13 +1,20 @@
 var express = require("express");
 var router = express.Router();
+var jwt = require("jsonwebtoken");
+var config = require("../config");
+var Admin = require("../models/admin");
 var Subscription = require("../schema/subscriptions");
 var Driver = require("../schema/driver");
+var SubscriptionPlan = require("../schema/subscriptionplans");
+var SubscriptionPlanFeature = require("../schema/subscriptionplanfeatures");
+var { buildActor, logAuditFromRequest } = require("../services/auditLogService");
 var {
   buildPaginationResult,
   buildSort,
   getPaginationParams
 } = require("../utils/pagination");
 var {
+  calculateSubscriptionWindow,
   formatDateKey,
   formatDriverSubscription,
   expireDriverSubscriptions,
@@ -17,6 +24,185 @@ var {
   expirePassengerSubscriptions,
   formatPassengerSubscription
 } = require("../services/passengerSubscriptionService");
+
+function sendValidationError(res, message) {
+  return res.status(400).json({ status: "false", message: message });
+}
+
+async function requireAdmin(req, res, next) {
+  try {
+    var authorization = String(req.headers.authorization || "");
+    var token = authorization.replace(/^JWT\s+/i, "").trim();
+    if (!token) {
+      return res.status(401).json({ status: "false", message: "Unauthorized access" });
+    }
+    var decoded = jwt.verify(token, config.secret);
+    var payload = decoded && decoded.data ? decoded.data : decoded;
+    var adminId = payload && (payload._id || payload.id);
+    if (!adminId) {
+      return res.status(401).json({ status: "false", message: "Unauthorized access" });
+    }
+    var admin = await Admin.findById(adminId).exec();
+    if (!admin) {
+      return res.status(401).json({ status: "false", message: "Unauthorized access" });
+    }
+    req.user = {
+      _id: admin._id,
+      role: "admin",
+      full_name: admin.name || admin.username,
+      username: admin.username
+    };
+    return next();
+  } catch (_error) {
+    return res.status(401).json({ status: "false", message: "Unauthorized access" });
+  }
+}
+
+router.post("/grant", requireAdmin, async function (req, res) {
+  try {
+    var driverId = String(req.body.driver_id || "").trim();
+    var planId = String(req.body.plan_id || "").trim();
+    var reason = String(req.body.reason || "").trim();
+    var startsAt = req.body.starts_at ? new Date(req.body.starts_at) : new Date();
+
+    if (!driverId || !planId) {
+      return sendValidationError(res, "Driver and subscription plan are required");
+    }
+    if (reason.length < 5) {
+      return sendValidationError(res, "A grant reason of at least 5 characters is required");
+    }
+    if (Number.isNaN(startsAt.getTime())) {
+      return sendValidationError(res, "Start date is invalid");
+    }
+
+    var driver = await Driver.findById(driverId).exec();
+    var plan = await SubscriptionPlan.findById(planId).exec();
+    if (!driver) {
+      return sendValidationError(res, "Driver not found");
+    }
+    if (!plan || plan.customer_type !== "DRIVER" || plan.is_active !== true) {
+      return sendValidationError(res, "An active driver subscription plan is required");
+    }
+
+    await expireDriverSubscriptions(new Date());
+    var existing = await Subscription.findOne({
+      customer_type: "DRIVER",
+      driver_id: driver._id,
+      status: "ACTIVE",
+      expires_at: { $gt: new Date() }
+    }).exec();
+    if (existing) {
+      return res.status(409).json({
+        status: "false",
+        message: "Driver already has an active subscription"
+      });
+    }
+
+    var snapshot = {
+      duration_unit_snapshot: plan.duration_unit,
+      duration_value_snapshot: plan.duration_value
+    };
+    var window = calculateSubscriptionWindow(snapshot, startsAt, null);
+    if (req.body.expires_at) {
+      var requestedExpiry = new Date(req.body.expires_at);
+      if (Number.isNaN(requestedExpiry.getTime()) || requestedExpiry <= startsAt) {
+        return sendValidationError(res, "Expiry date must be after the start date");
+      }
+      window.expires_at = requestedExpiry;
+    }
+
+    var actor = buildActor(req);
+    var features = await SubscriptionPlanFeature.find({ plan_id: plan._id }).exec();
+    var subscription = await Subscription.create({
+      plan_id: plan._id,
+      customer_type: "DRIVER",
+      driver_id: driver._id,
+      status: "ACTIVE",
+      payment_status: "PENDING",
+      payment_reference: "",
+      activation_source: "ADMIN_GRANT",
+      grant_reason: reason,
+      granted_by: actor.actor_id,
+      granted_by_label: actor.actor_label,
+      granted_at: new Date(),
+      starts_at: window.starts_at,
+      started_at: window.starts_at,
+      expires_at: window.expires_at,
+      rides_used_today: 0,
+      ride_count_date: formatDateKey(startsAt),
+      plan_name_snapshot: plan.name,
+      price_snapshot: plan.price,
+      currency_snapshot: plan.currency,
+      duration_unit_snapshot: plan.duration_unit,
+      duration_value_snapshot: plan.duration_value,
+      daily_limit_snapshot: plan.daily_ride_limit,
+      is_unlimited_snapshot: plan.is_unlimited,
+      plan_features_snapshot: (features || []).map(function (feature) {
+        return { feature_code: feature.feature_code, feature_value: feature.feature_value };
+      })
+    });
+
+    await logAuditFromRequest(req, {
+      action: "driver_subscription.admin_granted",
+      target_type: "driver_subscription",
+      target_id: subscription._id,
+      metadata: {
+        driver_id: driver._id,
+        driver_name: driver.full_name,
+        plan_id: plan._id,
+        plan_name: plan.name,
+        reason: reason,
+        starts_at: window.starts_at,
+        expires_at: window.expires_at,
+        represents_payment: false
+      }
+    });
+
+    return res.status(201).json({
+      status: "true",
+      message: "Driver subscription granted successfully",
+      result: formatDriverSubscription(subscription)
+    });
+  } catch (error) {
+    return res.status(500).json({
+      status: "false",
+      message: error && error.message ? error.message : "Unable to grant driver subscription"
+    });
+  }
+});
+
+router.post("/:id/revoke", requireAdmin, async function (req, res) {
+  try {
+    var reason = String(req.body.reason || "").trim();
+    if (reason.length < 5) {
+      return sendValidationError(res, "A revoke reason of at least 5 characters is required");
+    }
+    var subscription = await Subscription.findOne({
+      _id: req.params.id,
+      customer_type: "DRIVER",
+      activation_source: "ADMIN_GRANT",
+      status: "ACTIVE"
+    }).exec();
+    if (!subscription) {
+      return res.status(404).json({ status: "false", message: "Active admin grant not found" });
+    }
+    var actor = buildActor(req);
+    subscription.status = "CANCELLED";
+    subscription.revoked_by = actor.actor_id;
+    subscription.revoked_at = new Date();
+    subscription.revoke_reason = reason;
+    await subscription.save();
+    await logAuditFromRequest(req, {
+      action: "driver_subscription.admin_revoked",
+      target_type: "driver_subscription",
+      target_id: subscription._id,
+      metadata: { driver_id: subscription.driver_id, reason: reason }
+    });
+    return res.json({ status: "true", message: "Driver subscription grant revoked" });
+  } catch (_error) {
+    return res.status(500).json({ status: "false", message: "Unable to revoke driver subscription grant" });
+  }
+});
 
 router.get("/", async function (req, res) {
   try {

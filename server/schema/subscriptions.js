@@ -37,6 +37,48 @@ var SubscriptionSchema = new Schema(
       type: String,
       default: ""
     },
+    activation_source: {
+      type: String,
+      enum: ["SELCOM", "ADMIN_GRANT"],
+      default: "SELCOM"
+    },
+    grant_reason: {
+      type: String,
+      default: "",
+      trim: true
+    },
+    granted_by: {
+      type: String,
+      default: "",
+      trim: true
+    },
+    granted_by_label: {
+      type: String,
+      default: "",
+      trim: true
+    },
+    granted_at: {
+      type: Date,
+      default: null
+    },
+    revoked_by: {
+      type: String,
+      default: "",
+      trim: true
+    },
+    revoked_at: {
+      type: Date,
+      default: null
+    },
+    revoke_reason: {
+      type: String,
+      default: "",
+      trim: true
+    },
+    starts_at: {
+      type: Date,
+      default: null
+    },
     started_at: {
       type: Date,
       default: null

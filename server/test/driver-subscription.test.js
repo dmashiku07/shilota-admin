@@ -16,6 +16,11 @@ const apiRouteSource = fs.readFileSync(
   "utf8"
 );
 
+const adminSubscriptionRouteSource = fs.readFileSync(
+  path.join(__dirname, "..", "routes", "subscriptionRoutes.js"),
+  "utf8"
+);
+
 test("deactivated plan purchase attempt is rejected", function () {
   assert.equal(
     service.validatePlanForPurchase({
@@ -191,4 +196,25 @@ test("selcom callback finalizes driver subscriptions server-side", function () {
   assert.match(apiRouteSource, /finalizeSubscriptionSession/);
   assert.match(apiRouteSource, /DRIVER_SUBSCRIPTION_ACTOR_TYPE/);
   assert.match(apiRouteSource, /session\.consumed_at = new Date\(\)/);
+});
+
+test("admin can grant and revoke non-payment driver access with an audit trail", function () {
+  assert.match(adminSubscriptionRouteSource, /router\.post\("\/grant"/);
+  assert.match(adminSubscriptionRouteSource, /router\.post\("\/grant", requireAdmin/);
+  assert.match(adminSubscriptionRouteSource, /activation_source: "ADMIN_GRANT"/);
+  assert.match(adminSubscriptionRouteSource, /payment_status: "PENDING"/);
+  assert.match(adminSubscriptionRouteSource, /driver_subscription\.admin_granted/);
+  assert.match(adminSubscriptionRouteSource, /router\.post\("\/:id\/revoke"/);
+  assert.match(adminSubscriptionRouteSource, /driver_subscription\.admin_revoked/);
+});
+
+test("subscription schema distinguishes admin grants from Selcom payments", function () {
+  const source = fs.readFileSync(
+    path.join(__dirname, "..", "schema", "subscriptions.js"),
+    "utf8"
+  );
+  assert.match(source, /enum: \["SELCOM", "ADMIN_GRANT"\]/);
+  assert.match(source, /grant_reason/);
+  assert.match(source, /granted_by/);
+  assert.match(source, /revoked_at/);
 });

@@ -5,6 +5,7 @@ import { DriverSubscriptionsRoutingModule } from './driver-subscriptions-routing
 import { DriverSubscriptionViewComponent } from './view/driver-subscription-view.component';
 import { SubscriptionService } from '../../../service/subscription.service';
 import { SubscriptionPlanService } from '../../../service/subscription-plan.service';
+import { DriverService } from '../../../service/driver.service';
 
 @NgModule({
   imports: [
@@ -13,6 +14,6 @@ import { SubscriptionPlanService } from '../../../service/subscription-plan.serv
     DriverSubscriptionsRoutingModule
   ],
   declarations: [DriverSubscriptionViewComponent],
-  providers: [SubscriptionService, SubscriptionPlanService]
+  providers: [SubscriptionService, SubscriptionPlanService, DriverService]
 })
 export class DriverSubscriptionsModule {}
