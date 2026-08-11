@@ -4,6 +4,8 @@ const path = require("node:path");
 const test = require("node:test");
 
 const appSource = fs.readFileSync(path.join(__dirname, "..", "..", "app.js"), "utf8");
+const adminRouteSource = fs.readFileSync(path.join(__dirname, "..", "routes", "user.js"), "utf8");
+const driverRouteSource = fs.readFileSync(path.join(__dirname, "..", "routes", "driverRoutes.js"), "utf8");
 const angularConfig = JSON.parse(
   fs.readFileSync(path.join(__dirname, "..", "..", "angular.json"), "utf8")
 );
@@ -36,4 +38,15 @@ test("admin APIs are available behind /api while /admin remains reserved for SPA
   assert.doesNotMatch(appSource, /app\.use\('\/admin', admin\)/);
   assert.match(appSource, /app\.use\('\/api\/assets', express\.static\(apiAssetsRoot\)\)/);
   assert.match(appSource, /app\.use\('\/api\/gallery', express\.static\(mediaRoot\)\)/);
+});
+
+test("admin JWT contains identity only and does not serialize the admin settings document", () => {
+  assert.match(adminRouteSource, /role: "admin"/);
+  assert.match(adminRouteSource, /_id: user\._id/);
+  assert.doesNotMatch(adminRouteSource, /data: user\s*[},]/);
+});
+
+test("driver search does not apply a regular expression to numeric phone fields", () => {
+  assert.match(driverRouteSource, /buildSearchQuery\(params\.search, \['full_name', 'email'\]\)/);
+  assert.match(driverRouteSource, /phone_number: phoneNumber/);
 });

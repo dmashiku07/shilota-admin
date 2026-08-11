@@ -62,10 +62,16 @@ router.route('/').get(async function (req, res) {
       defaultSortBy: '_id',
       allowedSortFields: ['_id', 'full_name', 'email', 'phone_number']
     });
-    const match = mergeMatch(
-      { deletion_status: 0 },
-      buildSearchQuery(params.search, ['full_name', 'email', 'phone_number'])
-    );
+    let searchMatch = buildSearchQuery(params.search, ['full_name', 'email']);
+    const numericPhoneSearch = String(params.search || '').replace(/[^0-9]/g, '');
+    if (params.search && numericPhoneSearch && numericPhoneSearch === String(params.search).replace(/\s+/g, '')) {
+      const phoneNumber = Number(numericPhoneSearch);
+      if (Number.isFinite(phoneNumber)) {
+        searchMatch = searchMatch || { $or: [] };
+        searchMatch.$or.push({ phone_number: phoneNumber });
+      }
+    }
+    const match = mergeMatch({ deletion_status: 0 }, searchMatch);
     const totalItems = await Driver.countDocuments(match).exec();
     const drivers = await Driver.find(match)
       .sort(buildSort(params.sortBy, params.sortDir))
@@ -76,17 +82,28 @@ router.route('/').get(async function (req, res) {
 
     const items = await Promise.all((drivers || []).map(async function (driver) {
       const record = driver.toObject();
-      const eligibility = await evaluateDriverEligibility(driver, {
-        now: new Date()
-      });
-      record.subscription_eligible = eligibility.eligible;
-      record.subscription_error_code = eligibility.code || "";
-      record.subscription_message = eligibility.message || "";
+      try {
+        const eligibility = await evaluateDriverEligibility(driver, {
+          now: new Date()
+        });
+        record.subscription_eligible = eligibility.eligible;
+        record.subscription_error_code = eligibility.code || "";
+        record.subscription_message = eligibility.message || "";
+      } catch (eligibilityError) {
+        console.error('Unable to evaluate driver subscription eligibility:', {
+          driver_id: String(driver._id),
+          message: eligibilityError && eligibilityError.message
+        });
+        record.subscription_eligible = false;
+        record.subscription_error_code = "ELIGIBILITY_CHECK_FAILED";
+        record.subscription_message = "Subscription eligibility could not be evaluated";
+      }
       return record;
     }));
 
     return res.json(buildPaginationResult(items, totalItems, params));
-  } catch (_error) {
+  } catch (error) {
+    console.error('Unable to load driver records:', error);
     return res.json({
       error: true,
       msg: "Unable to load records from database"

@@ -77,7 +77,12 @@ router.post("/authenticate", (req, res, next) => {
       if (isMatch) {
         const token = jwt.sign(
           {
-            data: user
+            data: {
+              role: "admin",
+              _id: user._id,
+              name: user.name,
+              username: user.username
+            }
           },
           config.secret,
           {
