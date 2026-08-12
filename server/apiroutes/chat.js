@@ -63,6 +63,7 @@ io.sockets.on('connection', function (socket) {
   console.log("user Connected");
   /* share driver instant location */
   socket.on('sharelocation', function (data) {
+    console.log('sharelocation received:', data);
     var result = {
       loc: [data.lng, data.lat],
       instant_lat: data.lat,
@@ -74,7 +75,17 @@ io.sockets.on('connection', function (socket) {
     }, {
       "$set": result
     }).exec(function (err, users) {
-      // console.log("sharing location" + data.location);
+      if (err) {
+        console.error('sharelocation database error:', err);
+        return;
+      }
+
+      if (!users) {
+        console.warn('sharelocation driver not found:', data.user_id);
+        return;
+      }
+
+      console.log('sharelocation updated driver:', users._id);
     });
   });
 
