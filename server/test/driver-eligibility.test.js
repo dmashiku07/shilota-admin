@@ -313,6 +313,18 @@ test("phase 4 routes are guarded by the centralized eligibility policy", functio
   assert.match(apiRouteSource, /filterEligibleDrivers\(/);
 });
 
+test("ride availability filters real drivers before grouping them by category", function () {
+  const routeStart = apiRouteSource.indexOf('router.post("/grabrides"');
+  const routeEnd = apiRouteSource.indexOf('router.post(', routeStart + 1);
+  const routeSource = apiRouteSource.slice(routeStart, routeEnd);
+
+  assert.notEqual(routeStart, -1, "expected the grabrides route");
+  assert.match(routeSource, /buildDriverAvailabilityQuery/);
+  assert.match(routeSource, /filterEligibleDrivers\(driver/);
+  assert.match(routeSource, /groupEligibleDriversByCategory\(eligibleDriverSets\[0\]\)/);
+  assert.doesNotMatch(routeSource, /\$group/);
+});
+
 test("passenger ride notification paths filter subscription-ineligible drivers before push", function () {
   const driverOfferNotifyIndex = apiRouteSource.indexOf("nearBy(availdrivers, rides._id);");
   assert.notEqual(driverOfferNotifyIndex, -1, "expected driver-offer notification dispatch");

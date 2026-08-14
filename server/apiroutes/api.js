@@ -2673,7 +2673,7 @@ router.post("/grabrides" /* , passport.authenticate('jwt', {
           let lon = parseFloat(req.body.pickup_lng);
           let lat = parseFloat(req.body.pickup_lat);
           /* mongo geonear api */
-          let buildCategoryAvailabilityQuery = function (serviceType) {
+          let buildDriverAvailabilityQuery = function (serviceType) {
             return Driver.aggregate([
             {
               $geoNear: {
@@ -2692,32 +2692,41 @@ router.post("/grabrides" /* , passport.authenticate('jwt', {
               }
             },
             {
-              $group: {
-                _id: "$category_id",
-                distance: {
-                  $first: "$distance"
-                },
-                email: {
-                  $first: "$email"
-                },
-                instant_location: {
-                  $first: "$instant_location"
-                }
-              }
-            },
-            {
               $sort: {
                 distance: 1
               }
             }
             ]);
           };
-          let query = buildCategoryAvailabilityQuery("ride");
+          let groupEligibleDriversByCategory = function (drivers) {
+            let nearestByCategory = {};
+            (drivers || []).forEach(function (eligibleDriver) {
+              let categoryId = String(eligibleDriver.category_id || "").trim();
+              if (!categoryId) {
+                return;
+              }
+              let existing = nearestByCategory[categoryId];
+              if (!existing || Number(eligibleDriver.distance) < Number(existing.distance)) {
+                nearestByCategory[categoryId] = {
+                  _id: categoryId,
+                  distance: eligibleDriver.distance,
+                  email: eligibleDriver.email,
+                  instant_location: eligibleDriver.instant_location
+                };
+              }
+            });
+            return Object.keys(nearestByCategory).map(function (categoryId) {
+              return nearestByCategory[categoryId];
+            }).sort(function (left, right) {
+              return Number(left.distance) - Number(right.distance);
+            });
+          };
+          let query = buildDriverAvailabilityQuery("ride");
           query.exec(function (err, driver) {
             if (err) {
               senderr(res);
             } else {
-              let deliveryQuery = buildCategoryAvailabilityQuery("delivery");
+              let deliveryQuery = buildDriverAvailabilityQuery("delivery");
               deliveryQuery.exec(function (deliveryErr, deliveryDriver) {
                 if (deliveryErr) {
                   senderr(res);
@@ -2727,8 +2736,8 @@ router.post("/grabrides" /* , passport.authenticate('jwt', {
                   filterEligibleDrivers(driver, { now: new Date() }),
                   filterEligibleDrivers(deliveryDriver, { now: new Date() })
                 ]).then(function (eligibleDriverSets) {
-                  driver = eligibleDriverSets[0] || [];
-                  deliveryDriver = eligibleDriverSets[1] || [];
+                  driver = groupEligibleDriversByCategory(eligibleDriverSets[0]);
+                  deliveryDriver = groupEligibleDriversByCategory(eligibleDriverSets[1]);
                   console.log(driver);
                   if (driver.length == 0 && deliveryDriver.length == 0) {
                     res.json({
