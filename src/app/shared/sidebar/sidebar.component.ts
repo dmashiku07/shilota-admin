@@ -13,9 +13,10 @@ import { Subscription } from 'rxjs';
 })
 
 export class SidebarComponent implements OnInit, OnDestroy {
+    private readonly brandName = 'SHILOTA';
     public menuItems: any[];
     userinfo: any = {};
-    site_title = 'Shilota';
+    site_title = this.brandName;
     openMenus = new Set<string>();
     private routerEventsSub?: Subscription;
 
@@ -28,7 +29,7 @@ export class SidebarComponent implements OnInit, OnDestroy {
         this.authService.getProfile().subscribe(res => {
             const profile: any = res || {};
             this.userinfo = profile;
-            this.site_title = profile.siteName || 'Shilota';
+            this.site_title = this.brandName;
         });
         this.syncOpenMenusWithRoute();
         this.routerEventsSub = this.router.events.subscribe(event => {

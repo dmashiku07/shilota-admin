@@ -13,7 +13,21 @@ export class FooterComponent implements OnInit {
     constructor(private authService: AuthenticationService) { }
     ngOnInit() {
         this.authService.getProfile().subscribe(res => {
-            this.user = { ...(res || {}), footer: res?.footer || '' };
+            this.user = {
+                ...(res || {}),
+                footer: this.normalizeFooter(res?.footer)
+            };
         });
+    }
+
+    private normalizeFooter(footer: unknown): string {
+        if (typeof footer !== 'string') {
+            return '';
+        }
+
+        return footer
+            .replace(/cabi\.co\.tz/gi, 'shilota.tz')
+            .replace(/\bcabi\b/gi, 'SHILOTA')
+            .trim();
     }
 }

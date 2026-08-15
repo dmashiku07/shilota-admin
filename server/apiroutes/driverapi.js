@@ -195,8 +195,7 @@ function buildVehicleDetailsUpdate(body) {
     insurance_date: body.insurance_date,
     book_no: firstDefined(body.book_no, body.rcbook_no, body.rc_book_no),
     book_date: firstDefined(body.book_date, body.rcbook_date, body.rc_book_date),
-    service_types: normalizeDriverServiceTypes(body.service_types),
-    vehicle_details: "Complete"
+    service_types: normalizeDriverServiceTypes(body.service_types)
   };
 
   if (typeof body.licensedoc !== "undefined" || typeof body.licence_doc !== "undefined") {
@@ -216,6 +215,63 @@ function buildVehicleDetailsUpdate(body) {
   });
 
   return update;
+}
+
+function hasVehicleDetailValue(value) {
+  if (Array.isArray(value)) {
+    return value.length > 0;
+  }
+  if (typeof value === "number") {
+    return value > 0;
+  }
+  if (value && typeof value === "object") {
+    return Object.keys(value).length > 0;
+  }
+  return value !== null && typeof value !== "undefined" && String(value).trim() !== "";
+}
+
+function getMissingVehicleDetailFields(vehicle) {
+  const data = vehicle && typeof vehicle.toObject === "function" ? vehicle.toObject() : (vehicle || {});
+  const amenities = hasVehicleDetailValue(data.amenities) ? data.amenities : data.amenitites;
+  const requiredFields = [
+    ["vehicle_name", data.vehicle_name],
+    ["available_seats", data.available_seats],
+    ["body_type", data.body_type],
+    ["amenities", amenities],
+    ["vehicle_number", data.vehicle_number],
+    ["licence_no", data.licence_no],
+    ["licence_date", data.licence_date],
+    ["licensedoc", data.licensedoc],
+    ["insurance_no", data.insurance_no],
+    ["insurance_date", data.insurance_date],
+    ["insurancedoc", data.insurancedoc]
+  ];
+
+  return requiredFields
+    .filter(function (field) {
+      return !hasVehicleDetailValue(field[1]);
+    })
+    .map(function (field) {
+      return field[0];
+    });
+}
+
+function vehicleDetailsStatus(vehicle) {
+  return getMissingVehicleDetailFields(vehicle).length === 0 ? "Complete" : "InComplete";
+}
+
+function syncVehicleDetailsStatus(userId, vehicle) {
+  const status = vehicleDetailsStatus(vehicle);
+  return Promise.all([
+    Driver.findOneAndUpdate({ _id: userId }, {
+      $set: { vehicle_details: status }
+    }).exec(),
+    Vehicles.findOneAndUpdate({ user_id: userId }, {
+      $set: { completionStatus: status === "Complete" ? "1" : "0" }
+    }).exec()
+  ]).then(function () {
+    return status;
+  });
 }
 
 function saveDriverCallLog(payload, callback) {
@@ -1043,7 +1099,7 @@ router.post('/signin', function (req, res) {
               result.phone_number = driver.phone_number;
               result.vehicle_inspection = driver.vehicle_inspection;
               result.security_deposit = driver.security_deposit;
-              result.vehicle_details = driver.vehicle_details;
+              result.vehicle_details = vehicleinfo ? vehicleDetailsStatus(vehicleinfo) : "InComplete";
               result.payment_details = driver.payment_details;
               result.user_image = base_url + '/gallery/drivers/' + profile_image;
               result.token = 'JWT ' + signintoken;
@@ -1051,8 +1107,13 @@ router.post('/signin', function (req, res) {
               result.walletmoney = getDriverWalletAmount(driver);
               result.service_types = driver.service_types && driver.service_types.length ? driver.service_types : ["ride"];
               result.approval = ((driver.approval == '1') ? "true" : "false");
-              vehicleStatus = ((vehicleinfo.status == '1') ? "approved" : "rejected");
-              result.vehicle_approval = ((typeof vehicleinfo.category == 'undefined') ? "pending" : vehicleStatus);
+              vehicleStatus = vehicleinfo && vehicleinfo.status == '1' ? "approved" : "rejected";
+              result.vehicle_approval = (!vehicleinfo || typeof vehicleinfo.category == 'undefined') ? "pending" : vehicleStatus;
+              if (driver.vehicle_details !== result.vehicle_details) {
+                syncVehicleDetailsStatus(driver._id, vehicleinfo).catch(function (syncError) {
+                  console.error("Vehicle details status reconciliation failed:", syncError);
+                });
+              }
               res.json(result);
             });
           } else {
@@ -1208,14 +1269,25 @@ router.get('/getvehicledetails/:userid', function (req, res) {
           Vehicles.findOne({
             user_id: req.params.userid
           }, function (err, vehicles) {
+            if (err) {
+              return senderr(res);
+            }
             if (!vehicles) {
               return res.json({
                 status: "false",
                 message: "Something went to be wrong"
               });
             }
-            vehicles.status = "true";
-            res.json(vehicles);
+            syncVehicleDetailsStatus(req.params.userid, vehicles)
+              .then(function (completionStatus) {
+                let result = vehicles.toObject();
+                result.status = "true";
+                result.vehicle_details = completionStatus;
+                res.json(result);
+              })
+              .catch(function () {
+                senderr(res);
+              });
           });
         } else {
           res.json({
@@ -1240,109 +1312,38 @@ router.post('/postvehicledetails', function (req, res) {
       message: 'Something went to be wrong'
     });
   } else {
-    Vehicles.count({
-      user_id: req.body.user_id
-    })
-      .then(function (c) {
-        let vehicleUpdate = buildVehicleDetailsUpdate(req.body);
-        if (c > 0) {
-          Vehicles.findOneAndUpdate({
-            "user_id": req.body.user_id
-          }, {
-            "$set": vehicleUpdate
-          }, {
-            new: true
-          }).exec(function (err, vehicles) {
-            let result = {
-              vehicle_details: "Complete",
-              service_types: vehicleUpdate.service_types
-            };
-            if (err) {
-              res.json({
-                status: "false",
-                message: "Something went to be wrong"
-              });
-            } else {
-              Driver.findOneAndUpdate({
-                _id: req.body.user_id
-              }, {
-                $set: result
-              }).exec(function (err, driver) {
-                if (err) {
-                  res.json({
-                    status: "false",
-                    message: "Something went to be wrong"
-                  });
-                } else {
-                  let updatestring = {
-                    _id: req.body.user_id,
-                    vehicle_inspection: "Complete",
-                    security_deposit: "Complete",
-                    payment_details: "Complete",
-                    vehicle_details: "Complete",
-                    completionStatus: "1"
-                  };
-                  Driver.find(updatestring).
-                    exec(function (err, rides) {
-                      if (!err) {
-                        vehicles.category = undefined;
-                        vehicles.completionStatus = "1";
-                        vehicles.save();
-                        cetsSyncService.enqueueVehicleSync(vehicles._id, "vehicle_details_update").catch(function (syncError) {
-                          console.error("CeTS vehicle update enqueue failed:", syncError);
-                        });
-                        res.json({
-                          status: "true",
-                          message: 'Vehicle updated sucessfully'
-                        });
-                      } else {
-                        res.json({
-                          status: "true",
-                          message: 'Vehicle updated sucessfully'
-                        });
-                      }
-                    });
-                }
-              });
-            }
-          });
-        } else {
-          let newVehicle = new Vehicles(vehicleUpdate);
-          // save the vehicle details
-          newVehicle.save(function (err, vehicles) {
-            if (err) {
-              res.json({
-                status: "false",
-                message: 'Something went to be wrong'
-              });
-            } else {
-              let result = {
-                vehicle_details: "Complete",
-                service_types: req.body.service_types
-              };
-              Driver.findOneAndUpdate({
-                _id: req.body.user_id
-              }, {
-                $set: result
-              }).exec(function (err, driver) {
-                if (err) {
-                  res.json({
-                    status: "false",
-                    message: "Something went to be wrong"
-                  });
-                } else {
-                  cetsSyncService.enqueueVehicleSync(vehicles._id, "vehicle_details_create").catch(function (syncError) {
-                    console.error("CeTS vehicle create enqueue failed:", syncError);
-                  });
-                  res.json({
-                    status: "true",
-                    message: 'Vehicle saved sucessfully'
-                  });
-                }
-              });
-            }
+    let vehicleUpdate = buildVehicleDetailsUpdate(req.body);
+    Vehicles.findOne({ user_id: req.body.user_id }).exec()
+      .then(function (existingVehicle) {
+        let candidate = Object.assign({}, existingVehicle ? existingVehicle.toObject() : {}, vehicleUpdate);
+        let missingFields = getMissingVehicleDetailFields(candidate);
+        if (missingFields.length > 0) {
+          return res.json({
+            status: "false",
+            vehicle_details: "InComplete",
+            missing_fields: missingFields.join(","),
+            message: "Complete all required vehicle fields and documents"
           });
         }
+
+        return Vehicles.findOneAndUpdate({ user_id: req.body.user_id }, {
+          $set: vehicleUpdate
+        }, {
+          new: true,
+          upsert: true,
+          setDefaultsOnInsert: true
+        }).exec().then(function (vehicles) {
+          return syncVehicleDetailsStatus(req.body.user_id, vehicles).then(function (completionStatus) {
+            cetsSyncService.enqueueVehicleSync(vehicles._id, existingVehicle ? "vehicle_details_update" : "vehicle_details_create").catch(function (syncError) {
+              console.error("CeTS vehicle sync enqueue failed:", syncError);
+            });
+            return res.json({
+              status: "true",
+              vehicle_details: completionStatus,
+              message: existingVehicle ? "Vehicle updated successfully" : "Vehicle saved successfully"
+            });
+          });
+        });
       })
       .then(undefined, function (err) {
         res.json({
@@ -3157,6 +3158,8 @@ router.post('/uploaddoc', function (req, res) {
         "user_id": req.body.user_id
       }, {
         $set: result
+      }, {
+        new: true
       }).exec(function (err, vehicles) {
         if (err) {
           res.json({
@@ -3169,10 +3172,17 @@ router.post('/uploaddoc', function (req, res) {
             message: "Vehicle details not found"
           });
         } else {
-          res.json({
-            status: "true",
-            message: 'Image uploaded successfully'
-          });
+          syncVehicleDetailsStatus(req.body.user_id, vehicles)
+            .then(function (completionStatus) {
+              res.json({
+                status: "true",
+                vehicle_details: completionStatus,
+                message: 'Image uploaded successfully'
+              });
+            })
+            .catch(function () {
+              senderr(res);
+            });
         }
       });
     });
