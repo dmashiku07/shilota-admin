@@ -189,22 +189,16 @@ async function buildOfferSummary(offer) {
   const vehicle = driver
     ? await Vehicles.findOne({ user_id: String(driver._id) }).exec()
     : null;
-  const reviewCount = driver
-    ? await Reviews.countDocuments({ driver_id: String(driver._id) }).exec()
-    : 0;
-  const averageRating =
-    driver && reviewCount > 0
-      ? parseFloat((Number(driver.rating || 0) / Number(reviewCount || 1)).toFixed(1))
-      : 0;
-
   return {
     id: String(offer._id),
     ride_request_id: String(offer.ride_request_id),
     driver_id: String(offer.driver_id),
-    driver_name: driver ? String(driver.full_name || "") : "",
-    driver_image: driver ? String(driver.profile_image || "") : "",
-    driver_rating: averageRating,
-    vehicle_name: vehicle ? String(vehicle.vehicle_name || "") : "",
+    // Keep the driver anonymous until the passenger selects an offer. The
+    // accepted-ride response reveals the full driver and vehicle details.
+    driver_name: "",
+    driver_image: "",
+    driver_rating: 0,
+    vehicle_name: "",
     vehicle_number: vehicle ? String(vehicle.vehicle_number || "") : "",
     offered_price: toNumber(offer.offered_price, 0),
     currency: normalizeCurrency(offer.currency),
