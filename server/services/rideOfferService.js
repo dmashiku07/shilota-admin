@@ -579,8 +579,10 @@ async function filterEligibleDriverIdsForRide(driverDocs, now) {
 }
 
 async function getPassengerBroadcastAuthorization(userId, now, settings) {
-  if (!isPassengerPriceBroadcastEnabled()) {
+  const enabled = isPassengerPriceBroadcastEnabled() && (!settings || settings.enabled !== false);
+  if (!enabled) {
     return {
+      enabled: false,
       allowed: false,
       code: "PASSENGER_PRICE_BROADCAST_DISABLED",
       message: "Passenger price broadcast is not enabled"
@@ -590,6 +592,7 @@ async function getPassengerBroadcastAuthorization(userId, now, settings) {
   const subscriptionState = await getCurrentPassengerSubscriptionWithFeatures(userId, now);
   if (!subscriptionState.subscription) {
     return {
+      enabled: true,
       allowed: false,
       code: "PASSENGER_SUBSCRIPTION_REQUIRED",
       message: "An active passenger subscription is required"
@@ -597,6 +600,7 @@ async function getPassengerBroadcastAuthorization(userId, now, settings) {
   }
   if (!subscriptionState.featureMap.CAN_SET_RIDE_PRICE) {
     return {
+      enabled: true,
       allowed: false,
       code: "PASSENGER_PRICE_PERMISSION_REQUIRED",
       message: "Your subscription does not allow custom ride pricing"
@@ -604,6 +608,7 @@ async function getPassengerBroadcastAuthorization(userId, now, settings) {
   }
   if (!subscriptionState.featureMap.CAN_BROADCAST_RIDE_REQUEST) {
     return {
+      enabled: true,
       allowed: false,
       code: "PASSENGER_BROADCAST_PERMISSION_REQUIRED",
       message: "Your subscription does not allow ride request broadcasts"
@@ -611,6 +616,7 @@ async function getPassengerBroadcastAuthorization(userId, now, settings) {
   }
 
   return {
+    enabled: true,
     allowed: true,
     subscription: subscriptionState.subscription,
     featureMap: subscriptionState.featureMap,

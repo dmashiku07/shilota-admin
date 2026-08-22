@@ -117,6 +117,24 @@ test("passenger price broadcast authorization blocks requests when the feature f
     const result = await getPassengerBroadcastAuthorization("passenger-id", new Date("2026-07-22T09:00:00.000Z"), {
       enabled: true
     });
+    assert.equal(result.enabled, false);
+    assert.equal(result.allowed, false);
+    assert.equal(result.code, "PASSENGER_PRICE_BROADCAST_DISABLED");
+  } finally {
+    config.featureFlags.passenger_price_broadcast_enabled = previous;
+  }
+});
+
+test("passenger price broadcast authorization respects disabled runtime settings", async function () {
+  const previous = config.featureFlags.passenger_price_broadcast_enabled;
+  config.featureFlags.passenger_price_broadcast_enabled = true;
+  try {
+    const result = await getPassengerBroadcastAuthorization(
+      "passenger-id",
+      new Date("2026-07-22T09:00:00.000Z"),
+      { enabled: false }
+    );
+    assert.equal(result.enabled, false);
     assert.equal(result.allowed, false);
     assert.equal(result.code, "PASSENGER_PRICE_BROADCAST_DISABLED");
   } finally {
