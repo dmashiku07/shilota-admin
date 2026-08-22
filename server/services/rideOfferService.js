@@ -215,6 +215,7 @@ async function buildOfferSummary(offer) {
 
 async function listRideOffersForPassenger(rideId, userId, now) {
   await expireRideOffers(now);
+  await expireDriverPricedRideRequests(now);
   await expirePassengerPriceBroadcastRequests(now);
   const ride = await Rides.findOne({
     _id: String(rideId),
