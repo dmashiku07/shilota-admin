@@ -2,6 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { FormBuilder, Validators } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ToastrService } from 'ngx-toastr';
+import { finalize, take, timeout } from 'rxjs/operators';
 import { SubscriptionPlanService } from '../../../../service/subscription-plan.service';
 
 @Component({
@@ -11,6 +12,8 @@ import { SubscriptionPlanService } from '../../../../service/subscription-plan.s
 })
 export class SubscriptionPlanEditComponent implements OnInit {
   loading = true;
+  planLoaded = false;
+  loadError = '';
   saving = false;
   serverErrors: any = {};
   featureCatalog: any[] = [];
@@ -40,22 +43,46 @@ export class SubscriptionPlanEditComponent implements OnInit {
   }
 
   ngOnInit() {
-    const id = this.route.snapshot.params['id'];
-    this.service.getFeatureCatalog().subscribe((res: any) => {
-      this.featureCatalog = res && res.status === 'true' && Array.isArray(res.data) ? res.data : [];
-    });
-    this.service.get(id).subscribe((res: any) => {
+    this.loadFeatureCatalog();
+    this.loadPlan();
+  }
+
+  loadPlan() {
+    const id = String(this.route.snapshot.params['id'] || '').trim();
+    this.loading = true;
+    this.planLoaded = false;
+    this.loadError = '';
+
+    if (!id) {
       this.loading = false;
-      if (res && res.status === 'true' && res.data) {
+      this.loadError = 'No subscription plan was selected.';
+      return;
+    }
+
+    this.service.get(id).pipe(
+      take(1),
+      timeout(15000),
+      finalize(() => {
+        this.loading = false;
+      })
+    ).subscribe((res: any) => {
+      if (res && (res.status === 'true' || res.status === true) && res.data) {
         this.form.patchValue(res.data);
-      } else {
-        this.toastr.error('Unable to load subscription plan');
-        this.router.navigate(['admin/subscription-plans/view'], { queryParams: this.cancelQueryParams });
+        this.planLoaded = true;
+        return;
       }
+
+      this.loadError = res && res.message ? res.message : 'Unable to load subscription plan.';
     }, () => {
-      this.loading = false;
-      this.toastr.error('Unable to load subscription plan');
-      this.router.navigate(['admin/subscription-plans/view'], { queryParams: this.cancelQueryParams });
+      this.loadError = 'Unable to load the subscription plan. Check the connection and try again.';
+    });
+  }
+
+  private loadFeatureCatalog() {
+    this.service.getFeatureCatalog().pipe(take(1), timeout(15000)).subscribe((res: any) => {
+      this.featureCatalog = res && res.status === 'true' && Array.isArray(res.data) ? res.data : [];
+    }, () => {
+      this.featureCatalog = [];
     });
   }
 

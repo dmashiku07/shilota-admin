@@ -4,7 +4,7 @@
       <div class="card-header">
         <h4 class="card-title">{{ pageTitle }}</h4>
       </div>
-      <div class="card-body" *ngIf="!loading; else loadingState">
+      <div class="card-body" *ngIf="planLoaded && !loading; else loadState">
         <form [formGroup]="form" (ngSubmit)="save()">
           <div class="form-row">
             <div class="form-group col-md-6">
@@ -96,6 +96,19 @@
   </div>
 </section>
 
-<ng-template #loadingState>
-  <div class="card-body text-muted">Loading subscription plan...</div>
+<ng-template #loadState>
+  <div class="card-body" *ngIf="loading; else loadFailed">
+    <div class="d-flex align-items-center text-muted" role="status" aria-live="polite">
+      <span class="spinner-border spinner-border-sm mr-2" aria-hidden="true"></span>
+      Loading subscription plan...
+    </div>
+  </div>
+</ng-template>
+
+<ng-template #loadFailed>
+  <div class="card-body">
+    <div class="alert alert-danger" role="alert">{{ loadError }}</div>
+    <button class="btn btn-primary mr-2" type="button" (click)="loadPlan()">Retry</button>
+    <a class="btn btn-outline-secondary" [routerLink]="['/admin/subscription-plans/view']" [queryParams]="cancelQueryParams">Back to plans</a>
+  </div>
 </ng-template>
