@@ -53,8 +53,55 @@ textarea {
   opacity: 1;
 }
 
-.btn:hover {
-  color: white !important;
+/*
+ * The legacy Apex palette gives `.btn-*` text the contextual colour. That is
+ * correct for flat buttons, but makes labels disappear when the same colour is
+ * also used as a solid background. Keep solid button labels readable in every
+ * interaction state; outline and flat buttons retain their contextual text.
+ */
+.btn-primary:not(.btn-flat),
+.btn-secondary:not(.btn-flat),
+.btn-success:not(.btn-flat),
+.btn-danger:not(.btn-flat),
+.btn-info:not(.btn-flat),
+.btn-dark:not(.btn-flat),
+.btn-raised[class*="btn-"] {
+  color: #fff !important;
+}
+
+.btn-warning:not(.btn-flat),
+.btn-light:not(.btn-flat) {
+  color: #212529 !important;
+}
+
+.btn-primary:not(.btn-flat):hover,
+.btn-primary:not(.btn-flat):focus,
+.btn-primary:not(.btn-flat):active,
+.btn-secondary:not(.btn-flat):hover,
+.btn-secondary:not(.btn-flat):focus,
+.btn-secondary:not(.btn-flat):active,
+.btn-success:not(.btn-flat):hover,
+.btn-success:not(.btn-flat):focus,
+.btn-success:not(.btn-flat):active,
+.btn-danger:not(.btn-flat):hover,
+.btn-danger:not(.btn-flat):focus,
+.btn-danger:not(.btn-flat):active,
+.btn-info:not(.btn-flat):hover,
+.btn-info:not(.btn-flat):focus,
+.btn-info:not(.btn-flat):active,
+.btn-dark:not(.btn-flat):hover,
+.btn-dark:not(.btn-flat):focus,
+.btn-dark:not(.btn-flat):active {
+  color: #fff !important;
+}
+
+.btn-warning:not(.btn-flat):hover,
+.btn-warning:not(.btn-flat):focus,
+.btn-warning:not(.btn-flat):active,
+.btn-light:not(.btn-flat):hover,
+.btn-light:not(.btn-flat):focus,
+.btn-light:not(.btn-flat):active {
+  color: #212529 !important;
 }
 
 h4,

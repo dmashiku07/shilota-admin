@@ -3,6 +3,7 @@ import { ToastrService } from 'ngx-toastr';
 import { SubscriptionPlanService } from '../../../../service/subscription-plan.service';
 import { SubscriptionService } from '../../../../service/subscription.service';
 import { DriverService } from '../../../../service/driver.service';
+import { ActivatedRoute } from '@angular/router';
 
 @Component({
   standalone: false,
@@ -11,6 +12,7 @@ import { DriverService } from '../../../../service/driver.service';
   changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class DriverSubscriptionViewComponent implements OnInit {
+  isPassenger = false;
   loading = false;
   plans: any[] = [];
   subscriptions: any[] = [];
@@ -30,6 +32,7 @@ export class DriverSubscriptionViewComponent implements OnInit {
   };
   filters: any = {
     driver: '',
+    passenger: '',
     plan_id: '',
     status: '',
     payment_status: '',
@@ -41,17 +44,22 @@ export class DriverSubscriptionViewComponent implements OnInit {
     private subscriptionService: SubscriptionService,
     private subscriptionPlanService: SubscriptionPlanService,
     private driverService: DriverService,
+    private route: ActivatedRoute,
     private toastr: ToastrService,
     private cdr: ChangeDetectorRef
   ) {}
 
   ngOnInit() {
-    this.loadPlans();
-    this.loadSubscriptions();
+    this.route.queryParamMap.subscribe((params) => {
+      this.isPassenger = String(params.get('customer_type') || 'DRIVER').toUpperCase() === 'PASSENGER';
+      this.resetFilterValues();
+      this.loadPlans();
+      this.loadSubscriptions();
+    });
   }
 
   loadPlans() {
-    this.subscriptionPlanService.list('DRIVER').subscribe((res: any) => {
+    this.subscriptionPlanService.list(this.isPassenger ? 'PASSENGER' : 'DRIVER').subscribe((res: any) => {
       this.plans = res && res.status === 'true' && Array.isArray(res.data) ? res.data : [];
       this.cdr.markForCheck();
     });
@@ -59,7 +67,10 @@ export class DriverSubscriptionViewComponent implements OnInit {
 
   loadSubscriptions(page: number = 1) {
     this.loading = true;
-    const params: any = { page };
+    const params: any = {
+      page,
+      customer_type: this.isPassenger ? 'PASSENGER' : 'DRIVER'
+    };
     Object.keys(this.filters).forEach((key) => {
       if (this.filters[key]) {
         params[key] = this.filters[key];
@@ -73,21 +84,26 @@ export class DriverSubscriptionViewComponent implements OnInit {
       this.cdr.markForCheck();
     }, () => {
       this.loading = false;
-      this.toastr.error('Unable to load driver subscriptions');
+      this.toastr.error(`Unable to load ${this.isPassenger ? 'passenger' : 'driver'} subscriptions`);
       this.cdr.markForCheck();
     });
   }
 
   resetFilters() {
+    this.resetFilterValues();
+    this.loadSubscriptions();
+  }
+
+  private resetFilterValues() {
     this.filters = {
       driver: '',
+      passenger: '',
       plan_id: '',
       status: '',
       payment_status: '',
       expiry_date: '',
       reached_limit: ''
     };
-    this.loadSubscriptions();
   }
 
   openGrantForm() {

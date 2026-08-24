@@ -3611,7 +3611,12 @@ router.post("/rideoffers/submit", function (req, res) {
       NotifyDevices.findOne({
         user_id: result.ride.user_id
       }, function (_notifyErr, userdevices) {
-        const message = result.action === "updated" ? "A driver updated an offer for your trip" : "A driver sent an offer for your trip";
+        const acceptedPassengerPrice = result.offer.offer_type === "ACCEPT_PASSENGER_PRICE";
+        const message = acceptedPassengerPrice
+          ? "A driver accepted your price"
+          : result.action === "updated"
+            ? "A driver updated an offer for your trip"
+            : "A driver sent an offer for your trip";
         const data = {
           ride_id: String(result.ride._id),
           type: result.action === "updated" ? "offer_updated" : "offer_created",
@@ -3630,7 +3635,9 @@ router.post("/rideoffers/submit", function (req, res) {
 
       return res.json({
         status: "true",
-        message: result.action === "updated" ? "Ride offer updated" : "Ride offer submitted",
+        message: result.offer.offer_type === "ACCEPT_PASSENGER_PRICE"
+          ? "Passenger price accepted"
+          : result.action === "updated" ? "Ride offer updated" : "Ride offer submitted",
         offer: result.offer
       });
     }).catch(function () {

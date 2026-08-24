@@ -254,7 +254,7 @@ function installMarketplaceMocks(state) {
   };
 }
 
-test("subscription marketplace flow gates, negotiates, completes, and records no commission", async function () {
+test("subscription marketplace flow gates, accepts passenger price, completes, and records no commission", async function () {
   const previousFlags = { ...config.featureFlags };
   Object.assign(config.featureFlags, {
     commission_enabled: false,
@@ -366,7 +366,7 @@ test("subscription marketplace flow gates, negotiates, completes, and records no
       is_unlimited_snapshot: false
     };
 
-    const driverCounter = await rideOfferService.submitRideOffer({
+    const rejectedCounter = await rideOfferService.submitRideOffer({
       rideId: state.ride._id,
       driverId: state.driver._id,
       offeredPrice: 10000,
@@ -376,20 +376,32 @@ test("subscription marketplace flow gates, negotiates, completes, and records no
       currency: "TZS",
       now: state.now
     });
-    assert.equal(driverCounter.ok, true);
-    assert.equal(driverCounter.offer.offered_price, 10000);
-    assert.equal(driverCounter.offer.offer_type, rideOfferService.OFFER_TYPE_DRIVER_COUNTER);
+    assert.equal(rejectedCounter.ok, false);
+    assert.equal(rejectedCounter.code, "COUNTER_OFFERS_NOT_ALLOWED");
+
+    const driverAcceptance = await rideOfferService.submitRideOffer({
+      rideId: state.ride._id,
+      driverId: state.driver._id,
+      offeredPrice: 8000,
+      offerType: rideOfferService.OFFER_TYPE_ACCEPT_PASSENGER_PRICE,
+      estimatedArrivalMinutes: 6,
+      currency: "TZS",
+      now: state.now
+    });
+    assert.equal(driverAcceptance.ok, true);
+    assert.equal(driverAcceptance.offer.offered_price, 8000);
+    assert.equal(driverAcceptance.offer.offer_type, rideOfferService.OFFER_TYPE_ACCEPT_PASSENGER_PRICE);
 
     const accepted = await rideOfferService.acceptRideOffer({
       rideId: state.ride._id,
       userId: state.ride.user_id,
-      offerId: driverCounter.offer.id,
+      offerId: driverAcceptance.offer.id,
       now: new Date("2026-07-24T09:02:00.000Z")
     });
     assert.equal(accepted.ok, true);
     assert.equal(state.ride.driver_id, state.driver._id);
     assert.equal(state.ride.accepted_offer_id, "offer-counter-1");
-    assert.equal(state.ride.final_agreed_price, 10000);
+    assert.equal(state.ride.final_agreed_price, 8000);
     assert.equal(state.ride.final_agreed_currency, "TZS");
 
     state.ride.ridestatus = "completed";

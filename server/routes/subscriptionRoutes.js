@@ -5,6 +5,7 @@ var config = require("../config");
 var Admin = require("../models/admin");
 var Subscription = require("../schema/subscriptions");
 var Driver = require("../schema/driver");
+var User = require("../schema/user");
 var SubscriptionPlan = require("../schema/subscriptionplans");
 var SubscriptionPlanFeature = require("../schema/subscriptionplanfeatures");
 var { buildActor, logAuditFromRequest } = require("../services/auditLogService");
@@ -280,6 +281,17 @@ router.get("/", async function (req, res) {
       };
     } else if (customerType === "DRIVER" && req.query.driver_id) {
       match.driver_id = req.query.driver_id;
+    } else if (customerType === "PASSENGER" && req.query.passenger) {
+      var passengerRegex = new RegExp(String(req.query.passenger).trim(), "i");
+      var passengers = await User.find({
+        $or: [
+          { full_name: passengerRegex },
+          { email: passengerRegex }
+        ]
+      }).select("_id").exec();
+      match.user_id = {
+        $in: passengers.map(function (passenger) { return passenger._id; })
+      };
     } else if (customerType === "PASSENGER" && req.query.user_id) {
       match.user_id = req.query.user_id;
     }

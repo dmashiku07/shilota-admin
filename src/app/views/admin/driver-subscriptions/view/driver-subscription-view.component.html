@@ -3,12 +3,12 @@
     <div class="card">
       <div class="card-header">
         <div class="d-flex justify-content-between align-items-center">
-          <h4 class="card-title mb-0">Driver Subscriptions</h4>
-          <button class="btn btn-primary btn-sm" type="button" (click)="openGrantForm()">Grant Subscription</button>
+          <h4 class="card-title mb-0">{{ isPassenger ? 'Passenger Subscriptions' : 'Driver Subscriptions' }}</h4>
+          <button *ngIf="!isPassenger" class="btn btn-primary btn-sm" type="button" (click)="openGrantForm()">Grant Subscription</button>
         </div>
       </div>
       <div class="card-body">
-        <div class="card border-primary mb-4" *ngIf="showGrantForm">
+        <div class="card border-primary mb-4" *ngIf="showGrantForm && !isPassenger">
           <div class="card-header d-flex justify-content-between align-items-center">
             <strong>Grant driver subscription</strong>
             <button type="button" class="close" aria-label="Close" (click)="closeGrantForm()"><span aria-hidden="true">&times;</span></button>
@@ -66,9 +66,13 @@
           </div>
         </div>
         <form class="form-row mb-3" (ngSubmit)="loadSubscriptions()">
-          <div class="form-group col-md-3">
+          <div class="form-group col-md-3" *ngIf="!isPassenger">
             <label>Driver</label>
             <input class="form-control" [(ngModel)]="filters.driver" name="driver" placeholder="Name, email, or phone">
+          </div>
+          <div class="form-group col-md-3" *ngIf="isPassenger">
+            <label>Passenger</label>
+            <input class="form-control" [(ngModel)]="filters.passenger" name="passenger" placeholder="Name or email">
           </div>
           <div class="form-group col-md-2">
             <label>Plan</label>
@@ -102,7 +106,7 @@
             <label>Expiry date</label>
             <input class="form-control" type="date" [(ngModel)]="filters.expiry_date" name="expiry_date">
           </div>
-          <div class="form-group col-md-2">
+          <div class="form-group col-md-2" *ngIf="!isPassenger">
             <label>Daily limit</label>
             <select class="form-control" [(ngModel)]="filters.reached_limit" name="reached_limit">
               <option value="">All drivers</option>
@@ -120,9 +124,9 @@
           <span class="text-muted ml-3" *ngIf="pagination">Showing {{ subscriptions.length }} of {{ pagination.totalItems }} subscriptions</span>
         </div>
 
-        <div *ngIf="loading" class="text-muted">Loading driver subscriptions...</div>
+        <div *ngIf="loading" class="text-muted">Loading {{ isPassenger ? 'passenger' : 'driver' }} subscriptions...</div>
 
-        <div *ngIf="!loading" class="table-responsive">
+        <div *ngIf="!loading && !isPassenger" class="table-responsive">
           <table class="table table-striped">
             <thead>
               <tr>
@@ -172,6 +176,46 @@
               </tr>
               <tr *ngIf="subscriptions.length === 0">
                 <td colspan="12" class="text-muted">No driver subscriptions found</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div *ngIf="!loading && isPassenger" class="table-responsive">
+          <table class="table table-striped">
+            <thead>
+              <tr>
+                <th>Passenger</th>
+                <th>Plan</th>
+                <th>Status</th>
+                <th>Payment</th>
+                <th>Price</th>
+                <th>Validity</th>
+                <th>Payment reference</th>
+                <th>Started</th>
+                <th>Expires</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let subscription of subscriptions">
+                <td>
+                  <strong>{{ subscription.user?.full_name || 'Unknown passenger' }}</strong><br>
+                  <small class="text-muted">{{ subscription.user?.email || subscription.user?.phone_number || '-' }}</small>
+                </td>
+                <td>
+                  <strong>{{ subscription.plan_name_snapshot || subscription.plan?.name || '-' }}</strong><br>
+                  <small class="text-muted">{{ subscription.plan?._id || subscription.plan_id }}</small>
+                </td>
+                <td>{{ subscription.status }}</td>
+                <td>{{ subscription.payment_status }}</td>
+                <td>{{ subscription.currency_snapshot }} {{ subscription.price_snapshot }}</td>
+                <td>{{ subscription.duration_value_snapshot }} {{ subscription.duration_unit_snapshot }}</td>
+                <td>{{ subscription.payment_reference || '-' }}</td>
+                <td>{{ subscription.starts_at ? (subscription.starts_at | date:'medium') : '-' }}</td>
+                <td>{{ subscription.expires_at ? (subscription.expires_at | date:'medium') : '-' }}</td>
+              </tr>
+              <tr *ngIf="subscriptions.length === 0">
+                <td colspan="9" class="text-muted">No passenger subscriptions found</td>
               </tr>
             </tbody>
           </table>

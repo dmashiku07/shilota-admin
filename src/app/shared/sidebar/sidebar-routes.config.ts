@@ -148,23 +148,12 @@ export const ROUTES: RouteInfo[] = [
     },
 
     {
-        path: '', title: 'Payment', icon: 'fa fa-money', class: 'has-sub',
+        path: '', title: 'Subscriptions', icon: 'fa fa-credit-card', class: 'has-sub',
         badge: '', badgeClass: 'badge badge-pill badge-danger float-right mr-1 mt-1', isExternalLink: false, submenu: [
-
-            {
-                path: '/admin/account/payment', title: 'Payment Settings', icon: '', class: '',
-                badge: '', badgeClass: '', isExternalLink: false, submenu: []
-            },
             ...(environment.featureFlags.commission_enabled ? [{
                 path: '/admin/commissions/view', title: 'Commission Settings', icon: '', class: '',
                 badge: '', badgeClass: '', isExternalLink: false, submenu: []
             }] : []),
-
-            {
-                path: '/admin/management/payment', title: 'User Payment', icon: '', class: '',
-                badge: '', badgeClass: '', isExternalLink: false, submenu: []
-            },
-
             {
                 path: '/admin/subscription-plans/view', title: 'Driver Subscription Plans', icon: '', class: '',
                 badge: '', badgeClass: '', isExternalLink: false, submenu: []
@@ -179,6 +168,10 @@ export const ROUTES: RouteInfo[] = [
                 path: '/admin/driver-subscriptions/view', title: 'Driver Subscriptions', icon: '', class: '',
                 badge: '', badgeClass: '', isExternalLink: false, submenu: []
             },
+            {
+                path: '/admin/driver-subscriptions/view?customer_type=PASSENGER', title: 'Passenger Subscriptions', icon: '', class: '',
+                badge: '', badgeClass: '', isExternalLink: false, submenu: []
+            },
             ...(environment.featureFlags.commission_enabled ? [{
                 path: '/admin/management/driverPay', title: 'Driver Payment', icon: '', class: '',
                 badge: '', badgeClass: '', isExternalLink: false, submenu: []
@@ -190,60 +183,6 @@ export const ROUTES: RouteInfo[] = [
 
         ]
 
-    },
-
-    {
-        path: '', title: 'Static Pages', icon: 'fa fa-file-text', class: 'has-sub',
-        badge: '', badgeClass: 'badge badge-pill badge-danger float-right mr-1 mt-1', isExternalLink: false, submenu: [
-            {
-                path: '/admin/home/view', title: 'Home Page', icon: '', class: '',
-                badge: '', badgeClass: '', isExternalLink: false, submenu: []
-            },
-            {
-                path: '/admin/home/driver', title: 'Driver Home Page', icon: '', class: '',
-                badge: '', badgeClass: '', isExternalLink: false, submenu: []
-            }
-        ]
-
-    },
-
-    {
-        path: '/admin/banner/view', title: 'Banners', icon: 'fa fa-file-image-o', class: '', badge: '',
-        badgeClass: 'badge badge-pill badge-danger float-right mr-1 mt-1', isExternalLink: false, submenu: [
-        ]
-    },
-
-    {
-        path: '/admin/account/app', title: 'App Store', icon: 'fa fa-cloud-download', class: '', badge: '',
-        badgeClass: 'badge badge-pill badge-danger float-right mr-1 mt-1', isExternalLink: false, submenu: [
-        ]
-    },
-
-    {
-        path: '/admin/account/sociallink', title: 'Social Links', icon: 'fa fa-bullhorn', class: '', badge: '',
-        badgeClass: 'badge badge-pill badge-danger float-right mr-1 mt-1', isExternalLink: false, submenu: [
-        ]
-    },
-
-    {
-        path: '', title: 'Helps', icon: 'fa fa-info', class: 'has-sub',
-        badge: '', badgeClass: 'badge badge-pill badge-danger float-right mr-1 mt-1', isExternalLink: false, submenu: [
-            {
-                path: '/admin/page/view', title: 'Driver', icon: '', class: '',
-                badge: '', badgeClass: '', isExternalLink: false, submenu: []
-            },
-            {
-                path: '/admin/page/user', title: 'User', icon: '', class: '',
-                badge: '', badgeClass: '', isExternalLink: false, submenu: []
-            }
-        ]
-
-    },
-
-    {
-        path: '/admin/faq/view', title: 'Faq', icon: 'fa fa-question-circle', class: '', badge: '',
-        badgeClass: 'badge badge-pill badge-danger float-right mr-1 mt-1', isExternalLink: false, submenu: [
-        ]
     },
 
 ];

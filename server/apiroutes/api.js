@@ -2807,7 +2807,7 @@ router.post("/grabrides" /* , passport.authenticate('jwt', {
                                     _id: c._id,
                                     category_name: c.category_name,
                                     image: categoryimage,
-                                    baseprice: basePrice,
+                                    baseprice: "0",
                                     reach_pickup: reachbycat[c._id] || "",
                                     service_type: "ride",
                                     available: "1"

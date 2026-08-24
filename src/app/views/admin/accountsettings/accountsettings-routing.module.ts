@@ -6,7 +6,6 @@ import { SocialComponent } from './social/social.component';
 import { LogoComponent } from './logo/logo.component';
 import { PasswordComponent } from './password/password.component';
 import { MobileappComponent } from './mobileapp/mobileapp.component';
-import { PaymentComponent } from './payment/payment.component';
 import { FaviconComponent } from './favicon/favicon.component';
 const routes: Routes = [
   {
@@ -42,10 +41,6 @@ const routes: Routes = [
       },
 
       {
-        path: 'payment',
-        component: PaymentComponent,
-      },
-      {
         path: 'favicon',
         component: FaviconComponent,
 
@@ -60,4 +55,3 @@ const routes: Routes = [
   exports: [RouterModule]
 })
 export class AccountsettingsRoutingModule { }
-

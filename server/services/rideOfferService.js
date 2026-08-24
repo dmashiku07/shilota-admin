@@ -301,27 +301,23 @@ async function submitRideOffer(options) {
   let effectiveOfferType = requestedOfferType || OFFER_TYPE_DRIVER_DIRECT;
   let effectiveOfferedPrice = offeredPrice;
   if (isPassengerBroadcastRide(ride)) {
-    if (effectiveOfferType === OFFER_TYPE_ACCEPT_PASSENGER_PRICE) {
-      effectiveOfferedPrice = toNumber(ride.passenger_offered_price, NaN);
-      if (!Number.isFinite(effectiveOfferedPrice) || effectiveOfferedPrice < 0) {
-        return {
-          ok: false,
-          code: "PASSENGER_PRICE_NOT_AVAILABLE",
-          message: "The passenger price is no longer available"
-        };
-      }
-      effectiveOfferType = OFFER_TYPE_ACCEPT_PASSENGER_PRICE;
-    } else {
-      effectiveOfferType = OFFER_TYPE_DRIVER_COUNTER;
-      if (!Number.isFinite(effectiveOfferedPrice) || effectiveOfferedPrice < 0) {
-        return {
-          ok: false,
-          code: "INVALID_RIDE_OFFER",
-          message: "A valid counter-offer price is required"
-        };
-      }
+    if (requestedOfferType && requestedOfferType !== OFFER_TYPE_ACCEPT_PASSENGER_PRICE) {
+      return {
+        ok: false,
+        code: "COUNTER_OFFERS_NOT_ALLOWED",
+        message: "Drivers can only accept or ignore a passenger-priced request"
+      };
     }
-  } else if (!Number.isFinite(effectiveOfferedPrice) || effectiveOfferedPrice < 0) {
+    effectiveOfferedPrice = toNumber(ride.passenger_offered_price, NaN);
+    if (!Number.isFinite(effectiveOfferedPrice) || effectiveOfferedPrice <= 0) {
+      return {
+        ok: false,
+        code: "PASSENGER_PRICE_NOT_AVAILABLE",
+        message: "The passenger price is no longer available"
+      };
+    }
+    effectiveOfferType = OFFER_TYPE_ACCEPT_PASSENGER_PRICE;
+  } else if (!Number.isFinite(effectiveOfferedPrice) || effectiveOfferedPrice <= 0) {
     return {
       ok: false,
       code: "INVALID_RIDE_OFFER",

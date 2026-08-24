@@ -10,7 +10,6 @@ import { VehicleComponent } from './vehicle/vehicle.component';
 import { RidesComponent } from './rides/rides.component';
 import { RidesDetailsComponent } from './rides-details/rides-details.component';
 import { VechicledetailComponent } from './vechicledetail/vechicledetail.component';
-import { PaymentComponent } from './payment/payment.component';
 import { PaymentdetailsComponent } from './paymentdetails/paymentdetails.component';
 import { RideHistoryComponent } from './ride-history/ride-history.component';
 import { DriverPayComponent } from './driver-pay/driver-pay.component';
@@ -71,11 +70,6 @@ const routes: Routes = [
       {
         path: 'ridesdetails/:id',
         component: RidesDetailsComponent,
-       
-      },
-      {
-        path: 'payment',
-        component: PaymentComponent,
        
       },
       {
