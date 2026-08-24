@@ -70,6 +70,7 @@ const smsService = require("../services/smsService");
 const selcomService = require("../services/selcomService");
 const cetsSyncService = require("../services/cetsSyncService");
 const { roundCustomerPayableAmount } = require("../utils/pricing");
+const { getRoadRoute } = require("../services/routeGeometryService");
 const {
   applyRideCompletionFinancials,
   buildPaymentDocument,
@@ -812,6 +813,23 @@ async function pushDriverWalletNotification(driverId, walletamount, message) {
 }
 
 /* signup as driver user */
+router.post('/routepath', function (req, res) {
+  passport.authenticate('jwt', { session: false }, async function (_err, user) {
+    if (!user || String(user._id) !== String(req.body.user_id || '')) {
+      return res.json({ status: 'false', message: 'Unauthorized access' });
+    }
+    try {
+      const encodedPolyline = await getRoadRoute(req.body || {});
+      return res.json({ status: 'true', encoded_polyline: encodedPolyline });
+    } catch (routeError) {
+      return res.json({
+        status: 'false',
+        message: routeError && routeError.message ? routeError.message : 'Unable to calculate route'
+      });
+    }
+  })(req, res);
+});
+
 router.post('/signup', function (req, res) {
   if (!req.body.email || !req.body.password) {
     res.json({

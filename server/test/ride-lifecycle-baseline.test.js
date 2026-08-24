@@ -68,8 +68,8 @@ test("payments, wallets, settlements, and call logs keep settlement-critical fie
 
 test("passenger routes keep request and confirm ride lifecycle branches", function () {
   assert.match(apiRouteSource, /router\.post\("\/routepath"/);
-  assert.match(apiRouteSource, /overview_polyline/);
-  assert.match(apiRouteSource, /select\("googleMapKey"\)/);
+  assert.match(apiRouteSource, /getRoadRoute\(req\.body \|\| \{\}\)/);
+  assert.match(driverApiRouteSource, /router\.post\('\/routepath'/);
   assert.match(apiRouteSource, /router\.post\(\s*"\/requestride"/);
   assert.match(apiRouteSource, /req\.body\.ridestatus = "scheduled"/);
   assert.match(apiRouteSource, /req\.body\.ridestatus = "requested"/);

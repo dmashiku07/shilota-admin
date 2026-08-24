@@ -118,6 +118,7 @@ const {
   REQUEST_TYPE_PASSENGER_PRICE_BROADCAST
 } = require("../services/rideOfferService");
 const { roundCustomerPayableAmount } = require("../utils/pricing");
+const { getRoadRoute } = require("../services/routeGeometryService");
 const {
   applyRideCompletionFinancials,
   buildPaymentDocument,
@@ -200,28 +201,6 @@ function isPassengerBroadcastRequest(body) {
     String(body && body.pricing_mode || "").trim().toLowerCase() === "passenger_broadcast" ||
     String(body && body.passenger_price_broadcast || "").trim().toLowerCase() === "true"
   );
-}
-
-function parseRouteStops(value) {
-  if (Array.isArray(value)) {
-    return value;
-  }
-  if (typeof value !== "string" || !value.trim()) {
-    return [];
-  }
-  try {
-    const parsed = JSON.parse(value);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch (_error) {
-    return [];
-  }
-}
-
-function validRouteCoordinate(lat, lng) {
-  const latitude = Number(lat);
-  const longitude = Number(lng);
-  return Number.isFinite(latitude) && Number.isFinite(longitude) &&
-    latitude >= -90 && latitude <= 90 && longitude >= -180 && longitude <= 180;
 }
 
 async function cancelSupersededRequestedRides(userId) {
@@ -2970,52 +2949,14 @@ router.post("/routepath", function (req, res) {
       return res.json({ status: "false", message: "Unauthorized access" });
     }
 
-    if (!validRouteCoordinate(req.body.pickup_lat, req.body.pickup_lng) ||
-        !validRouteCoordinate(req.body.drop_lat, req.body.drop_lng)) {
-      return res.json({ status: "false", message: "Valid route coordinates are required" });
-    }
-
     try {
-      const admin = await Admin.findOne({}).select("googleMapKey").lean().exec();
-      const apiKey = String(admin && admin.googleMapKey || "").trim();
-      if (!apiKey) {
-        return res.json({ status: "false", message: "Route service is not configured" });
-      }
-
-      const stops = parseRouteStops(req.body.ride_stops).filter(function (stop) {
-        return validRouteCoordinate(stop.latitude || stop.lat, stop.longitude || stop.lng);
+      const encodedPolyline = await getRoadRoute(req.body || {});
+      return res.json({ status: "true", encoded_polyline: encodedPolyline });
+    } catch (routeError) {
+      return res.json({
+        status: "false",
+        message: routeError && routeError.message ? routeError.message : "Unable to calculate route"
       });
-      const waypoints = stops.map(function (stop) {
-        return "via:" + Number(stop.latitude || stop.lat) + "," + Number(stop.longitude || stop.lng);
-      }).join("|");
-
-      Request.get({
-        url: "https://maps.googleapis.com/maps/api/directions/json",
-        qs: {
-          origin: Number(req.body.pickup_lat) + "," + Number(req.body.pickup_lng),
-          destination: Number(req.body.drop_lat) + "," + Number(req.body.drop_lng),
-          mode: "driving",
-          key: apiKey,
-          ...(waypoints ? { waypoints: waypoints } : {})
-        },
-        json: true,
-        timeout: 10000
-      }, function (routeError, routeResponse, body) {
-        const route = body && Array.isArray(body.routes) ? body.routes[0] : null;
-        const encodedPolyline = route && route.overview_polyline && route.overview_polyline.points;
-        if (routeError || !routeResponse || routeResponse.statusCode !== 200 || !encodedPolyline) {
-          return res.json({
-            status: "false",
-            message: body && body.error_message ? body.error_message : "Unable to calculate route"
-          });
-        }
-        return res.json({
-          status: "true",
-          encoded_polyline: encodedPolyline
-        });
-      });
-    } catch (_routeError) {
-      return res.json({ status: "false", message: "Unable to calculate route" });
     }
   })(req, res);
 });
