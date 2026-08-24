@@ -24,9 +24,19 @@ function parseStops(value) {
 
 function requestJson(options) {
   return new Promise(function (resolve, reject) {
-    Request.get({ ...options, json: true, timeout: 10000 }, function (error, response, body) {
+    Request.get({
+      ...options,
+      headers: {
+        "User-Agent": "ShilotaRide/1.0 (support@shilota.tz)",
+        "Accept": "application/json",
+        ...(options.headers || {})
+      },
+      json: true,
+      timeout: 10000
+    }, function (error, response, body) {
       if (error || !response || response.statusCode !== 200) {
-        return reject(error || new Error("Route service request failed"));
+        const status = response && response.statusCode ? " (HTTP " + response.statusCode + ")" : "";
+        return reject(error || new Error("Route service request failed" + status));
       }
       resolve(body);
     });
@@ -56,12 +66,12 @@ async function googleRoute(points, apiKey) {
   return route && route.overview_polyline ? route.overview_polyline.points : null;
 }
 
-async function osrmRoute(points) {
+async function osrmRoute(points, serviceUrl) {
   const coordinates = points.map(function (point) {
     return point.lng + "," + point.lat;
   }).join(";");
   const body = await requestJson({
-    url: "https://router.project-osrm.org/route/v1/driving/" + coordinates,
+    url: serviceUrl + "/route/v1/driving/" + coordinates,
     qs: {
       overview: "full",
       geometries: "polyline",
@@ -97,7 +107,20 @@ async function getRoadRoute(payload) {
     encodedPolyline = null;
   }
   if (!encodedPolyline) {
-    encodedPolyline = await osrmRoute(points);
+    const osrmServices = [
+      "https://router.project-osrm.org",
+      "https://routing.openstreetmap.de/routed-car"
+    ];
+    for (const serviceUrl of osrmServices) {
+      try {
+        encodedPolyline = await osrmRoute(points, serviceUrl);
+      } catch (_osrmError) {
+        encodedPolyline = null;
+      }
+      if (encodedPolyline) {
+        break;
+      }
+    }
   }
   if (!encodedPolyline) {
     throw new Error("No driving route was found");
