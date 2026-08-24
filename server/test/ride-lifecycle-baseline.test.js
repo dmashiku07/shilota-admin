@@ -71,11 +71,11 @@ test("passenger routes keep request and confirm ride lifecycle branches", functi
   assert.match(apiRouteSource, /req\.body\.ridestatus = "scheduled"/);
   assert.match(apiRouteSource, /req\.body\.ridestatus = "requested"/);
   assert.match(apiRouteSource, /const ACTIVE_RIDE_STATUSES = \["requested", "accepted", "ontheway", "onride"\]/);
-  assert.match(apiRouteSource, /const STALE_REQUESTED_RIDE_MINUTES = 15/);
-  assert.match(apiRouteSource, /async function cancelStaleRequestedRideBlockers/);
-  assert.match(apiRouteSource, /await cancelStaleRequestedRideBlockers\(req\.body\.user_id, new Date\(\)\)/);
-  assert.match(apiRouteSource, /created_at: \{ \$lte: cutoff \}/);
+  assert.match(apiRouteSource, /async function cancelSupersededRequestedRides/);
+  assert.match(apiRouteSource, /await cancelSupersededRequestedRides\(req\.body\.user_id\)/);
   assert.match(apiRouteSource, /Payments\.count\(\{ onride_id: ride\._id \}\)/);
+  assert.match(apiRouteSource, /ride_request_id: String\(ride\._id\)/);
+  assert.match(apiRouteSource, /status: "EXPIRED"/);
   assert.match(apiRouteSource, /attemptMatchPoolRide/);
   assert.match(apiRouteSource, /router\.post\(\s*"\/confirmride"/);
   assert.match(apiRouteSource, /rides\.ridestatus == "ontheway" \|\| rides\.ridestatus == "accepted" \|\| rides\.ridestatus == "onride"/);

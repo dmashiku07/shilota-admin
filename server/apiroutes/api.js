@@ -135,7 +135,6 @@ const SCHEDULE_MAX_DAYS = 7;
 const SCHEDULE_DISPATCH_LEAD_MINUTES = 30;
 const SCHEDULE_REMINDER_LEAD_MINUTES = 60;
 const ACTIVE_RIDE_STATUSES = ["requested", "accepted", "ontheway", "onride"];
-const STALE_REQUESTED_RIDE_MINUTES = 15;
 
 function normalizeSavedPlaceType(value) {
   value = String(value || "").trim();
@@ -203,17 +202,14 @@ function isPassengerBroadcastRequest(body) {
   );
 }
 
-async function cancelStaleRequestedRideBlockers(userId, now) {
+async function cancelSupersededRequestedRides(userId) {
   if (!userId) {
     return [];
   }
 
-  const comparisonDate = now instanceof Date ? now : new Date();
-  const cutoff = new Date(comparisonDate.getTime() - (STALE_REQUESTED_RIDE_MINUTES * 60 * 1000));
   const candidates = await Rides.find({
     user_id: userId,
     ridestatus: "requested",
-    created_at: { $lte: cutoff },
     $or: [
       { driver_id: { $exists: false } },
       { driver_id: null },
@@ -245,6 +241,14 @@ async function cancelStaleRequestedRideBlockers(userId, now) {
 
     if (updateResult && (updateResult.modifiedCount || updateResult.nModified)) {
       cancelledRideIds.push(String(ride._id));
+      await RideOffer.updateMany({
+        ride_request_id: String(ride._id),
+        status: "PENDING"
+      }, {
+        $set: {
+          status: "EXPIRED"
+        }
+      }).exec();
     }
   }
 
@@ -3144,9 +3148,9 @@ router.post(
               prepareAndSaveRide();
             } else {
               try {
-                await cancelStaleRequestedRideBlockers(req.body.user_id, new Date());
+                await cancelSupersededRequestedRides(req.body.user_id);
               } catch (cleanupError) {
-                console.error("Unable to cancel stale requested ride blockers:", cleanupError);
+                console.error("Unable to replace an unaccepted ride request:", cleanupError);
                 return senderr(res);
               }
               Rides.findOne({
