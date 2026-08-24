@@ -2961,6 +2961,32 @@ router.post("/routepath", function (req, res) {
   })(req, res);
 });
 
+router.post("/ridestatus", function (req, res) {
+  passport.authenticate("jwt", { session: false }, function (_err, user) {
+    if (!user || String(user._id) !== String(req.body.user_id || "")) {
+      return res.json({ status: "false", message: "Unauthorized access" });
+    }
+    if (!req.body.onride_id) {
+      return res.json({ status: "false", message: "Ride id is required" });
+    }
+    Rides.findOne({
+      _id: req.body.onride_id,
+      user_id: req.body.user_id
+    }).select("ridestatus driver_id ride_started_at ride_completed_at").lean().exec(function (rideError, ride) {
+      if (rideError || !ride) {
+        return res.json({ status: "false", message: "Ride not found" });
+      }
+      return res.json({
+        status: "true",
+        ride_status: ride.ridestatus || "",
+        driver_id: ride.driver_id || "",
+        ride_started_at: ride.ride_started_at || null,
+        ride_completed_at: ride.ride_completed_at || null
+      });
+    });
+  })(req, res);
+});
+
 router.post(
   "/requestride",
   function (req, res) {
