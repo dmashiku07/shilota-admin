@@ -100,6 +100,10 @@ const featureFlags = {
   driver_destination_broadcast_enabled: asBoolean(
     process.env.DRIVER_DESTINATION_BROADCAST_ENABLED || localConfig.driverDestinationBroadcastEnabled,
     true
+  ),
+  acceptance_settings_enabled: asBoolean(
+    process.env.ACCEPTANCE_SETTINGS_ENABLED || localConfig.acceptanceSettingsEnabled,
+    false
   )
 };
 

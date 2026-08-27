@@ -136,6 +136,7 @@ const SCHEDULE_MAX_DAYS = 7;
 const SCHEDULE_DISPATCH_LEAD_MINUTES = 30;
 const SCHEDULE_REMINDER_LEAD_MINUTES = 60;
 const ACTIVE_RIDE_STATUSES = ["requested", "accepted", "ontheway", "onride"];
+const DRIVER_NOTIFICATION_TITLE = "Shilota Driver";
 
 function normalizeSavedPlaceType(value) {
   value = String(value || "").trim();
@@ -477,6 +478,9 @@ function saveRideChatMessage(options, callback) {
 function filterDriversByAcceptanceSettings(drivers, ride) {
   if (!Array.isArray(drivers)) {
     return [];
+  }
+  if (config.featureFlags.acceptance_settings_enabled !== true) {
+    return drivers;
   }
   return drivers.filter(function (driver) {
     let settings = driver.acceptance_settings || {};
@@ -1613,25 +1617,38 @@ router.post("/uploadprofileimage", function (req, res) {
         }
       }).single("userImage");
       upload(req, res, function (err) {
+        if (err || !res.req.file) {
+          return res.json({
+            status: "false",
+            message: err && err.message ? err.message : "Select a valid profile image"
+          });
+        }
         User.findOne(
           {
-            _id: req.body.user_id
+            _id: user._id
           },
-          function (err, user) {
-            if (user && typeof user.profile_image != "undefined") {
-              fs.unlink(userassets + user.profile_image, function (error) {
+          function (findErr, profileUser) {
+            if (findErr || !profileUser) {
+              return senderr(res);
+            }
+            if (profileUser.profile_image) {
+              fs.unlink(userassets + profileUser.profile_image, function (error) {
                 if (error) {
                   //console.log(err);
                   // senderr(res);
                 }
               });
             }
-            user.profile_image = res.req.file.filename;
-            user.save();
-            res.json({
-              status: "true",
-              user_image: base_url + "/gallery/users/" + res.req.file.filename,
-              message: "Image uploaded successfully"
+            profileUser.profile_image = res.req.file.filename;
+            profileUser.save(function (saveErr) {
+              if (saveErr) {
+                return senderr(res);
+              }
+              res.json({
+                status: "true",
+                user_image: base_url + "/gallery/users/" + res.req.file.filename,
+                message: "Image uploaded successfully"
+              });
             });
           }
         );
@@ -6651,15 +6668,21 @@ router.post(
         if (!req.body.user_id) {
           senderr(res);
         } else {
+          let profileUpdates = {};
+          ["full_name", "country_code", "phone_number"].forEach(function (field) {
+            if (typeof req.body[field] !== "undefined") {
+              profileUpdates[field] = req.body[field];
+            }
+          });
           if (typeof req.body.emergency_contact != "undefined") {
-            req.body.emergency_contact = JSON.parse(req.body.emergency_contact);
+            profileUpdates.emergency_contact = JSON.parse(req.body.emergency_contact);
           }
           User.findOneAndUpdate(
             {
-              _id: req.body.user_id
+              _id: user._id
             },
             {
-              $set: req.body
+              $set: profileUpdates
             }
           ).exec(function (err, users) {
             if (err) {
@@ -7912,6 +7935,7 @@ fireBaseDriver = function (devicetokens, messagetext, data) {
     pushService
       .sendNotification({
         tokens: devicetokens,
+        title: DRIVER_NOTIFICATION_TITLE,
         message: messagetext,
         data: data,
         mobile: true,
@@ -7927,6 +7951,7 @@ fireBaseAndroidDriver = function (devicetokens, messagetext, data) {
     pushService
       .sendNotification({
         tokens: devicetokens,
+        title: DRIVER_NOTIFICATION_TITLE,
         message: messagetext,
         data: data,
         mobile: true,

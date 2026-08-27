@@ -128,6 +128,7 @@ const DRIVER_WALLET_TYPE = "driver";
 const DRIVER_FORGOT_PASSWORD_OTP_PURPOSE = "forgot_password";
 const VALID_DRIVER_SERVICE_TYPES = ["ride", "delivery"];
 const ACTIVE_RIDE_STATUSES = ["requested", "accepted", "ontheway", "onride"];
+const DRIVER_NOTIFICATION_TITLE = "Shilota Driver";
 
 function normalizeDriverServiceTypes(value) {
   let serviceTypes = value;
@@ -410,6 +411,9 @@ function buildDriverServiceTypeMatch(serviceType) {
 }
 
 function driverMatchesAcceptanceSettings(driver, ride) {
+  if (config.featureFlags.acceptance_settings_enabled !== true) {
+    return true;
+  }
   let settings = driver.acceptance_settings || {};
   let maxPickupDistance = Number(settings.max_pickup_distance_km || 0);
   let minFare = Number(settings.min_fare || 0);
@@ -801,6 +805,7 @@ async function pushDriverWalletNotification(driverId, walletamount, message) {
   if (tokens.length > 0) {
     await pushService.sendNotification({
       tokens: tokens,
+      title: DRIVER_NOTIFICATION_TITLE,
       message: message,
       data: {
         type: "payment",
@@ -2015,8 +2020,6 @@ router.post('/updateprofile', function (req, res) {
       } else {
         let updatestring = {
           _id: req.body.user_id,
-          vehicle_inspection: "Complete",
-          security_deposit: "Complete",
           payment_details: "Complete",
           vehicle_details: "Complete"
         };
@@ -2088,8 +2091,6 @@ router.post('/paymentinfo', function (req, res) {
       driver.save(function (err) {
         let updatestring = {
           _id: req.body.user_id,
-          vehicle_inspection: "Complete",
-          security_deposit: "Complete",
           payment_details: "Complete",
           vehicle_details: "Complete"
         };
@@ -4643,6 +4644,7 @@ router.post('/testpush', function (req, res) {
 
       await pushService.sendNotification({
         tokens: tokens,
+        title: DRIVER_NOTIFICATION_TITLE,
         message: message,
         data: {
           type: 'testpush',

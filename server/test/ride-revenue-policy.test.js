@@ -35,7 +35,7 @@ function withCommissionFlag(value, callback) {
   }
 }
 
-test("completed paid ride keeps full fare for driver when commission is disabled", function () {
+test("completed paid ride treats the quoted fare as tax-inclusive", function () {
   withCommissionFlag(false, function () {
     const ride = {};
     applyRideCompletionFinancials({
@@ -65,10 +65,10 @@ test("completed paid ride keeps full fare for driver when commission is disabled
     assert.equal(ride.commissionamount, 0);
     assert.equal(ride.baseprice, 10000);
     assert.equal(ride.tax, 1000);
-    assert.equal(ride.final_ride_amount, 11000);
+    assert.equal(ride.final_ride_amount, 10000);
     assert.equal(ride.payment_status, "paid");
     assert.equal(ride.payment_direct_to_driver, 1);
-    assert.equal(payment.ride_fare, 11000);
+    assert.equal(payment.ride_fare, 10000);
     assert.equal(payment.baseprice, 10000);
     assert.equal(payment.commissionamount, 0);
     assert.equal(payment.direct_to_driver, 1);
@@ -91,7 +91,28 @@ test("completed unpaid ride remains unpaid until a payment record is created", f
 
   assert.equal(ride.payment_status, "unpaid");
   assert.equal(ride.payment_direct_to_driver, 1);
-  assert.equal(getRideFinalAmount(ride), 12600);
+  assert.equal(getRideFinalAmount(ride), 12000);
+});
+
+test("tax is reported without increasing what the passenger pays", function () {
+  const ride = {};
+  const result = applyRideCompletionFinancials({
+    ride,
+    baseFare: 30000,
+    taxRate: 10,
+    commissionBands: [],
+    commissionEnabled: false,
+    roundCustomerPayableAmount: function (value) {
+      return value;
+    }
+  });
+
+  assert.equal(result.quotedFare, 30000);
+  assert.equal(result.taxAmount, 3000);
+  assert.equal(result.finalRideAmount, 30000);
+  assert.equal(ride.baseprice, 30000);
+  assert.equal(ride.tax, 3000);
+  assert.equal(getRideFinalAmount(ride), 30000);
 });
 
 test("cancelled ride branch remains protected from completion recalculation", function () {

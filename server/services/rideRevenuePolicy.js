@@ -74,9 +74,11 @@ function applyRideCompletionFinancials(options) {
   );
   const quotedFare = toMoney(baseFare + commissionAmount);
   const roundFn = options.roundCustomerPayableAmount;
+  // The fare quoted to the passenger is tax-inclusive. Tax is retained as a
+  // reporting breakdown, but must never be added on top of the quoted fare.
   const finalRideAmount = typeof roundFn === "function"
-    ? toMoney(roundFn(quotedFare + taxAmount))
-    : toMoney(quotedFare + taxAmount);
+    ? toMoney(roundFn(quotedFare))
+    : quotedFare;
 
   ride.total = baseFare;
   ride.baseprice = quotedFare;

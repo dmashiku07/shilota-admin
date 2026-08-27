@@ -152,3 +152,9 @@ test("ride offer routes are wired into passenger and driver APIs", function () {
   assert.match(driverApiRouteSource, /router\.post\(\"\/rideoffers\/withdraw\"/);
   assert.match(driverApiRouteSource, /offer_type/);
 });
+
+test("hidden acceptance settings do not silently filter driver offers", function () {
+  assert.equal(config.featureFlags.acceptance_settings_enabled, false);
+  assert.match(apiRouteSource, /acceptance_settings_enabled !== true[\s\S]*?return drivers/);
+  assert.match(driverApiRouteSource, /acceptance_settings_enabled !== true[\s\S]*?return true/);
+});

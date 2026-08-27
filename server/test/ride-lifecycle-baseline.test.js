@@ -18,6 +18,19 @@ const driverApiRouteSource = fs.readFileSync(
   "utf8"
 );
 
+test("driver push notifications use Shilota Driver branding", function () {
+  assert.match(apiRouteSource, /const DRIVER_NOTIFICATION_TITLE = "Shilota Driver"/);
+  assert.match(apiRouteSource, /fireBaseDriver[\s\S]*?title: DRIVER_NOTIFICATION_TITLE/);
+  assert.match(apiRouteSource, /fireBaseAndroidDriver[\s\S]*?title: DRIVER_NOTIFICATION_TITLE/);
+  assert.match(driverApiRouteSource, /title: DRIVER_NOTIFICATION_TITLE/);
+});
+
+test("passenger profile updates and image uploads target the authenticated user", function () {
+  assert.match(apiRouteSource, /router\.post\("\/uploadprofileimage"[\s\S]*?_id: user\._id/);
+  assert.match(apiRouteSource, /"\/updateprofile"[\s\S]*?_id: user\._id/);
+  assert.match(apiRouteSource, /\["full_name", "country_code", "phone_number"\]/);
+});
+
 test("rides schema keeps lifecycle, fare, and payment fields", function () {
   const ridePaths = Rides.schema.paths;
 
