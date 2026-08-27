@@ -226,18 +226,14 @@ router.route('/update/:id').post(function (req, res) {
                       console.error("CeTS driver enqueue after vehicle update failed:", syncError);
                     });
                     if (driver.approval == 1) {
-                      return sendVehicleApprovalMail(driver, function () {
-                        return res.json({
-                          success: true,
-                          msg: 'Vehicle Status Updated'
-                        });
-                      });
-                    } else {
-                      return res.json({
-                        success: true,
-                        msg: 'Vehicle Status Updated'
+                      sendVehicleApprovalMail(driver, function () {
+                        // Email delivery is best-effort and must not delay the admin save response.
                       });
                     }
+                    return res.json({
+                      success: true,
+                      msg: 'Vehicle status updated successfully'
+                    });
                   })
                   .catch(err => {
                     return res.json({

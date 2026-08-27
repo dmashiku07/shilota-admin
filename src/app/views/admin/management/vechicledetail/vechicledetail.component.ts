@@ -3,6 +3,7 @@ import { UntypedFormBuilder, UntypedFormControl, UntypedFormGroup, Validators } 
 import { ActivatedRoute, Router } from '@angular/router';
 import { Location } from '@angular/common';
 import { ToastrService } from 'ngx-toastr';
+import { finalize } from 'rxjs/operators';
 
 import { VehicleService } from '../../../../service/vehicle.service';
 import { environment } from '../../../../../environments/environment';
@@ -94,30 +95,32 @@ export class VechicledetailComponent implements OnInit {
     if (this.Form.valid) {
       this.isLoading = true;
       this.cdr.detectChanges();
-      this.route.params.subscribe(params => {
-        this.service.update(form, params['id']).subscribe(
-          data => {
-            this.isLoading = false;
-            this.cdr.detectChanges();
-            if (data['success']) {
-              this.toastr.success(data['msg']);
-              window.scrollTo(0, 0);
-            }
+      const vehicleId = this.route.snapshot.paramMap.get('id');
 
-            if (data['error']) {
-              this.toastr.error(data['msg']);
+      this.service.update(form, vehicleId).pipe(
+        finalize(() => {
+          this.isLoading = false;
+          this.cdr.detectChanges();
+        })
+      ).subscribe(
+          data => {
+            if (data['success']) {
+              this.toastr.success(data['msg'] || 'Vehicle status updated successfully', 'Saved');
+              window.scrollTo(0, 0);
+            } else {
+              this.toastr.error(data['msg'] || 'The vehicle status could not be updated', 'Save failed');
               window.scrollTo(0, 0);
             }
           },
           error => {
-            this.isLoading = false;
-            this.cdr.detectChanges();
-            this.toastr.error('An error occurred', 'Error!');
+            const message = error?.error?.msg || 'The vehicle status could not be updated. Please try again.';
+            this.toastr.error(message, 'Save failed');
+            window.scrollTo(0, 0);
           }
         );
-      });
     } else {
       this.validateAllFormFields(this.Form);
+      this.toastr.error('Please complete the required fields before saving.', 'Save failed');
     }
   }
 
