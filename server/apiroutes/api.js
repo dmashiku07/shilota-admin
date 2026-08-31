@@ -79,7 +79,6 @@ const {
 const {
   PASSENGER_SUBSCRIPTION_ACTOR_TYPE,
   buildPendingPassengerSubscriptionRecord,
-  consumePassengerBroadcastUsage,
   finalizePassengerSubscriptionSession,
   formatPassengerSubscription,
   getCurrentPassengerSubscription,
@@ -3168,20 +3167,6 @@ router.post(
                   requestedExpiry || defaultExpiry,
                   maxExpiry
                 );
-
-                const usageResult = await consumePassengerBroadcastUsage({
-                  subscription: context.subscription,
-                  configuredLimit: settings.max_broadcasts_per_day,
-                  now: new Date()
-                });
-
-                if (!usageResult.ok) {
-                  return res.json({
-                    status: "false",
-                    message: usageResult.message,
-                    error_code: usageResult.code
-                  });
-                }
 
                 req.body.request_type = REQUEST_TYPE_PASSENGER_PRICE_BROADCAST;
                 req.body.pooling_opt_in = false;
