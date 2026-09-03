@@ -29,6 +29,8 @@ test("passenger profile updates and image uploads target the authenticated user"
   assert.match(apiRouteSource, /router\.post\("\/uploadprofileimage"[\s\S]*?_id: user\._id/);
   assert.match(apiRouteSource, /"\/updateprofile"[\s\S]*?_id: user\._id/);
   assert.match(apiRouteSource, /\["full_name", "country_code", "phone_number"\]/);
+  assert.match(apiRouteSource, /profileUser\.profile_image_updated_at = new Date\(\)/);
+  assert.match(apiRouteSource, /profileUser\.profile_image !== "user\.png"/);
 });
 
 test("rides schema keeps lifecycle, fare, and payment fields", function () {
@@ -39,6 +41,9 @@ test("rides schema keeps lifecycle, fare, and payment fields", function () {
     "ridestatusat",
     "ride_started_at",
     "ride_completed_at",
+    "ride_cancelled_at",
+    "cancelled_by",
+    "cancellation_reason",
     "payment_type",
     "driver_id",
     "baseprice",
@@ -96,6 +101,7 @@ test("passenger routes keep request and confirm ride lifecycle branches", functi
   assert.match(apiRouteSource, /status: "EXPIRED"/);
   assert.match(apiRouteSource, /attemptMatchPoolRide/);
   assert.match(apiRouteSource, /router\.post\(\s*"\/confirmride"/);
+  assert.match(apiRouteSource, /router\.post\("\/activeride"/);
   assert.match(apiRouteSource, /rides\.ridestatus == "ontheway" \|\| rides\.ridestatus == "accepted" \|\| rides\.ridestatus == "onride"/);
   assert.match(apiRouteSource, /nearBy\(availdrivers, rides\._id\)/);
 });
@@ -120,4 +126,28 @@ test("driver routes keep accept, start, complete, and payment lifecycle branches
   assert.match(driverApiRouteSource, /applyRideCompletionFinancials\(/);
   assert.match(driverApiRouteSource, /router\.post\('\/paybycash'/);
   assert.match(driverApiRouteSource, /buildPaymentDocument\(/);
+  assert.match(driverApiRouteSource, /router\.post\('\/cancelride'/);
+  assert.match(driverApiRouteSource, /driver_id: String\(driver\._id\)/);
+  assert.match(driverApiRouteSource, /cancelled_by: "driver"/);
+});
+
+test("ride list responses do not add tax above the tax-inclusive total", function () {
+  assert.doesNotMatch(apiRouteSource, /parseFloat\(c\.baseprice\) \+ parseFloat\(taxprice\)/);
+  assert.doesNotMatch(driverApiRouteSource, /parseFloat\(c\.baseprice \|\| 0\) \+ parseFloat\(taxprice \|\| 0\)/);
+  assert.match(apiRouteSource, /total_price: rideTotal/);
+  assert.match(driverApiRouteSource, /total_price: rideTotal/);
+});
+
+test("call routes deliver visible incoming-call notifications and socket events", function () {
+  assert.match(apiRouteSource, /driverNotify\(userids, "Incoming call from "/);
+  assert.match(driverApiRouteSource, /userNotific\(\[receiverId\], "Incoming call from "/);
+  assert.match(driverApiRouteSource, /emitToUser\(String\(req\.body\.receiver_id\), "end-call"/);
+});
+
+test("Emergency Alert and Lost Items routes retain their safety safeguards", function () {
+  assert.match(apiRouteSource, /title: "Rider Emergency Alert"/);
+  assert.match(driverApiRouteSource, /title: "Driver Emergency Alert"/);
+  assert.match(apiRouteSource, /router\.post\("\/lostitem\/report"/);
+  assert.match(apiRouteSource, /ridestatus: "completed"/);
+  assert.match(apiRouteSource, /type: "lost_item"/);
 });

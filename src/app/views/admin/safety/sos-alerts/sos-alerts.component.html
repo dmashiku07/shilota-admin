@@ -2,7 +2,7 @@
   <div class="col-12">
     <div class="card">
       <div class="card-header">
-        <h4 class="card-title">SOS Alerts</h4>
+        <h4 class="card-title">Emergency Alerts</h4>
       </div>
       <div class="card-body">
         <div class="row mb-2">
@@ -21,7 +21,7 @@
           </div>
         </div>
 
-        <div *ngIf="loading" class="text-muted">Loading SOS alerts...</div>
+        <div *ngIf="loading" class="text-muted">Loading Emergency Alerts...</div>
         <div class="table-responsive" *ngIf="!loading">
           <table class="table table-striped">
             <thead>
@@ -68,7 +68,7 @@
                 </td>
               </tr>
               <tr *ngIf="filteredAlerts.length === 0">
-                <td colspan="8" class="text-muted">No SOS alerts found</td>
+                <td colspan="8" class="text-muted">No Emergency Alerts found</td>
               </tr>
             </tbody>
           </table>

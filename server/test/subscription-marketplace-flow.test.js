@@ -389,16 +389,10 @@ test("subscription marketplace flow gates, accepts passenger price, completes, a
       now: state.now
     });
     assert.equal(driverAcceptance.ok, true);
+    assert.equal(driverAcceptance.autoAccepted, true);
+    assert.equal(driverAcceptance.action, "accepted");
     assert.equal(driverAcceptance.offer.offered_price, 8000);
     assert.equal(driverAcceptance.offer.offer_type, rideOfferService.OFFER_TYPE_ACCEPT_PASSENGER_PRICE);
-
-    const accepted = await rideOfferService.acceptRideOffer({
-      rideId: state.ride._id,
-      userId: state.ride.user_id,
-      offerId: driverAcceptance.offer.id,
-      now: new Date("2026-07-24T09:02:00.000Z")
-    });
-    assert.equal(accepted.ok, true);
     assert.equal(state.ride.driver_id, state.driver._id);
     assert.equal(state.ride.accepted_offer_id, "offer-counter-1");
     assert.equal(state.ride.final_agreed_price, 8000);

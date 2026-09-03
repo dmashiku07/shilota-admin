@@ -334,6 +334,24 @@ async function submitRideOffer(options) {
     existing.message = message;
     existing.expires_at = buildOfferExpiry(now, ride);
     await existing.save();
+    if (isPassengerBroadcastRide(ride)) {
+      const accepted = await acceptRideOffer({
+        rideId: rideId,
+        userId: String(ride.user_id),
+        offerId: String(existing._id),
+        now: now
+      });
+      if (!accepted.ok) {
+        return accepted;
+      }
+      return {
+        ok: true,
+        action: "accepted",
+        autoAccepted: true,
+        ride: accepted.ride,
+        offer: accepted.offer
+      };
+    }
     return {
       ok: true,
       action: "updated",
@@ -353,6 +371,33 @@ async function submitRideOffer(options) {
     status: "PENDING",
     expires_at: buildOfferExpiry(now, ride)
   });
+
+  // A passenger-priced broadcast is an invitation to accept the passenger's
+  // exact price, not a list of offers for the passenger to choose from. Make
+  // the first driver's acceptance atomic through acceptRideOffer; concurrent
+  // drivers receive RIDE_OFFER_ALREADY_ACCEPTED from that compare-and-set.
+  if (isPassengerBroadcastRide(ride)) {
+    const accepted = await acceptRideOffer({
+      rideId: rideId,
+      userId: String(ride.user_id),
+      offerId: String(created._id),
+      now: now
+    });
+    if (!accepted.ok) {
+      await RideOffer.updateOne(
+        { _id: created._id, status: "PENDING" },
+        { $set: { status: "REJECTED" } }
+      ).exec();
+      return accepted;
+    }
+    return {
+      ok: true,
+      action: "accepted",
+      autoAccepted: true,
+      ride: accepted.ride,
+      offer: accepted.offer
+    };
+  }
 
   return {
     ok: true,

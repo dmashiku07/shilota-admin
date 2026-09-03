@@ -119,6 +119,15 @@ var RidesSchema = new Schema({
     ride_completed_at: {
         type: Date,
     },
+    ride_cancelled_at: {
+        type: Date,
+    },
+    cancelled_by: {
+        type: String,
+    },
+    cancellation_reason: {
+        type: String,
+    },
     vehicle_no: {
         type: String,
     },

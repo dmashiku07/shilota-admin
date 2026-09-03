@@ -37,6 +37,7 @@ var UserSchema = new Schema({
   },
   emergency_contact: Object,
   profile_image: { type: String, default: "user.png" },
+  profile_image_updated_at: { type: Date, default: null },
   customer_id: { type: String },
   walletmoney: {
     type: Number,

@@ -3630,7 +3630,7 @@ router.post("/rideoffers/submit", function (req, res) {
       NotifyDevices.findOne({
         user_id: result.ride.user_id
       }, function (_notifyErr, userdevices) {
-        const acceptedPassengerPrice = result.offer.offer_type === "ACCEPT_PASSENGER_PRICE";
+        const acceptedPassengerPrice = result.autoAccepted === true;
         const message = acceptedPassengerPrice
           ? "A driver accepted your price"
           : result.action === "updated"
@@ -3638,7 +3638,9 @@ router.post("/rideoffers/submit", function (req, res) {
             : "A driver sent an offer for your trip";
         const data = {
           ride_id: String(result.ride._id),
-          type: result.action === "updated" ? "offer_updated" : "offer_created",
+          type: acceptedPassengerPrice
+            ? "acceptride"
+            : result.action === "updated" ? "offer_updated" : "offer_created",
           message: message,
           offer_id: String(result.offer.id),
           offer_type: String(result.offer.offer_type || "DRIVER_DIRECT_OFFER"),
@@ -3654,10 +3656,12 @@ router.post("/rideoffers/submit", function (req, res) {
 
       return res.json({
         status: "true",
-        message: result.offer.offer_type === "ACCEPT_PASSENGER_PRICE"
-          ? "Passenger price accepted"
+        message: result.autoAccepted === true
+          ? "Passenger price accepted and ride assigned"
           : result.action === "updated" ? "Ride offer updated" : "Ride offer submitted",
-        offer: result.offer
+        offer: result.offer,
+        ride_status: result.ride.ridestatus,
+        assigned: result.autoAccepted === true ? "true" : "false"
       });
     }).catch(function () {
       senderr(res);
@@ -3968,9 +3972,7 @@ router.post('/completeridedetails', function (req, res) {
                   rideresult.drop_lng = rides.drop_lng;
                   rideresult.driver_name = rides.driver_id.full_name;
                   rideresult.driver_image = base_url + '/gallery/drivers/' + rides.driver_id.profile_image;
-	                  rideresult.ride_fare = rides.pricing_mode === "driver_offer"
-	                    ? (rides.final_agreed_price || rides.baseprice)
-	                    : rides.baseprice;
+	                  rideresult.ride_fare = getRideFinalAmount(rides, roundCustomerPayableAmount);
                   rideresult.basefare = rides.total;
                   rideresult.commissionamount = rides.commissionamount;
                   rideresult.ride_tax = rides.tax;
@@ -4170,13 +4172,13 @@ router.post('/ridehistory', function (req, res) {
 	                    profile_image = 'category.png';
 	                  }
 	                  let categoryimage = base_url + '/imagegallery/' + profile_image;
-	                  let rideTotal = parseFloat(c.baseprice || 0) + parseFloat(taxprice || 0);
+	                  let rideTotal = getRideFinalAmount(c, roundCustomerPayableAmount);
 	                  rideresult.push({
 	                    onride_id: c._id,
 	                    category_image: categoryimage,
 	                    category_name: c.category_id && c.category_id.category_name ? c.category_id.category_name : "",
 	                    ride_status: c.ridestatus,
-	                    total_price: roundCustomerPayableAmount(rideTotal),
+	                    total_price: rideTotal,
 	                    vehicle_no: vehicle_no,
 	                    pickup_time: statustime
 	                  });
@@ -4209,27 +4211,43 @@ router.post('/cancelride', function (req, res) {
         message: 'Unauthorized access'
       });
     } else {
-      if (!req.body.user_id || !req.body.onride_id) {
-        senderr(res);
+      if (!req.body.onride_id) {
+        return senderr(res);
       } else {
         Rides.findOneAndUpdate({
-          _id: req.body.onride_id
+          _id: req.body.onride_id,
+          driver_id: String(driver._id),
+          ridestatus: { $in: ["accepted", "ontheway"] }
         }, {
           "$set": {
-            ridestatus: "cancelled"
+            ridestatus: "cancelled",
+            ridestatusat: timeZone(),
+            ride_cancelled_at: new Date(),
+            cancelled_by: "driver",
+            cancellation_reason: String(req.body.reason || "Driver could not continue the ride")
           }
-        }).exec(function (err, reviews) {
+        }, { new: true }).exec(function (err, ride) {
           if (err) {
-            senderr(res);
+            return senderr(res);
+          } else if (!ride) {
+            return res.json({
+              status: "false",
+              message: "This ride cannot be cancelled by the driver in its current state"
+            });
           } else {
-            /*let notifications = {
-            user_id: req.body.user_id, notify_to: rides.user_id, title: "Ride Canceelled",
-            message: "Your Ride has been cancelled by the driver"
+            const message = "Your ride has been cancelled by the driver";
+            const data = {
+              ride_id: String(ride._id),
+              type: "cancelride",
+              cancelled_by: "driver",
+              message: message
             };
-            notifyTo(notifications);*/
-            res.json({
+            userNotific([ride.user_id], message, data);
+            socketRegistry.emitToUser(String(ride.user_id), "ride-cancelled", data);
+            applyPostRideAvailability(driver._id, { now: new Date() }).catch(function () {});
+            return res.json({
               status: "true",
-              message: 'Your Ride has been cancelled'
+              message: 'Your ride has been cancelled'
             });
           }
         });
@@ -4792,13 +4810,13 @@ router.post("/sosalert", function (req, res) {
       notifyTo({
         user_id: String(driver._id),
         notify_to: "admin",
-        title: "Driver SOS Alert",
+        title: "Driver Emergency Alert",
         message: alert.message
       });
 
       return res.json({
         status: "true",
-        message: "SOS alert sent",
+        message: "Emergency Alert sent",
         sos_id: savedAlert._id
       });
     });
@@ -5277,6 +5295,8 @@ router.post("/makecall", function (req, res) {
         type: req.body.type,
         user_name: driver.full_name,
         user_image: base_url + "/gallery/drivers/" + profileImage,
+        onride_id: req.body.onride_id || "",
+        ride_id: req.body.onride_id || "",
         message: "make_audio_call"
       };
 
@@ -5286,7 +5306,7 @@ router.post("/makecall", function (req, res) {
         room_id: req.body.room_id,
         onride_id: req.body.onride_id || ""
       }));
-      userNotific([receiverId], "", data);
+      userNotific([receiverId], "Incoming call from " + driver.full_name, data);
       const socketDelivered = socketRegistry.emitToUser(receiverId, "incoming-call", data);
       console.log("driver_makecall_socket", JSON.stringify({
         receiver_id: receiverId,
@@ -5363,6 +5383,7 @@ router.post("/endcall", function (req, res) {
     };
 
     userNotific([req.body.receiver_id], "", data);
+    socketRegistry.emitToUser(String(req.body.receiver_id), "end-call", data);
     saveDriverCallLog({
       room_id: req.body.room_id,
       status: "ended",

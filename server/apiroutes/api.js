@@ -1184,7 +1184,8 @@ router.get("/profile/:userid", function (req, res) {
             result.user_id = user._id;
             result.full_name = user.full_name;
             result.email = user.email;
-            result.user_image = base_url + "/gallery/users/" + profile_image;
+            result.user_image = base_url + "/gallery/users/" + profile_image +
+              (user.profile_image_updated_at ? "?v=" + user.profile_image_updated_at.getTime() : "");
             result.country_code = user.country_code;
             result.phone_number = user.phone_number;
             result.invite_url = "URL";
@@ -1630,7 +1631,7 @@ router.post("/uploadprofileimage", function (req, res) {
             if (findErr || !profileUser) {
               return senderr(res);
             }
-            if (profileUser.profile_image) {
+            if (profileUser.profile_image && profileUser.profile_image !== "user.png") {
               fs.unlink(userassets + profileUser.profile_image, function (error) {
                 if (error) {
                   //console.log(err);
@@ -1639,13 +1640,15 @@ router.post("/uploadprofileimage", function (req, res) {
               });
             }
             profileUser.profile_image = res.req.file.filename;
+            profileUser.profile_image_updated_at = new Date();
             profileUser.save(function (saveErr) {
               if (saveErr) {
                 return senderr(res);
               }
               res.json({
                 status: "true",
-                user_image: base_url + "/gallery/users/" + res.req.file.filename,
+                user_image: base_url + "/gallery/users/" + res.req.file.filename +
+                  "?v=" + profileUser.profile_image_updated_at.getTime(),
                 message: "Image uploaded successfully"
               });
             });
@@ -3392,7 +3395,7 @@ router.post(
           Rides.findOne(querystring)
             .populate("driver_id")
             .exec(function (err, rides) {
-              if (!err) {
+	              if (!err && rides) {
 	                if (rides.ridestatus == "ontheway" || rides.ridestatus == "accepted" || rides.ridestatus == "onride") {
 	                  rideresult.status = "true";
                   rideresult.pickup_location = rides.pickup_location;
@@ -3621,6 +3624,38 @@ router.post(
   }
 );
 
+/* Restore the passenger's current ride after app restart/navigation. */
+router.post("/activeride", function (req, res) {
+  passport.authenticate("jwt", { session: false }, function (err, user) {
+    if (err === "AccountDeleted") {
+      return res.json({ status: "error", message: "Account has been deleted successfully" });
+    }
+    if (!user || String(user._id) !== String(req.body.user_id || "")) {
+      return res.json({ status: "error", message: "Unauthorized access" });
+    }
+
+    Rides.findOne({
+      user_id: String(user._id),
+      ridestatus: { $in: ACTIVE_RIDE_STATUSES }
+    }).sort({ created_at: -1 }).exec(function (rideErr, ride) {
+      if (rideErr) {
+        return senderr(res);
+      }
+      if (!ride) {
+        return res.json({ status: "false", message: "No active ride" });
+      }
+      return res.json({
+        status: "true",
+        onride_id: ride._id,
+        ride_status: ride.ridestatus,
+        request_type: ride.request_type || "STANDARD",
+        pricing_mode: ride.pricing_mode || "platform",
+        created_at: ride.created_at || null
+      });
+    });
+  })(req, res);
+});
+
 router.post("/rideoffers", function (req, res) {
   passport.authenticate("jwt", { session: false }, function (err, user) {
     if (err === "AccountDeleted") {
@@ -3790,13 +3825,13 @@ router.post("/sosalert", function (req, res) {
       notifyTo({
         user_id: String(user._id),
         notify_to: "admin",
-        title: "Rider SOS Alert",
+        title: "Rider Emergency Alert",
         message: alert.message
       });
 
       return res.json({
         status: "true",
-        message: "SOS alert sent",
+        message: "Emergency Alert sent",
         sos_id: savedAlert._id
       });
     });
@@ -3823,12 +3858,13 @@ router.post("/lostitem/report", function (req, res) {
 
     Rides.findOne({
       _id: req.body.ride_id,
-      user_id: String(user._id)
+      user_id: String(user._id),
+      ridestatus: "completed"
     }).exec(function (rideErr, ride) {
       if (rideErr || !ride) {
         return res.json({
           status: "false",
-          message: "Ride not found"
+          message: "Lost items can only be reported for a completed ride"
         });
       }
 
@@ -4970,14 +5006,14 @@ router.post(
                       let profile_image = "category.png";
                     }
                     let categoryimage = base_url + "/imagegallery/" + profile_image;
-                    let rideTotal = parseFloat(c.baseprice) + parseFloat(taxprice);
+                    let rideTotal = getRideFinalAmount(c, roundCustomerPayableAmount);
                     rideresult.push({
                       onride_id: c._id,
                       category_image: categoryimage,
                       category_name: c.category_id.category_name,
                       ride_status: c.ridestatus,
                       driver_id: c.driver_id,
-                      total_price: roundCustomerPayableAmount(rideTotal),
+                      total_price: rideTotal,
                       vehicle_no: vehicle_no,
                       pickup_time: statustime
                     });
@@ -5056,7 +5092,7 @@ router.post(
                     rideresult.drop_lng = rides.drop_lng;
                     rideresult.driver_name = rides.driver_id.full_name;
                     rideresult.driver_image = base_url + "/gallery/drivers/" + rides.driver_id.profile_image;
-                    rideresult.ride_fare = rides.baseprice; /* quoted fare before tax */
+                    rideresult.ride_fare = getRideFinalAmount(rides, roundCustomerPayableAmount);
                     rideresult.basefare = rides.total; /* original base fare */
                     rideresult.commissionamount = rides.commissionamount;
                     rideresult.ride_tax = rides.tax;
@@ -7154,18 +7190,20 @@ router.post("/makecall", function (req, res) {
             type: req.body.type,
             user_name: user.full_name,
             user_image: base_url + "/gallery/users/" + profile_image,
+            onride_id: req.body.onride_id || "",
+            ride_id: req.body.onride_id || "",
             message: "make_audio_call"
           };
 
           let userids = [req.body.receiver_id];
 
           if (req.body.user_type === "user") {
-            driverNotify(userids, "", data);
+            driverNotify(userids, "Incoming call from " + user.full_name, data);
             socketRegistry.emitToUser(req.body.receiver_id, "incoming-call", data);
           }
 
           if (req.body.user_type === "driver") {
-            userNotify(userids, "", data);
+            userNotify(userids, "Incoming call from " + user.full_name, data);
             socketRegistry.emitToUser(req.body.receiver_id, "incoming-call", data);
           }
 

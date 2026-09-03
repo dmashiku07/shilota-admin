@@ -33,7 +33,7 @@ export class AdminSosAlertsComponent implements OnInit {
     this.http.get(environment.apiUrl + '/safety/sosalerts')
       .pipe(
         catchError(() => {
-          this.toastr.error('Unable to load SOS alerts');
+          this.toastr.error('Unable to load Emergency Alerts');
           return of({ data: [] });
         }),
         finalize(() => {
@@ -76,10 +76,10 @@ export class AdminSosAlertsComponent implements OnInit {
       if (res && res.status === 'true') {
         alert.status = 'resolved';
         this.applyFilters();
-        this.toastr.success('SOS alert resolved');
+        this.toastr.success('Emergency Alert resolved');
       } else {
-        this.toastr.error('Unable to resolve SOS alert');
+        this.toastr.error('Unable to resolve Emergency Alert');
       }
-    }, () => this.toastr.error('Unable to resolve SOS alert'));
+    }, () => this.toastr.error('Unable to resolve Emergency Alert'));
   }
 }
