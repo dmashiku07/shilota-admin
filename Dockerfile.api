@@ -13,12 +13,18 @@ RUN --mount=type=cache,id=shilota-npm,target=/root/.npm \
 
 FROM dependencies AS build
 
+# Keep Angular from exhausting a small deployment host by spawning one worker
+# per reported CPU. Two workers provide useful parallelism without forcing the
+# host into swap, which previously made bundle generation appear to hang.
+ENV NG_BUILD_MAX_WORKERS=2
+ENV NODE_OPTIONS=--max-old-space-size=2048
+
 # Keep the expensive Angular build independent from backend-only changes.
 COPY angular.json tsconfig.json browserslist ./
 COPY scripts/write-runtime-config.js scripts/verify-admin-build.js ./scripts/
 COPY src ./src
 
-RUN --mount=type=cache,target=/app/.angular/cache \
+RUN --mount=type=cache,id=shilota-angular,target=/app/.angular/cache,sharing=locked \
     npm run build:admin && npm run verify:admin-build
 
 # These files change frequently but do not affect the compiled admin bundle.
@@ -26,9 +32,10 @@ COPY app.js ./app.js
 COPY server ./server
 COPY scripts ./scripts
 
-# Derive production dependencies from the already-installed tree instead of
-# downloading and resolving the same packages a second time.
-FROM dependencies AS production-dependencies
+# Derive production dependencies only after the Angular build. Basing this
+# stage on `build` prevents BuildKit from running npm prune concurrently with
+# Angular compilation and competing for limited staging CPU/RAM.
+FROM build AS production-dependencies
 
 RUN npm prune --omit=dev --legacy-peer-deps --ignore-scripts --no-audit --no-fund
 
