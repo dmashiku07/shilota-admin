@@ -74,10 +74,6 @@ export const ROUTES: RouteInfo[] = [
             {
                 path: '/admin/reports', title: 'Platform Reports', icon: '', class: '',
                 badge: '', badgeClass: '', isExternalLink: false, submenu: []
-            },
-            {
-                path: '/admin/management/settlementHistory', title: 'Legacy Commission History', icon: '', class: '',
-                badge: '', badgeClass: '', isExternalLink: false, submenu: []
             }
         ]
     },

@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { ChangeDetectorRef, Component, OnInit } from '@angular/core';
 import { FormBuilder, Validators } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ToastrService } from 'ngx-toastr';
@@ -24,7 +24,8 @@ export class SubscriptionPlanEditComponent implements OnInit {
     private route: ActivatedRoute,
     private router: Router,
     private service: SubscriptionPlanService,
-    private toastr: ToastrService
+    private toastr: ToastrService,
+    private cdr: ChangeDetectorRef
   ) {
     this.form = this.fb.group({
       customer_type: ['DRIVER', Validators.required],
@@ -56,6 +57,7 @@ export class SubscriptionPlanEditComponent implements OnInit {
     if (!id) {
       this.loading = false;
       this.loadError = 'No subscription plan was selected.';
+      this.cdr.detectChanges();
       return;
     }
 
@@ -64,6 +66,7 @@ export class SubscriptionPlanEditComponent implements OnInit {
       timeout(15000),
       finalize(() => {
         this.loading = false;
+        this.cdr.detectChanges();
       })
     ).subscribe((res: any) => {
       if (res && (res.status === 'true' || res.status === true) && res.data) {
@@ -73,16 +76,20 @@ export class SubscriptionPlanEditComponent implements OnInit {
       }
 
       this.loadError = res && res.message ? res.message : 'Unable to load subscription plan.';
+      this.cdr.detectChanges();
     }, () => {
       this.loadError = 'Unable to load the subscription plan. Check the connection and try again.';
+      this.cdr.detectChanges();
     });
   }
 
   private loadFeatureCatalog() {
     this.service.getFeatureCatalog().pipe(take(1), timeout(15000)).subscribe((res: any) => {
       this.featureCatalog = res && res.status === 'true' && Array.isArray(res.data) ? res.data : [];
+      this.cdr.detectChanges();
     }, () => {
       this.featureCatalog = [];
+      this.cdr.detectChanges();
     });
   }
 
@@ -143,6 +150,7 @@ export class SubscriptionPlanEditComponent implements OnInit {
     this.saving = true;
     this.service.update(this.route.snapshot.params['id'], this.serializePayload()).subscribe((res: any) => {
       this.saving = false;
+      this.cdr.detectChanges();
       if (res && res.status === 'true') {
         this.toastr.success(res.message || 'Plan updated');
         this.router.navigate(['admin/subscription-plans/view'], { queryParams: this.cancelQueryParams });
@@ -152,6 +160,7 @@ export class SubscriptionPlanEditComponent implements OnInit {
       }
     }, () => {
       this.saving = false;
+      this.cdr.detectChanges();
       this.toastr.error('Unable to update subscription plan');
     });
   }

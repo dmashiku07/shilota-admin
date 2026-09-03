@@ -1209,7 +1209,8 @@ router.get("/helppages", function (req, res) {
     else {
       Help.find(
         {
-          type: "user"
+          type: "user",
+          pagetype: { $in: ["PrivacyPolicy", "Terms"] }
         },
         function (err, helps) {
           if (!err) {
