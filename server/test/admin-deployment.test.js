@@ -16,9 +16,14 @@ const packageJson = JSON.parse(
 test("production admin build is configured for /admin/", () => {
   const productionConfig =
     angularConfig.projects["taxi-booking-script"].architect.build.configurations.production;
+  const buildConfig = angularConfig.projects["taxi-booking-script"].architect.build;
 
   assert.equal(productionConfig.baseHref, "/admin/");
-  assert.equal(productionConfig.deployUrl, "/admin/");
+  assert.equal(buildConfig.builder, "@angular/build:application");
+  assert.deepEqual(buildConfig.options.outputPath, {
+    base: "dist/shilota",
+    browser: ""
+  });
   assert.match(packageJson.scripts["build:admin"], /ng build --configuration production/);
 });
 

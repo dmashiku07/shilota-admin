@@ -2,7 +2,7 @@
   <div class="col-12">
     <div class="card">
       <div class="card-header">
-        <h4 class="card-title">Emergency Alerts</h4>
+        <h4 class="card-title">Emergency Alert</h4>
       </div>
       <div class="card-body">
         <div class="row mb-2">
@@ -21,7 +21,7 @@
           </div>
         </div>
 
-        <div *ngIf="loading" class="text-muted">Loading Emergency Alerts...</div>
+        <div *ngIf="loading" class="text-muted">Loading Emergency Alert records...</div>
         <div class="table-responsive" *ngIf="!loading">
           <table class="table table-striped">
             <thead>
@@ -62,13 +62,16 @@
                   <span *ngIf="!alert.response_due_at">-</span><br>
                   <small>Callback: {{ alert.callback_status || 'pending' }}</small>
                 </td>
-                <td>{{ alert.status || '-' }}</td>
+                <td>
+                  {{ alert.status || '-' }}<br>
+                  <small *ngIf="alert.admin_notes">{{ alert.admin_notes }}</small>
+                </td>
                 <td>
                   <button class="btn btn-sm btn-primary" *ngIf="alert.status !== 'resolved'" (click)="resolveAlert(alert)">Resolve</button>
                 </td>
               </tr>
               <tr *ngIf="filteredAlerts.length === 0">
-                <td colspan="8" class="text-muted">No Emergency Alerts found</td>
+                <td colspan="8" class="text-muted">No Emergency Alert records found</td>
               </tr>
             </tbody>
           </table>

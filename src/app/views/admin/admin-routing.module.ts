@@ -10,7 +10,6 @@ import { AdminCallLogsComponent } from './safety/call-logs/call-logs.component';
 import { AdminRiderBlocksComponent } from './safety/rider-blocks/rider-blocks.component';
 import { AdminPoolSettingsComponent } from './safety/pool-settings/pool-settings.component';
 import { AdminDemandHeatmapComponent } from './safety/demand-heatmap/demand-heatmap.component';
-import { AdminAcceptanceSettingsComponent } from './safety/acceptance-settings/acceptance-settings.component';
 import { AdminPriceBroadcastSettingsComponent } from './safety/price-broadcast-settings/price-broadcast-settings.component';
 import { AdminDestinationBroadcastMonitorComponent } from './safety/destination-broadcast-monitor/destination-broadcast-monitor.component';
 import { PlatformReportsComponent } from './reports/platform-reports/platform-reports.component';
@@ -42,7 +41,6 @@ const routes: Routes = [
       { path: 'price-broadcast-settings', component: AdminPriceBroadcastSettingsComponent },
       { path: 'destination-broadcast-monitor', component: AdminDestinationBroadcastMonitorComponent },
       { path: 'demand-heatmap', component: AdminDemandHeatmapComponent },
-      { path: 'acceptance-settings', component: AdminAcceptanceSettingsComponent },
       { path: 'reports', component: PlatformReportsComponent },
 
       {

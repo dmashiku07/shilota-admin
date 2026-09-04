@@ -64,7 +64,7 @@ import { RatingShimModule } from "app/shared/rating/rating-shim.module";
     TranslateModule,
     NgxSkeletonLoaderModule,
     NgxIntlTelInputModule,
-    BsDropdownModule.forRoot(),
+    BsDropdownModule,
     AdsenseShimModule,
     AgmShimModule,
     RatingShimModule,

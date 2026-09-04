@@ -3794,7 +3794,7 @@ router.post("/sosalert", function (req, res) {
 
     let alert = new SosAlerts({
       actor_type: "user",
-      actor_id: req.body.user_id || user._id,
+      actor_id: user._id,
       actor_model: "User",
       ride_id: req.body.ride_id || req.body.onride_id || "",
       location: req.body.location || "",
@@ -7825,6 +7825,8 @@ schedulenearBy = function (driverIds, rides) {
           drop_location: rides.drop_location,
           drop_lat: rides.drop_lat,
           drop_lng: rides.drop_lng,
+          approx_price: rides.baseprice,
+          passenger_offered_price: rides.passenger_offered_price || null,
           message: translationServer.langTranslate("NewRideavailable", lang),
           type: "nearby"
         };
@@ -7855,6 +7857,8 @@ schedulenearBy = function (driverIds, rides) {
           drop_location: rides.drop_location,
           drop_lat: rides.drop_lat,
           drop_lng: rides.drop_lng,
+          approx_price: rides.baseprice,
+          passenger_offered_price: rides.passenger_offered_price || null,
           message: translationServer.langTranslate("NewRideavailable", lang),
           type: "nearby"
         };

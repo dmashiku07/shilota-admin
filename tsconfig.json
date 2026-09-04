@@ -1,10 +1,13 @@
 {
   "compileOnSave": false,
   "compilerOptions": {
-    "downlevelIteration": true,
     "importHelpers": true,
     "outDir": "./dist/out-tsc",
-    "baseUrl": "src",
+    "paths": {
+      "app/*": ["./src/app/*"],
+      "environments/*": ["./src/environments/*"],
+      "ngx-toastr": ["./src/app/shared/toast/toast-shim.ts"]
+    },
     "sourceMap": true,
     "declaration": false,
     "moduleResolution": "bundler",
@@ -22,9 +25,15 @@
       "es2022",
       "dom"
     ],
-    "module": "esnext"
+    "module": "esnext",
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "strict": false,
+    "noImplicitAny": false,
+    "strictNullChecks": false
   },
   "angularCompilerOptions": {
-    "preserveWhitespaces": false
+    "preserveWhitespaces": false,
+    "strictTemplates": false
   }
 }

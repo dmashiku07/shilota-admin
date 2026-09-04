@@ -4778,7 +4778,7 @@ router.post("/sosalert", function (req, res) {
 
     let alert = new SosAlerts({
       actor_type: "driver",
-      actor_id: req.body.user_id || driver._id,
+      actor_id: driver._id,
       actor_model: "Driver",
       ride_id: req.body.ride_id || req.body.onride_id || "",
       location: req.body.location || "",
@@ -5332,24 +5332,24 @@ router.post("/makecall", function (req, res) {
       });
     };
 
-    if (req.body.receiver_id) {
-      return sendCallNotification(req.body.receiver_id);
+    if (req.body.onride_id) {
+      return Rides.findOne({
+        _id: req.body.onride_id
+      }, function (err, ride) {
+        if (err || !ride || !ride.user_id) {
+          return senderr(res);
+        }
+        if (ride.driver_id && String(ride.driver_id) !== String(req.body.sender_id)) {
+          return res.json({
+            status: "error",
+            message: "Unauthorized access"
+          });
+        }
+        return sendCallNotification(ride.user_id);
+      });
     }
 
-    Rides.findOne({
-      _id: req.body.onride_id
-    }, function (err, ride) {
-      if (err || !ride || !ride.user_id) {
-        return senderr(res);
-      }
-      if (ride.driver_id && String(ride.driver_id) !== String(req.body.sender_id)) {
-        return res.json({
-          status: "error",
-          message: "Unauthorized access"
-        });
-      }
-      return sendCallNotification(ride.user_id);
-    });
+    return sendCallNotification(req.body.receiver_id);
   });
 });
 

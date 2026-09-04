@@ -3,7 +3,7 @@ import { AuthenticationService } from 'app/service/authentication.service';
 import { FaqService } from 'app/service/faq.service';
 import { environment } from 'environments/environment';
 import { TranslateService } from '@ngx-translate/core';
-import * as $ from 'jquery';
+import $ from 'jquery';
 @Component({
   standalone: false,
 selector: 'app-frontheader',

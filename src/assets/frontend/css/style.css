@@ -275,7 +275,7 @@ input.book_details:focus {
 
 .enter_current {
   border: 1px solid #dbdbdb;
-  background-image: url("assets/images/icons/search_icon.png");
+  background-image: url("/admin/assets/images/icons/search_icon.png");
   background-repeat: no-repeat;
   height: 45px;
   width: 100%;
@@ -513,13 +513,13 @@ input.book_details:focus {
 }
 
 .ac {
-  background-image: url("assets/images/home/ac.png");
+  background-image: url("/admin/assets/images/home/ac.png");
   height: 26px;
   width: 23px;
 }
 
 .usb {
-  background-image: url("assets/images/home/usb.png");
+  background-image: url("/admin/assets/images/home/usb.png");
   height: 17px;
   width: 28px;
 }
@@ -1388,7 +1388,7 @@ ul {
 
 /**************************icons********************************/
 .no_services {
-  background-image: url("assets/images/icons/no_ride.png");
+  background-image: url("/admin/assets/images/icons/no_ride.png");
   width: 100px;
   height: 100px;
   background-size: cover;
@@ -1396,7 +1396,7 @@ ul {
 }
 
 .no_service {
-  background-image: url("assets/images/icons/no_service.png");
+  background-image: url("/admin/assets/images/icons/no_service.png");
   width: 100px;
   height: 100px;
   background-size: cover;
@@ -1404,7 +1404,7 @@ ul {
 }
 
 .no_driver {
-  background-image: url("assets/images/no_driver.png");
+  background-image: url("/admin/assets/images/no_driver.png");
   width: 100px;
   height: 100px;
   background-size: cover;
@@ -1423,7 +1423,7 @@ ul {
 .wallet_icon{background-image: url('../images/icons/wallet.png');}
 .paypal_icon{background-image: url('../images/icons/paypal.png');} */
 .wallet_icon {
-  background-image: url("assets/images/icons/wallet.png");
+  background-image: url("/admin/assets/images/icons/wallet.png");
 }
 
 .payment_icons {
@@ -1434,31 +1434,31 @@ ul {
 }
 
 .nav_payment {
-  background-image: url("assets/images/icons/nav_payment.png");
+  background-image: url("/admin/assets/images/icons/nav_payment.png");
 }
 
 .nav_ride {
-  background-image: url("assets/images/icons/nav_rides.png");
+  background-image: url("/admin/assets/images/icons/nav_rides.png");
 }
 
 .nav_wallet {
-  background-image: url("assets/images/icons/nav_wallet.png");
+  background-image: url("/admin/assets/images/icons/nav_wallet.png");
 }
 
 .nav_invite {
-  background-image: url("assets/images/icons/nav_invite.png");
+  background-image: url("/admin/assets/images/icons/nav_invite.png");
 }
 
 .nav_share {
-  background-image: url("assets/images/icons/share.png");
+  background-image: url("/admin/assets/images/icons/share.png");
 }
 
 .nav_help {
-  background-image: url("assets/images/icons/nav_help.png");
+  background-image: url("/admin/assets/images/icons/nav_help.png");
 }
 
 .notification {
-  background-image: url("assets/images/icons/notification.png");
+  background-image: url("/admin/assets/images/icons/notification.png");
 }
 
 .nav_icons {
@@ -1487,19 +1487,19 @@ ul {
 }
 
 .red_arrow {
-  background-image: url("assets/images/icons/red_arrow.png");
+  background-image: url("/admin/assets/images/icons/red_arrow.png");
 }
 
 .green_arrow {
-  background-image: url("assets/images/icons/green_arrow.png");
+  background-image: url("/admin/assets/images/icons/green_arrow.png");
 }
 
 .subs_arrow {
-  background-image: url("assets/images/icons/subs_arrow.png");
+  background-image: url("/admin/assets/images/icons/subs_arrow.png");
 }
 
 .del_icon {
-  background: url("assets/images/icons/menu.png") no-repeat scroll;
+  background: url("/admin/assets/images/icons/menu.png") no-repeat scroll;
   background-size: cover;
   height: 30px;
   width: 30px;
@@ -1520,7 +1520,7 @@ ul {
 }
 
 .search_icon {
-  background-image: url("assets/images/icons/search-gray.png");
+  background-image: url("/admin/assets/images/icons/search-gray.png");
   width: 16px;
   height: 16px;
   background-size: cover !important;
@@ -1536,11 +1536,11 @@ ul {
 }
 
 .tick_icon {
-  background: url("assets/images/icons/tick.png");
+  background: url("/admin/assets/images/icons/tick.png");
 }
 
 .decline_icon {
-  background: url("assets/images/icons/payment_decline.png") no-repeat scroll center;
+  background: url("/admin/assets/images/icons/payment_decline.png") no-repeat scroll center;
 }
 
 .ride_cancel_icon {
@@ -1568,7 +1568,7 @@ ul {
 }
 
 .call_icon {
-  background: url("assets/images/icons/call.png") no-repeat scroll;
+  background: url("/admin/assets/images/icons/call.png") no-repeat scroll;
   background-size: cover !important;
   height: 25px;
   width: 25px;
@@ -1625,11 +1625,11 @@ ul {
 }
 
 .micro {
-  background-image: url("assets/images/vehicles/ic_micro.png");
+  background-image: url("/admin/assets/images/vehicles/ic_micro.png");
 }
 
 .mini {
-  background-image: url("assets/images/vehicles/ic_mini.png");
+  background-image: url("/admin/assets/images/vehicles/ic_mini.png");
 }
 
 .no_icons {
@@ -1640,18 +1640,18 @@ ul {
 }
 
 .no_wallet {
-  background-image: url("assets/images/icons/no_wallet.png");
+  background-image: url("/admin/assets/images/icons/no_wallet.png");
 }
 
 /* .no_notification{background-image: url("../images/icons/no_notification.png");}
 .no_referals{background-image: url("../images/icons/no_invite.png");}
 .no_card{background-image: url("../images/icons/no_payment.png");} */
 .no_ride {
-  background-image: url("assets/images/icons/no_ride.png");
+  background-image: url("/admin/assets/images/icons/no_ride.png");
 }
 
 .no_notification {
-  background-image: url("assets/images/icons/no_notification.png");
+  background-image: url("/admin/assets/images/icons/no_notification.png");
 }
 
 .share_btn {
@@ -1868,7 +1868,7 @@ ul {
 }
 
 .invite-earn {
-  background: url("assets/images/icons/notification_bg.png") center;
+  background: url("/admin/assets/images/icons/notification_bg.png") center;
   background-size: cover;
 }
 
@@ -1877,7 +1877,7 @@ ul {
 }
 
 .invite_icon {
-  background-image: url("assets/images/icons/invite_earn.png");
+  background-image: url("/admin/assets/images/icons/invite_earn.png");
   background-size: cover;
   display: inline-block;
   width: 100px;
@@ -1939,7 +1939,7 @@ ul {
 }
 
 .car-type {
-  /* background: url("assets/images/vehicles/ic_mini.png") no-repeat center; */
+  /* background: url("/admin/assets/images/vehicles/ic_mini.png") no-repeat center; */
   height: 40px;
   width: 76px;
   margin-right: 20px;
@@ -1947,7 +1947,7 @@ ul {
 }
 
 .car-rent-price {
-  background: url("assets/images/speed.png") no-repeat center;
+  background: url("/admin/assets/images/speed.png") no-repeat center;
   height: 40px;
   width: 43px;
   display: block;
@@ -2402,7 +2402,7 @@ ul {
 }
 
 .faq_back {
-  background-image: url("assets/images/icons/arrow1.png");
+  background-image: url("/admin/assets/images/icons/arrow1.png");
   width: 20px;
   height: 20px;
   background-size: cover;

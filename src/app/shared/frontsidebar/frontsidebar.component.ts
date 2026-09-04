@@ -5,7 +5,7 @@ import { ToastrService } from "ngx-toastr";
 import { Router } from "@angular/router";
 import { NgbModal } from "@ng-bootstrap/ng-bootstrap";
 import { TranslateService } from '@ngx-translate/core';
-import * as $ from 'jquery';
+import $ from 'jquery';
 
 @Component({
   standalone: false,

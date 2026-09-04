@@ -53,6 +53,27 @@ textarea {
   opacity: 1;
 }
 
+#toast-container {
+  position: fixed;
+  z-index: 1060;
+  top: 16px;
+  right: 16px;
+  width: min(360px, calc(100vw - 32px));
+}
+
+#toast-container .toast {
+  display: block;
+  margin-bottom: 10px;
+  padding: 14px 16px;
+  border-radius: 6px;
+  color: #fff;
+  box-shadow: 0 5px 18px rgba(0, 0, 0, 0.2);
+}
+
+.toast-warning {
+  background-color: #f0ad4e !important;
+}
+
 /*
  * The legacy Apex palette gives `.btn-*` text the contextual colour. That is
  * correct for flat buttons, but makes labels disappear when the same colour is

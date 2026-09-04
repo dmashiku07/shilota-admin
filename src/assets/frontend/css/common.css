@@ -1303,7 +1303,7 @@ button {
   top: 0px;
   color: #292929;
   transition: 0.5s;
-  pointer-event: none;
+  pointer-events: none;
 }
 
 .form-design input:focus~label,

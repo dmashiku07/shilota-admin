@@ -18,7 +18,7 @@ import { NgbModal, ModalDismissReasons } from '@ng-bootstrap/ng-bootstrap';
 import * as _moment from 'moment';
 import { TranslateService } from '@ngx-translate/core';
 import { TranslateModule } from '@ngx-translate/core';
-import * as $ from 'jquery';
+import $ from 'jquery';
 const moment = (_moment as any).default ? (_moment as any).default : _moment;
 declare let google;
 @Component({

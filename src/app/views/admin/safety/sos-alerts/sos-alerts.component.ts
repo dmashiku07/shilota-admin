@@ -33,7 +33,7 @@ export class AdminSosAlertsComponent implements OnInit {
     this.http.get(environment.apiUrl + '/safety/sosalerts')
       .pipe(
         catchError(() => {
-          this.toastr.error('Unable to load Emergency Alerts');
+          this.toastr.error('Unable to load Emergency Alert records');
           return of({ data: [] });
         }),
         finalize(() => {
@@ -70,11 +70,20 @@ export class AdminSosAlertsComponent implements OnInit {
   }
 
   resolveAlert(alert: any) {
+    const notes = window.prompt('Add resolution notes for this Emergency Alert:');
+    if (notes === null) {
+      return;
+    }
     this.http.post(environment.apiUrl + '/safety/sosalerts/' + alert._id + '/resolve', {
-      resolved_by: 'admin'
+      status: 'resolved',
+      resolved_by: 'admin',
+      admin_notes: notes.trim(),
+      callback_status: 'completed'
     }).subscribe((res: any) => {
       if (res && res.status === 'true') {
         alert.status = 'resolved';
+        alert.admin_notes = notes.trim();
+        alert.callback_status = 'completed';
         this.applyFilters();
         this.toastr.success('Emergency Alert resolved');
       } else {
