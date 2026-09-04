@@ -13,10 +13,11 @@ RUN --mount=type=cache,id=shilota-npm,target=/root/.npm \
 
 FROM dependencies AS build
 
-# Keep Angular from exhausting a small deployment host by spawning one worker
-# per reported CPU. Two workers provide useful parallelism without forcing the
-# host into swap, which previously made bundle generation appear to hang.
-ENV NG_BUILD_MAX_WORKERS=2
+# Keep Angular predictable on the resource-constrained staging host. CI mode
+# disables Angular's persistent disk cache; Docker already caches this entire
+# build layer after a successful build, so an inner cache only adds slow I/O.
+ENV CI=true
+ENV NG_BUILD_MAX_WORKERS=1
 ENV NODE_OPTIONS=--max-old-space-size=2048
 
 # Keep the expensive Angular build independent from backend-only changes.
@@ -24,8 +25,7 @@ COPY angular.json tsconfig.json browserslist ./
 COPY scripts/write-runtime-config.js scripts/verify-admin-build.js ./scripts/
 COPY src ./src
 
-RUN --mount=type=cache,id=shilota-angular,target=/app/.angular/cache,sharing=locked \
-    npm run build:admin && npm run verify:admin-build
+RUN npm run build:admin && npm run verify:admin-build
 
 # These files change frequently but do not affect the compiled admin bundle.
 COPY app.js ./app.js
