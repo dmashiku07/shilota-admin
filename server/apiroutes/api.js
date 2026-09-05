@@ -13,6 +13,7 @@ const moment = require("moment");
 const googledistance = require("google-distance");
 const timezone = require("../utils/timezone");
 const socketRegistry = require("../socketRegistry");
+const { buildIceServers } = require("../services/turnService");
 /* image downloader */
 const download = require("image-downloader");
 /* cron */
@@ -7167,6 +7168,15 @@ router.get("/lastridedetails/:user_id", function (req, res) {
 });
 
 /* Audio Call Addon */
+router.get("/call/ice-servers/:userid", function (req, res) {
+  passport.authenticate("jwt", { session: false }, function (err, user) {
+    if (err || !user || String(user._id) !== String(req.params.userid)) {
+      return res.status(401).json({ status: "false", message: "Unauthorized access" });
+    }
+    return res.json({ status: "true", ice_servers: buildIceServers(user._id) });
+  })(req, res);
+});
+
 router.post("/makecall", function (req, res) {
   if (!req.body.sender_id || !req.body.receiver_id || !req.body.type || !req.body.user_type || !req.body.room_id || !req.body.platform || !req.body.timestamp) {
    

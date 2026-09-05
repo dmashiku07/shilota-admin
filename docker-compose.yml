@@ -37,12 +37,32 @@ services:
       FIREBASE_MESSAGING_SENDER_ID: ${FIREBASE_MESSAGING_SENDER_ID:-}
       FIREBASE_APP_ID: ${FIREBASE_APP_ID:-}
       FIREBASE_MEASUREMENT_ID: ${FIREBASE_MEASUREMENT_ID:-}
+      TURN_URLS: ${TURN_URLS:-}
+      TURN_SHARED_SECRET: ${TURN_SHARED_SECRET:-}
+      TURN_CREDENTIAL_TTL: ${TURN_CREDENTIAL_TTL:-3600}
     ports:
       - "127.0.0.1:3000:3000"
       - "127.0.0.1:8081:8081"
     volumes:
       - media_data:/app/src/assets/media
       - uploads_data:/app/src/assets/uploads
+
+  turn:
+    image: coturn/coturn:4.6.3
+    container_name: shilota-turn
+    restart: unless-stopped
+    network_mode: host
+    command:
+      - --listening-port=3478
+      - --fingerprint
+      - --use-auth-secret
+      - --static-auth-secret=${TURN_SHARED_SECRET}
+      - --realm=shilota.tz
+      - --external-ip=${TURN_EXTERNAL_IP}
+      - --min-port=49160
+      - --max-port=49200
+      - --no-cli
+      - --no-multicast-peers
 
 volumes:
   mongo_data:

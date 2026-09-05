@@ -8,6 +8,7 @@ const router = express.Router();
 const path = require('path');
 const moment = require("moment");
 const socketRegistry = require("../socketRegistry");
+const { buildIceServers } = require("../services/turnService");
 const timezone = require("../utils/timezone");
 
 /* schemas */
@@ -5253,6 +5254,15 @@ router.post("/ridechat/:onride_id/message", function (req, res) {
 });
 
 /* Audio Call Addon */
+router.get("/call/ice-servers/:userid", function (req, res) {
+  passport.authenticate("jwt", { session: false }, function (err, driver) {
+    if (err || !driver || String(driver._id) !== String(req.params.userid)) {
+      return res.status(401).json({ status: "false", message: "Unauthorized access" });
+    }
+    return res.json({ status: "true", ice_servers: buildIceServers(driver._id) });
+  })(req, res);
+});
+
 router.post("/makecall", function (req, res) {
   if (!req.body.sender_id || (!req.body.receiver_id && !req.body.onride_id) || !req.body.type || !req.body.user_type || !req.body.room_id || !req.body.platform || !req.body.timestamp) {
     return senderr(res);

@@ -17,6 +17,10 @@ const driverApiRouteSource = fs.readFileSync(
   path.join(__dirname, "..", "apiroutes", "driverapi.js"),
   "utf8"
 );
+const chatRouteSource = fs.readFileSync(
+  path.join(__dirname, "..", "apiroutes", "chat.js"),
+  "utf8"
+);
 
 test("driver push notifications use Shilota Driver branding", function () {
   assert.match(apiRouteSource, /const DRIVER_NOTIFICATION_TITLE = "Shilota Driver"/);
@@ -142,6 +146,11 @@ test("call routes deliver visible incoming-call notifications and socket events"
   assert.match(apiRouteSource, /driverNotify\(userids, "Incoming call from "/);
   assert.match(driverApiRouteSource, /userNotific\(\[receiverId\], "Incoming call from "/);
   assert.match(driverApiRouteSource, /emitToUser\(String\(req\.body\.receiver_id\), "end-call"/);
+  assert.match(chatRouteSource, /socket\.on\("ready-call"/);
+  assert.match(chatRouteSource, /socket\.to\(roomId\)\.emit\("rtcmessage"/);
+  assert.doesNotMatch(chatRouteSource, /adapter\.rooms\.get/);
+  assert.match(apiRouteSource, /call\/ice-servers\/\:userid/);
+  assert.match(driverApiRouteSource, /call\/ice-servers\/\:userid/);
 });
 
 test("Emergency Alert and Lost Items routes retain their safety safeguards", function () {

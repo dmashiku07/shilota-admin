@@ -114,6 +114,14 @@ module.exports = {
   socketPort: asNumber(process.env.SOCKET_PORT || localConfig.socketPort, 8081),
   httpsMode: process.env.HTTPS_MODE || localConfig.httpsMode || "disable",
   baseUrl: process.env.BASE_URL || localConfig.baseUrl || `http://localhost:${resolvedApiPort}`,
+  turn: {
+    urls: String(process.env.TURN_URLS || localConfig.turnUrls || "")
+      .split(",")
+      .map(function (value) { return value.trim(); })
+      .filter(Boolean),
+    sharedSecret: process.env.TURN_SHARED_SECRET || localConfig.turnSharedSecret || "",
+    ttlSeconds: asNumber(process.env.TURN_CREDENTIAL_TTL || localConfig.turnCredentialTtl, 3600)
+  },
   featureFlags: featureFlags,
   cets: {
     enabled: (process.env.CETS_ENABLED || localConfig.cetsEnabled || "false").toLowerCase() === "true",

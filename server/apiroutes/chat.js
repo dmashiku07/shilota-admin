@@ -23,7 +23,9 @@ if (httpsMode === "enable") {
 }
 
 let io = require('socket.io')(server);
-let port = process.env.PORT || config.socketPort;
+// The API may use PORT for its HTTP listener. Signaling must always bind its
+// dedicated socket port so nginx's /socket.io/ upstream remains available.
+let port = config.socketPort;
 
 /** schemas */
 let User = require("../schema/user");
@@ -171,12 +173,9 @@ io.sockets.on('connection', function (socket) {
       return;
     }
     socket.join(roomId);
-    let room = io.sockets.adapter.rooms.get(roomId);
-    if (room && room.size > 1) {
-      io.to(roomId).emit("call-ready", {
-        room_id: roomId
-      });
-    }
+    // Joining means the call screen is listening, not that the receiver has
+    // accepted. Only ready-call may start SDP negotiation.
+    socket.emit("call-joined", { room_id: roomId });
   });
 
   socket.on("ready-call", function (data) {
