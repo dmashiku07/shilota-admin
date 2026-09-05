@@ -35,6 +35,8 @@ test("passenger profile updates and image uploads target the authenticated user"
   assert.match(apiRouteSource, /\["full_name", "country_code", "phone_number"\]/);
   assert.match(apiRouteSource, /profileUser\.profile_image_updated_at = new Date\(\)/);
   assert.match(apiRouteSource, /profileUser\.profile_image !== "user\.png"/);
+  assert.match(apiRouteSource, /user_image: base_url \+ "\/api\/gallery\/users\/" \+ res\.req\.file\.filename/);
+  assert.doesNotMatch(apiRouteSource, /user_image: base_url \+ "\/gallery\/users\/"/);
 });
 
 test("rides schema keeps lifecycle, fare, and payment fields", function () {

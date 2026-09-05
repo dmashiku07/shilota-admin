@@ -1123,7 +1123,7 @@ router.post("/signin", function (req, res) {
                 password: req.body.password,
                 country_code: user.country_code,
                 phone_number: user.phone_number,
-                user_image: base_url + "/gallery/users/" + profile_image,
+                user_image: base_url + "/api/gallery/users/" + profile_image,
                 token: "JWT " + signintoken,
                 emergency_contact: user.emergency_contact,
                 walletmoney: walletamount
@@ -1185,7 +1185,7 @@ router.get("/profile/:userid", function (req, res) {
             result.user_id = user._id;
             result.full_name = user.full_name;
             result.email = user.email;
-            result.user_image = base_url + "/gallery/users/" + profile_image +
+            result.user_image = base_url + "/api/gallery/users/" + profile_image +
               (user.profile_image_updated_at ? "?v=" + user.profile_image_updated_at.getTime() : "");
             result.country_code = user.country_code;
             result.phone_number = user.phone_number;
@@ -1649,7 +1649,7 @@ router.post("/uploadprofileimage", function (req, res) {
               }
               res.json({
                 status: "true",
-                user_image: base_url + "/gallery/users/" + res.req.file.filename +
+                user_image: base_url + "/api/gallery/users/" + res.req.file.filename +
                   "?v=" + profileUser.profile_image_updated_at.getTime(),
                 message: "Image uploaded successfully"
               });
@@ -7200,7 +7200,7 @@ router.post("/makecall", function (req, res) {
             timestamp: req.body.timestamp,
             type: req.body.type,
             user_name: user.full_name,
-            user_image: base_url + "/gallery/users/" + profile_image,
+            user_image: base_url + "/api/gallery/users/" + profile_image,
             onride_id: req.body.onride_id || "",
             ride_id: req.body.onride_id || "",
             message: "make_audio_call"
@@ -7379,7 +7379,7 @@ router.post("/ridechat/:onride_id/message", function (req, res) {
           sender_id: String(user._id),
           receiver_id: String(ride.driver_id || ""),
           user_name: user.full_name || "",
-          user_image: base_url + "/gallery/users/" + (user.profile_image || "user.png"),
+          user_image: base_url + "/api/gallery/users/" + (user.profile_image || "user.png"),
           message: savedMessage.message,
           created_at: savedMessage.created_at
         };
