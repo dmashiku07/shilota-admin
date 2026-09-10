@@ -4559,85 +4559,85 @@ router.post(
           senderr(res);
         } else {
           let timestamp = timeZone();
+          // Match ownership and state in the write so a ride cannot start
+          // between checking whether cancellation is allowed and cancelling it.
           let querystring = {
-            _id: req.body.onride_id
+            _id: req.body.onride_id,
+            user_id: user._id,
+            ridestatus: { $in: ["requested", "ontheway", "accepted", "scheduled"] }
           };
-          let ridestring = [
-            {
-              ridestatus: "ontheway"
-            },
-            {
-              ridestatus: "accepted"
-            },
-            {
-              ridestatus: "scheduled"
+          Rides.findOneAndUpdate(querystring, {
+            $set: {
+              ridestatus: "cancelled",
+              ridestatusat: timestamp,
+              ride_cancelled_at: new Date(),
+              cancelled_by: "user"
             }
-          ];
-          Rides.count(querystring)
-            .or(ridestring)
-            .exec(function (err, iscancelable) {
-              if (iscancelable > 0) {
-                Rides.findOneAndUpdate(querystring, {
-                  $set: {
-                    ridestatus: "cancelled",
-                    ridestatusat: timestamp
-                  }
-                }).exec(function (err, reviews) {
-                  if (err) {
-                    senderr(res);
-                  } else {
-                    UserDevices.findOne({
-                      user_id: reviews.user_id
-                    }, function (err, userdevices) {
-                      if (userdevices) {
-                        let lang = userdevices.lang_type;
-                        
-                        let message = translationServer.langTranslate("Yourridehasbeencancelled", lang);
-                        /* notify user */
-                        let userids = [reviews.user_id];
-                        let data = {
-                          ride_id: reviews._id,
-                          type: "cancelride",
-                          message: message
-                        };
-                        translatedstring = translationServer.langTranslate("Yourridehasbeencancelled", lang);
-                        userNotify(userids, translatedstring, data);
-                      }
-                    });
-                    if (typeof reviews.driver_id != "undefined" || reviews.driver_id != null) {
-                      let driverids = [reviews.driver_id];
-                      setDriverAvailableIfEligible(reviews.driver_id, function () {});
-                      DriverDevices.findOne({
-                        user_id: reviews.driver_id
-                      }, function (err, driverdevices) {
-                        if (driverdevices) {
-                          let driverlang = driverdevices.lang_type;
-                        
-                          let message = translationServer.langTranslate("Yourridehasbeencancelled", driverlang);
-                          let data = {
-                            ride_id: reviews._id,
-                            type: "cancelride",
-                            message: message
-                          };
-                          translatedstring = translationServer.langTranslate("Yourridehasbeencancelled", driverlang);
-                          driverNotify(driverids, translatedstring, data);
-                        }
-                      });
-                    }
-                    /* notify user */
-                    res.json({
-                      status: "true",
-                      message: "Your ride has been cancelled"
-                    });
-                  }
-                });
-              } else {
+          }).exec(function (err, reviews) {
+            if (err) {
+              return senderr(res);
+            }
+            if (!reviews) {
+              // Retries and searches that expired before the tap are already ended.
+              // Treat them as successful without modifying terminal ride history.
+              return Rides.findOne({
+                _id: req.body.onride_id,
+                user_id: user._id,
+                ridestatus: { $in: ["cancelled", "ridenotaccepted", "scheduleridenotaccepted"] }
+              }).exec(function (lookupError, cancelledRide) {
+                if (lookupError) return senderr(res);
                 res.json({
-                  status: "false",
-                  message: "Your ride is non-cancelable now"
+                  status: cancelledRide ? "true" : "false",
+                  message: cancelledRide
+                    ? "Your ride has been cancelled"
+                    : "Your ride is non-cancelable now"
                 });
+              });
+            }
+            UserDevices.findOne({
+              user_id: reviews.user_id
+            }, function (err, userdevices) {
+              if (userdevices) {
+                let lang = userdevices.lang_type;
+
+                let message = translationServer.langTranslate("Yourridehasbeencancelled", lang);
+                /* notify user */
+                let userids = [reviews.user_id];
+                let data = {
+                  ride_id: reviews._id,
+                  type: "cancelride",
+                  message: message
+                };
+                translatedstring = translationServer.langTranslate("Yourridehasbeencancelled", lang);
+                userNotify(userids, translatedstring, data);
               }
             });
+            if (reviews.driver_id) {
+              let driverids = [reviews.driver_id];
+              setDriverAvailableIfEligible(reviews.driver_id, function () {});
+              DriverDevices.findOne({
+                user_id: reviews.driver_id
+              }, function (err, driverdevices) {
+                if (driverdevices) {
+                  let driverlang = driverdevices.lang_type;
+
+                  let message = translationServer.langTranslate("Yourridehasbeencancelled", driverlang);
+                  let data = {
+                    ride_id: reviews._id,
+                    type: "cancelride",
+                    message: message
+                  };
+                  translatedstring = translationServer.langTranslate("Yourridehasbeencancelled", driverlang);
+                  driverNotify(driverids, translatedstring, data);
+                }
+              });
+            }
+            /* notify user */
+            res.json({
+              status: "true",
+              message: "Your ride has been cancelled"
+            });
+          });
         }
       }
     })(req, res);

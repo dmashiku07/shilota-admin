@@ -71,7 +71,7 @@ const smsService = require("../services/smsService");
 const selcomService = require("../services/selcomService");
 const cetsSyncService = require("../services/cetsSyncService");
 const { roundCustomerPayableAmount } = require("../utils/pricing");
-const { getRoadRoute } = require("../services/routeGeometryService");
+const { getRoadRouteDetails } = require("../services/routeGeometryService");
 const {
   applyRideCompletionFinancials,
   buildPaymentDocument,
@@ -825,8 +825,13 @@ router.post('/routepath', function (req, res) {
       return res.json({ status: 'false', message: 'Unauthorized access' });
     }
     try {
-      const encodedPolyline = await getRoadRoute(req.body || {});
-      return res.json({ status: 'true', encoded_polyline: encodedPolyline });
+      const route = await getRoadRouteDetails(req.body || {});
+      return res.json({
+        status: 'true',
+        encoded_polyline: route.encoded_polyline,
+        distance_meters: Number.isFinite(route.distance_meters) ? String(route.distance_meters) : '',
+        duration_seconds: Number.isFinite(route.duration_seconds) ? String(route.duration_seconds) : ''
+      });
     } catch (routeError) {
       return res.json({
         status: 'false',

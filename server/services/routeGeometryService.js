@@ -63,7 +63,13 @@ async function googleRoute(points, apiKey) {
     }
   });
   const route = body && Array.isArray(body.routes) ? body.routes[0] : null;
-  return route && route.overview_polyline ? route.overview_polyline.points : null;
+  if (!route || !route.overview_polyline) return null;
+  const legs = Array.isArray(route.legs) ? route.legs : [];
+  return {
+    encoded_polyline: route.overview_polyline.points,
+    distance_meters: legs.length ? legs.reduce((sum, leg) => sum + Number(leg.distance && leg.distance.value), 0) : null,
+    duration_seconds: legs.length ? legs.reduce((sum, leg) => sum + Number(leg.duration && leg.duration.value), 0) : null
+  };
 }
 
 async function osrmRoute(points, serviceUrl) {
@@ -79,10 +85,14 @@ async function osrmRoute(points, serviceUrl) {
     }
   });
   const route = body && Array.isArray(body.routes) ? body.routes[0] : null;
-  return route ? route.geometry : null;
+  return route && route.geometry ? {
+    encoded_polyline: route.geometry,
+    distance_meters: route.distance,
+    duration_seconds: route.duration
+  } : null;
 }
 
-async function getRoadRoute(payload) {
+async function getRoadRouteDetails(payload) {
   if (!validCoordinate(payload.pickup_lat, payload.pickup_lng) ||
       !validCoordinate(payload.drop_lat, payload.drop_lng)) {
     throw new Error("Valid route coordinates are required");
@@ -100,35 +110,40 @@ async function getRoadRoute(payload) {
   ];
 
   const admin = await Admin.findOne({}).select("googleMapKey").lean().exec();
-  let encodedPolyline = null;
+  let routeDetails = null;
   try {
-    encodedPolyline = await googleRoute(points, String(admin && admin.googleMapKey || "").trim());
+    routeDetails = await googleRoute(points, String(admin && admin.googleMapKey || "").trim());
   } catch (_googleError) {
-    encodedPolyline = null;
+    routeDetails = null;
   }
-  if (!encodedPolyline) {
+  if (!routeDetails || !routeDetails.encoded_polyline) {
     const osrmServices = [
       "https://router.project-osrm.org",
       "https://routing.openstreetmap.de/routed-car"
     ];
     for (const serviceUrl of osrmServices) {
       try {
-        encodedPolyline = await osrmRoute(points, serviceUrl);
+        routeDetails = await osrmRoute(points, serviceUrl);
       } catch (_osrmError) {
-        encodedPolyline = null;
+        routeDetails = null;
       }
-      if (encodedPolyline) {
+      if (routeDetails && routeDetails.encoded_polyline) {
         break;
       }
     }
   }
-  if (!encodedPolyline) {
+  if (!routeDetails || !routeDetails.encoded_polyline) {
     throw new Error("No driving route was found");
   }
-  return encodedPolyline;
+  return routeDetails;
+}
+
+async function getRoadRoute(payload) {
+  return (await getRoadRouteDetails(payload)).encoded_polyline;
 }
 
 module.exports = {
+  getRoadRouteDetails,
   getRoadRoute,
   validCoordinate
 };
