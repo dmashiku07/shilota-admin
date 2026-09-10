@@ -68,6 +68,7 @@ const braintree = require("braintree");
 const smsService = require("../services/smsService");
 const selcomService = require("../services/selcomService");
 const pushService = require("../services/pushService");
+const passwordService = require("../services/passwordService");
 const cetsSyncService = require("../services/cetsSyncService");
 const {
   DRIVER_SUBSCRIPTION_ACTOR_TYPE,
@@ -1556,8 +1557,7 @@ router.post("/resetpasswordbyotp", async function (req, res) {
       });
     }
 
-    user.password = newPassword;
-    await user.save();
+    await passwordService.replacePassword(User, user._id, newPassword);
 
     await OtpVerification.updateOne(
       {

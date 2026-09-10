@@ -62,6 +62,7 @@ const nodemailer = require('nodemailer');
 
 /* push notifications */
 const pushService = require("../services/pushService");
+const passwordService = require("../services/passwordService");
 const braintree = require("braintree");
 
 /* random string generation */
@@ -1051,8 +1052,7 @@ router.post("/resetpasswordbyotp", async function (req, res) {
       });
     }
 
-    driver.password = newPassword;
-    await driver.save();
+    await passwordService.replacePassword(Driver, driver._id, newPassword);
 
     await OtpVerification.updateOne(
       {
