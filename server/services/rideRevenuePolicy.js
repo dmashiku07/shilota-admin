@@ -49,6 +49,14 @@ function getRideFinalAmount(ride, roundCustomerPayableAmount) {
     return toMoney(explicitFinalAmount);
   }
 
+  // Offer-based rides receive their price when the passenger selects a
+  // driver. baseprice is finalized later at completion, so use the agreed
+  // offer while the ride is still accepted/on the way/in progress.
+  const agreedAmount = Number(ride && ride.final_agreed_price);
+  if (Number.isFinite(agreedAmount) && agreedAmount > 0) {
+    return toMoney(agreedAmount);
+  }
+
   const quotedFare = toMoney(ride && ride.baseprice);
   const taxAmount = toMoney(ride && ride.tax);
   const rawTotal = quotedFare + taxAmount;
@@ -62,7 +70,10 @@ function getRideFinalAmount(ride, roundCustomerPayableAmount) {
 function applyRideCompletionFinancials(options) {
   const ride = options.ride;
   const baseFare = toMoney(options.baseFare);
-  const taxAmount = calculateTaxAmount(baseFare, options.taxRate);
+  // Ride prices are final customer prices. New rides do not add or record a
+  // separate tax amount; retain the legacy reader behaviour below so old
+  // records without final_ride_amount still display their original totals.
+  const taxAmount = 0;
   const commissionEnabled =
     typeof options.commissionEnabled === "boolean"
       ? options.commissionEnabled
@@ -74,8 +85,6 @@ function applyRideCompletionFinancials(options) {
   );
   const quotedFare = toMoney(baseFare + commissionAmount);
   const roundFn = options.roundCustomerPayableAmount;
-  // The fare quoted to the passenger is tax-inclusive. Tax is retained as a
-  // reporting breakdown, but must never be added on top of the quoted fare.
   const finalRideAmount = typeof roundFn === "function"
     ? toMoney(roundFn(quotedFare))
     : quotedFare;

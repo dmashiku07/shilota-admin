@@ -1130,7 +1130,7 @@ router.post('/signin', function (req, res) {
               result.security_deposit = driver.security_deposit;
               result.vehicle_details = vehicleinfo ? vehicleDetailsStatus(vehicleinfo) : "InComplete";
               result.payment_details = driver.payment_details;
-              result.user_image = base_url + '/gallery/drivers/' + profile_image;
+              result.user_image = base_url + '/api/gallery/drivers/' + profile_image;
               result.token = 'JWT ' + signintoken;
               result.emergency_contact = driver.emergency_contact;
               result.walletmoney = getDriverWalletAmount(driver);
@@ -1198,7 +1198,7 @@ router.get('/profile/:userid', function (req, res) {
             result.user_id = driver._id;
             result.full_name = driver.full_name;
             result.email = driver.email;
-            result.user_image = base_url + "/gallery/drivers/" + profile_image;
+            result.user_image = base_url + "/api/gallery/drivers/" + profile_image;
             result.country_code = driver.country_code;
             result.phone_number = driver.phone_number;
             result.emergency_contact = Array.isArray(driver.emergency_contact) ? driver.emergency_contact : [];
@@ -3104,7 +3104,7 @@ router.post('/uploadprofileimage', function (req, res) {
           driver.save();
           res.json({
             status: "true",
-            user_image: base_url + '/gallery/drivers/' + res.req.file.filename,
+            user_image: base_url + '/api/gallery/drivers/' + res.req.file.filename,
             message: 'Image uploaded successfully'
           });
         });
@@ -3968,7 +3968,7 @@ router.post('/completeridedetails', function (req, res) {
                   rideresult.category_image = base_url + '/imagegallery/' + profile_image;
                   rideresult.category_name = rides.category_id.category_name;
                   rideresult.username = rides.user_id.full_name;
-                  rideresult.user_image = base_url + '/gallery/users/' + rides.user_id.profile_image;
+	                  rideresult.user_image = base_url + '/api/gallery/users/' + rides.user_id.profile_image;
                   rideresult.driver_id = rides.driver_id._id;
                   rideresult.pickup_location = rides.pickup_location;
                   rideresult.pickup_lat = rides.pickup_lat;
@@ -3977,7 +3977,7 @@ router.post('/completeridedetails', function (req, res) {
                   rideresult.drop_lat = rides.drop_lat;
                   rideresult.drop_lng = rides.drop_lng;
                   rideresult.driver_name = rides.driver_id.full_name;
-                  rideresult.driver_image = base_url + '/gallery/drivers/' + rides.driver_id.profile_image;
+	                  rideresult.driver_image = base_url + '/api/gallery/drivers/' + rides.driver_id.profile_image;
 	                  rideresult.ride_fare = getRideFinalAmount(rides, roundCustomerPayableAmount);
                   rideresult.basefare = rides.total;
                   rideresult.commissionamount = rides.commissionamount;
@@ -5231,7 +5231,7 @@ router.post("/ridechat/:onride_id/message", function (req, res) {
           sender_id: String(driver._id),
           receiver_id: String(ride.user_id || ""),
           driver_name: driver.full_name || "",
-          driver_image: base_url + "/gallery/drivers/" + (driver.profile_image || "driver.png"),
+          driver_image: base_url + "/api/gallery/drivers/" + (driver.profile_image || "driver.png"),
           message: savedMessage.message,
           created_at: savedMessage.created_at
         };
@@ -5309,7 +5309,7 @@ router.post("/makecall", function (req, res) {
         timestamp: req.body.timestamp,
         type: req.body.type,
         user_name: driver.full_name,
-        user_image: base_url + "/gallery/drivers/" + profileImage,
+        user_image: base_url + "/api/gallery/drivers/" + profileImage,
         onride_id: req.body.onride_id || "",
         ride_id: req.body.onride_id || "",
         message: "make_audio_call"

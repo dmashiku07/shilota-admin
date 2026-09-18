@@ -35,7 +35,7 @@ function withCommissionFlag(value, callback) {
   }
 }
 
-test("completed paid ride treats the quoted fare as tax-inclusive", function () {
+test("completed paid ride does not add or record tax", function () {
   withCommissionFlag(false, function () {
     const ride = {};
     applyRideCompletionFinancials({
@@ -64,7 +64,7 @@ test("completed paid ride treats the quoted fare as tax-inclusive", function () 
 
     assert.equal(ride.commissionamount, 0);
     assert.equal(ride.baseprice, 10000);
-    assert.equal(ride.tax, 1000);
+    assert.equal(ride.tax, 0);
     assert.equal(ride.final_ride_amount, 10000);
     assert.equal(ride.payment_status, "paid");
     assert.equal(ride.payment_direct_to_driver, 1);
@@ -94,7 +94,30 @@ test("completed unpaid ride remains unpaid until a payment record is created", f
   assert.equal(getRideFinalAmount(ride), 12000);
 });
 
-test("tax is reported without increasing what the passenger pays", function () {
+test("accepted offer ride displays its agreed price before completion", function () {
+  const ride = {
+    ridestatus: "accepted",
+    baseprice: 0,
+    tax: 0,
+    final_agreed_price: 5000
+  };
+
+  assert.equal(getRideFinalAmount(ride), 5000);
+});
+
+test("completed amount takes precedence over the earlier agreed offer", function () {
+  const ride = {
+    ridestatus: "completed",
+    baseprice: 5000,
+    tax: 0,
+    final_agreed_price: 5000,
+    final_ride_amount: 5500
+  };
+
+  assert.equal(getRideFinalAmount(ride), 5500);
+});
+
+test("tax configuration does not affect a new ride fare", function () {
   const ride = {};
   const result = applyRideCompletionFinancials({
     ride,
@@ -108,10 +131,10 @@ test("tax is reported without increasing what the passenger pays", function () {
   });
 
   assert.equal(result.quotedFare, 30000);
-  assert.equal(result.taxAmount, 3000);
+  assert.equal(result.taxAmount, 0);
   assert.equal(result.finalRideAmount, 30000);
   assert.equal(ride.baseprice, 30000);
-  assert.equal(ride.tax, 3000);
+  assert.equal(ride.tax, 0);
   assert.equal(getRideFinalAmount(ride), 30000);
 });
 

@@ -3420,7 +3420,7 @@ router.post(
                   rideresult.driver_mobile = rides.driver_id.phone_number;
                   rideresult.driver_id = rides.driver_id.batch_id;
                   rideresult.driver_userid = rides.driver_id._id;
-                  rideresult.driver_image = base_url + "/gallery/drivers/" + rides.driver_id.profile_image;
+                  rideresult.driver_image = base_url + "/api/gallery/drivers/" + rides.driver_id.profile_image;
                   Vehicles.findOne(
                     {
                       user_id: rides.driver_id._id
@@ -5093,7 +5093,7 @@ router.post(
                     rideresult.drop_lat = rides.drop_lat;
                     rideresult.drop_lng = rides.drop_lng;
                     rideresult.driver_name = rides.driver_id.full_name;
-                    rideresult.driver_image = base_url + "/gallery/drivers/" + rides.driver_id.profile_image;
+                    rideresult.driver_image = base_url + "/api/gallery/drivers/" + rides.driver_id.profile_image;
                     rideresult.ride_fare = getRideFinalAmount(rides, roundCustomerPayableAmount);
                     rideresult.basefare = rides.total; /* original base fare */
                     rideresult.commissionamount = rides.commissionamount;

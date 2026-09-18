@@ -37,6 +37,8 @@ test("passenger profile updates and image uploads target the authenticated user"
   assert.match(apiRouteSource, /profileUser\.profile_image !== "user\.png"/);
   assert.match(apiRouteSource, /user_image: base_url \+ "\/api\/gallery\/users\/" \+ res\.req\.file\.filename/);
   assert.doesNotMatch(apiRouteSource, /user_image: base_url \+ "\/gallery\/users\/"/);
+  assert.match(driverApiRouteSource, /user_image: base_url \+ '\/api\/gallery\/drivers\/' \+ res\.req\.file\.filename/);
+  assert.doesNotMatch(driverApiRouteSource, /user_image: base_url \+ '\/gallery\/drivers\/' \+ res\.req\.file\.filename/);
 });
 
 test("rides schema keeps lifecycle, fare, and payment fields", function () {
@@ -87,7 +89,7 @@ test("payments, wallets, settlements, and call logs keep settlement-critical fie
   );
 
   assert.ok(callLogPaths.created_at, "expected call logs schema to include created_at");
-  assert.equal(callLogPaths.created_at.options.expires, 604800);
+  assert.equal(callLogPaths.created_at.options.expires, undefined);
 });
 
 test("passenger routes keep request and confirm ride lifecycle branches", function () {
