@@ -189,22 +189,6 @@ function isSuccessfulWebhookPayload(payload) {
   return resultcode === "000" && paymentStatus === "COMPLETED";
 }
 
-function splitFullName(fullName) {
-  const cleanedName = String(fullName || "Shilota User").trim().replace(/\s+/g, " ");
-  if (!cleanedName) {
-    return {
-      firstName: "Shilota",
-      lastName: "User"
-    };
-  }
-
-  const parts = cleanedName.split(" ");
-  return {
-    firstName: parts.shift() || "Shilota",
-    lastName: parts.join(" ") || "User"
-  };
-}
-
 function buildBuyerPhone(user) {
   const phoneFromCountryCode =
     user && user.country_code && user.phone_number
@@ -223,7 +207,6 @@ async function createOrder(options) {
   const orderId = options && options.orderId ? String(options.orderId) : transid;
   const user = (options && options.user) || {};
   const buyerPhone = buildBuyerPhone(user);
-  const { firstName, lastName } = splitFullName(user.full_name);
   const returnUrl = options && options.returnUrl ? options.returnUrl : buildReturnUrl(transid);
   const cancelUrl = options && options.cancelUrl ? options.cancelUrl : returnUrl;
   const webhookUrl = options && options.webhookUrl ? options.webhookUrl : buildWebhookUrl();
@@ -239,32 +222,20 @@ async function createOrder(options) {
   const orderData = {
     vendor: selcomConfig.vendorId,
     order_id: orderId,
-    buyer_userid: String(user._id || options.userId || ""),
     buyer_email: user.email || `user-${String(user._id || "guest")}@shilota.local`,
     buyer_name: user.full_name || "Shilota User",
     buyer_phone: buyerPhone,
-    gateway_buyer_uuid: "",
     amount,
     currency: "TZS",
-    payment_methods: "ALL",
     redirect_url: encodeBase64(returnUrl),
     cancel_url: encodeBase64(cancelUrl),
     webhook: encodeBase64(webhookUrl),
-    "billing.firstname": firstName,
-    "billing.lastname": lastName,
-    "billing.address_1": "Dar es Salaam",
-    "billing.address_2": "",
-    "billing.city": "Dar es Salaam",
-    "billing.state_or_region": "Dar es Salaam",
-    "billing.postcode_or_pobox": "00000",
-    "billing.country": "TZ",
-    "billing.phone": buyerPhone,
     buyer_remarks: options && options.remarks ? String(options.remarks) : "Shilota payment",
     merchant_remarks: options && options.remarks ? String(options.remarks) : "Shilota payment",
     no_of_items: 1
   };
 
-  const response = await getClient().postFunc("/v1/checkout/create-order", orderData);
+  const response = await getClient().postFunc("/v1/checkout/create-order-minimal", orderData);
   ensureSuccessfulResponse(response, "Selcom order creation");
 
   const result = firstDataItem(response);
