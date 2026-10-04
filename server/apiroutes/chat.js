@@ -1,29 +1,6 @@
-const config = require("../config");
-let express = require('express');
-let router = express.Router();
-let mongoose = require('mongoose');
-let app = express();
-let fs = require("fs");
-let server;
-
-/* EXPRESS SERVER CONNECTIVITY */
-const httpsMode = config.httpsMode;
-server = require("http").createServer(app);
-if (httpsMode === "enable") {
-  const privateKey = fs.readFileSync("/etc/letsencrypt/live/shilota.tz/privkey.pem");
-  const certificate = fs.readFileSync("/etc/letsencrypt/live/shilota.tz/fullchain.pem");
-  const ca = fs.readFileSync("/etc/letsencrypt/live/shilota.tz/fullchain.pem");
-  /* SSL CERTIFICATES */
-  const sslOptions = {
-    key: privateKey,
-    cert: certificate,
-    ca: ca
-  };
-  server = require("https").createServer(sslOptions, app);
-}
-
-let io = require('socket.io')(server);
-let port = process.env.PORT || config.socketPort;
+const express = require('express');
+const router = express.Router();
+const mongoose = require('mongoose');
 
 /** schemas */
 let User = require("../schema/user");
@@ -35,10 +12,15 @@ let Commissions = require("../schema/commissions");
 const googledistance = require('google-distance');
 const socketRegistry = require("../socketRegistry");
 
-/* check nodejs working*/
-server.listen(port, function () {
-  //console.log('Server listening at port %d', port);
-});
+let socketServer;
+
+// Attach chat to the main server; importing this module opens no port.
+function initializeSocket(server) {
+  if (socketServer) {
+    return socketServer;
+  }
+  const io = require('socket.io')(server);
+  socketServer = io;
 
 /* socket connection */
 io.sockets.on('connection', function (socket) {
@@ -207,4 +189,8 @@ io.sockets.on('connection', function (socket) {
   });
 });
 
+  return io;
+}
+
 module.exports = router;
+module.exports.initializeSocket = initializeSocket;

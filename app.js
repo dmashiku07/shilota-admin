@@ -186,6 +186,7 @@ app.use(function (req, res, next) {
 const httpsMode = config.httpsMode;
 if (httpsMode === "disable") {
   const server = http.createServer(app);
+  chat.initializeSocket(server);
   server.listen(port, () => console.log(`API Server is running on :${port}`));
 } else {
   /* SSL CERTIFICATES */
@@ -198,5 +199,6 @@ if (httpsMode === "disable") {
     ca: ca
   };
   const server = https.createServer(sslOptions, app);
+  chat.initializeSocket(server);
   server.listen(port, () => console.log(`API Server is running on :${port}`));
 }
