@@ -35,7 +35,7 @@
         <div class="form-group">
           <label>Zone overrides JSON</label>
           <textarea class="form-control" rows="8" [(ngModel)]="zoneOverridesText"></textarea>
-          <small class="text-muted">Example: [{"zone_key":"-6.80,39.28","label":"CBD","enabled":true}]</small>
+          <small class="text-muted">Example: [&#123;"zone_key":"-6.80,39.28","label":"CBD","enabled":true&#125;]</small>
         </div>
         <button class="btn btn-primary" type="button" [disabled]="saving" (click)="save()">
           {{ saving ? 'Saving...' : 'Save Pool Settings' }}

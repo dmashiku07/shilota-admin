@@ -16,7 +16,8 @@ import {
   CountryISO
 } from "ngx-intl-tel-input";
 import * as firebaseui from 'firebaseui';
-import * as firebase from 'firebase';
+import firebase from 'firebase/app';
+import 'firebase/auth';
 
 @Component({
   standalone: false,
