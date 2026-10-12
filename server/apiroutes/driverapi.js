@@ -128,6 +128,11 @@ const {
 const {
   requiredCurrentStatusForDriverTransition
 } = require("../services/rideLifecycleService");
+const {
+  EMAIL_ACTIVATION_MAX_RESENDS,
+  issueDriverActivation,
+  verifyDriverActivation
+} = require("../services/emailActivationService");
 
 const OTP_EXPIRY_MINUTES = 5;
 const OTP_MAX_ATTEMPTS = 3;
@@ -880,7 +885,10 @@ router.post('/signup', function (req, res) {
       vehicle_details: "InComplete",
       payment_details: "InComplete",
       live_status: "0",
-      approval: "1",
+      // A newly registered driver is not dispatch-eligible until an administrator
+      // approves them and the registered email activation code is verified.
+      approval: "0",
+      email_activation_required: false,
       batch_id: BatchId
     });
     // save the driver details
@@ -1162,6 +1170,76 @@ router.post('/signin', function (req, res) {
       }
     }
   });
+});
+
+/* Verify the code sent when an administrator approves a driver. */
+router.post('/verify-email-activation', async function (req, res) {
+  const email = String(req.body.email || '').trim().toLowerCase();
+  const code = String(req.body.code || '');
+  if (!email || !/^\d{4}$/.test(code)) {
+    return res.json({ status: "false", message: "Email and a 4-digit activation code are required" });
+  }
+
+  try {
+    const verification = await verifyDriverActivation(email, code);
+    if (!verification.ok) {
+      return res.json({
+        status: "false",
+        error_code: verification.code,
+        message: "Email activation could not be verified"
+      });
+    }
+
+    const driver = await Driver.findOneAndUpdate(
+      { _id: verification.account_id, email: email, deletion_status: 0, email_activation_required: true },
+      { $set: { approval: "1", email_activation_required: false, email_activated_at: new Date() } },
+      { new: true }
+    ).exec();
+    if (!driver) {
+      return res.json({ status: "false", error_code: "ACTIVATION_NOT_AVAILABLE", message: "Email activation is not available" });
+    }
+
+    cetsSyncService.enqueueDriverSync(driver._id, "driver_email_activated").catch(function (syncError) {
+      console.error("CeTS driver activation enqueue failed:", syncError);
+    });
+    return res.json({ status: "true", message: "Email verified. Your driver account is active." });
+  } catch (_error) {
+    return senderr(res);
+  }
+});
+
+/* Resending is explicit and only available to the authenticated pending driver. */
+router.post('/resend-email-activation', function (req, res) {
+  passport.authenticate('jwt', { session: false }, async function (_err, driver) {
+    if (!driver || String(driver._id) !== String(req.body.user_id || '')) {
+      return res.json({ status: "false", message: "Unauthorized access" });
+    }
+    if (!driver.email_activation_required || String(driver.approval) === "1") {
+      return res.json({ status: "false", error_code: "ACTIVATION_NOT_PENDING", message: "Email activation is not pending" });
+    }
+
+    try {
+      const activation = await issueDriverActivation(driver, { resend: true });
+      if (!activation.ok) {
+        return res.json({
+          status: "false",
+          error_code: activation.code,
+          message: activation.code === "RESEND_LIMIT_REACHED"
+            ? "The activation resend limit has been reached"
+            : "No active email activation code was found"
+        });
+      }
+      return res.json({
+        status: activation.delivery.delivered ? "true" : "false",
+        error_code: activation.delivery.delivered ? undefined : activation.delivery.reason,
+        message: activation.delivery.delivered ? "Activation code sent" : "Activation email could not be sent",
+        expires_in: activation.expires_in,
+        resends_remaining: activation.resends_remaining
+      });
+    } catch (_error) {
+      return senderr(res);
+    }
+  })(req, res);
 });
 
 /* driver profile */

@@ -2,8 +2,6 @@ var express = require('express');
 var app = express();
 var router = express.Router();
 var Driver = require('../schema/driver');
-var nodemailer = require('nodemailer');
-var User = require('../models/admin');
 var cetsSyncService = require('../services/cetsSyncService');
 var { logAuditFromRequest } = require('../services/auditLogService');
 var { evaluateDriverEligibility } = require('../services/driverEligibilityService');
@@ -15,6 +13,7 @@ var {
   requireSuperAdmin
 } = require('../services/adminAccessService');
 var { UAT_RADIUS_OPTIONS_KM, normalizeActiveRadiusKm } = require('../services/driverDispatchRadiusService');
+var { issueDriverActivation } = require('../services/emailActivationService');
 var {
   buildPaginationResult,
   buildSearchQuery,
@@ -28,47 +27,6 @@ router.use(requireAdmin);
 function scopedDriverMatch(req, match) {
   if (req.adminAccess.role !== "OPS_ADMIN") return match;
   return mergeMatch(match, { _id: { $in: req.adminAccess.admin.assigned_driver_ids || [] } });
-}
-
-function sendDriverActivationMail(driver, callback) {
-  User.findOne({}).sort({
-    _id: -1
-  }).exec(function (err, user) {
-    if (err || !user) {
-      console.error("Driver activation email skipped: admin email settings not found", err);
-      return callback();
-    }
-
-    let transporter = nodemailer.createTransport({
-      host: user.smptHost,
-      port: user.smtpPort,
-      secure: false,
-      auth: {
-        user: user.smtpUsername,
-        pass: user.smtpPassword
-      }
-    });
-
-    let mailOptions = {
-      to: driver.email,
-      subject: "Vehicle approved message",
-      html: "Your registered vehicle approved sucessfully" + "<br><br> Regards, <br><br>" + user.siteName
-    };
-
-    transporter.verify(function (error) {
-      if (error) {
-        console.error("Driver activation email SMTP verification failed:", error);
-        return callback();
-      }
-
-      transporter.sendMail(mailOptions, function (mailError) {
-        if (mailError) {
-          console.error("Driver activation email send failed:", mailError);
-        }
-        return callback();
-      });
-    });
-  });
 }
 
 router.route('/').get(async function (req, res) {
@@ -161,15 +119,18 @@ router.route('/deactive/:id').post(requireAssignedDriver, function (req, res) {
   });
 });
 
-router.route('/active/:id').post(requireAssignedDriver, function (req, res) {
+router.route('/active/:id').post(requireAssignedDriver, async function (req, res) {
   Driver.findById(req.params.id, function (err, driver) {
     if (!driver)
       return next(new Error('Could not load Document'));
     else {
-      driver.approval = "1";
-      driver.save().then(driver => {
+      driver.approval = "0";
+      driver.email_activation_required = true;
+      driver.email_activated_at = null;
+      driver.save().then(async driver => {
+        const activation = await issueDriverActivation(driver);
         logAuditFromRequest(req, {
-          action: 'driver.activated',
+          action: 'driver.activation_requested',
           target_type: 'driver',
           target_id: driver._id,
           metadata: {
@@ -177,14 +138,13 @@ router.route('/active/:id').post(requireAssignedDriver, function (req, res) {
             email: driver.email
           }
         });
-        cetsSyncService.enqueueDriverSync(driver._id, "admin_driver_activate").catch(function (syncError) {
-          console.error("CeTS driver activate enqueue failed:", syncError);
-        });
-        return sendDriverActivationMail(driver, function () {
-          return res.json({
-            success: true,
-            msg: 'Driver Activated Successfully'
-          });
+        return res.json({
+          success: true,
+          activation_pending: true,
+          activation_delivery: activation.delivery && activation.delivery.delivered ? "sent" : "not_configured",
+          msg: activation.delivery && activation.delivery.delivered
+            ? 'Driver approval is pending email activation'
+            : 'Driver approval is pending email activation; SMTP is not configured'
         });
       })
         .catch(err => {

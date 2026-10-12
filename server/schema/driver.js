@@ -120,6 +120,14 @@ var DriverSchema = new Schema({
     type: String,
     default: 0
   },
+  email_activation_required: {
+    type: Boolean,
+    default: false
+  },
+  email_activated_at: {
+    type: Date,
+    default: null
+  },
   loc: {
     type: [Number],
     index: {
