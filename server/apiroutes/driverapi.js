@@ -125,6 +125,9 @@ const {
   submitRideOffer,
   withdrawRideOffer
 } = require("../services/rideOfferService");
+const {
+  requiredCurrentStatusForDriverTransition
+} = require("../services/rideLifecycleService");
 
 const OTP_EXPIRY_MINUTES = 5;
 const OTP_MAX_ATTEMPTS = 3;
@@ -3354,10 +3357,27 @@ router.post('/whereiam', function (req, res) {
       } else {
         let query;
         let timestamp = timeZone();
-        const continueRideStatuses = ["ontheway", "onride"];
-        if (req.body.status == "onride") {
+        const requestedStatus = String(req.body.status || "").toLowerCase();
+        const requiredCurrentStatus = requiredCurrentStatusForDriverTransition(requestedStatus);
+        if (!requiredCurrentStatus) {
+          return res.json({
+            status: "false",
+            error_code: "INVALID_RIDE_TRANSITION",
+            message: "This ride cannot be moved to the requested status"
+          });
+        }
+        if (requestedStatus === "onride" && !req.body.onride_otp) {
+          return res.json({
+            status: "false",
+            error_code: "OTP_REQUIRED",
+            message: "OTP verification failed."
+          });
+        }
+        if (requestedStatus === "onride") {
           query = Rides.findOne({
             _id: req.body.onride_id,
+            driver_id: driver._id,
+            ridestatus: requiredCurrentStatus,
             onride_otp: req.body.onride_otp
           });
           //let querystring = [{ ridestatus: 'ontheway' }];
@@ -3379,7 +3399,9 @@ router.post('/whereiam', function (req, res) {
           });
         } else {
           query = Rides.findOne({
-            _id: req.body.onride_id
+            _id: req.body.onride_id,
+            driver_id: driver._id,
+            ridestatus: requiredCurrentStatus
           });
         }
         const proceedWithRideStatusChange = function () {
@@ -3461,23 +3483,18 @@ router.post('/whereiam', function (req, res) {
           });
         };
 
-        if (continueRideStatuses.indexOf(String(req.body.status || "").toLowerCase()) !== -1) {
-          evaluateDriverActionEligibility(driver, {
-            now: new Date(),
-            allowActiveRideContinuation: true,
-            rideId: req.body.onride_id
-          }).then(function (eligibility) {
-            if (!eligibility.eligible) {
-              return res.json(buildEligibilityErrorPayload(eligibility));
-            }
-            proceedWithRideStatusChange();
-          }).catch(function () {
-            senderr(res);
-          });
-          return;
-        }
-
-        proceedWithRideStatusChange();
+        evaluateDriverActionEligibility(driver, {
+          now: new Date(),
+          allowActiveRideContinuation: true,
+          rideId: req.body.onride_id
+        }).then(function (eligibility) {
+          if (!eligibility.eligible) {
+            return res.json(buildEligibilityErrorPayload(eligibility));
+          }
+          proceedWithRideStatusChange();
+        }).catch(function () {
+          senderr(res);
+        });
       }
     }
   })(req, res);
@@ -3851,6 +3868,12 @@ router.post('/completeride', function (req, res) {
               
               senderr(res);
             } else {
+              if (String(rides.driver_id) !== String(driver._id)) {
+                return res.json({
+                  status: "false",
+                  message: "Unauthorized access"
+                });
+              }
               Admin.findOne(function (err, admin) {
                 if (rides.ridestatus === "completed") {
                   consumeCompletedRideUsage({
@@ -3872,6 +3895,14 @@ router.post('/completeride', function (req, res) {
                     senderr(res);
                   });
                   return;
+                }
+
+                if (rides.ridestatus !== "onride") {
+                  return res.json({
+                    status: "false",
+                    error_code: "INVALID_RIDE_TRANSITION",
+                    message: "Only an in-progress ride can be completed"
+                  });
                 }
 
                 if (rides.ridestatus !== "cancelled") {

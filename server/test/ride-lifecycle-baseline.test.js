@@ -127,10 +127,13 @@ test("driver routes keep accept, start, complete, and payment lifecycle branches
   assert.match(driverApiRouteSource, /router\.post\('\/goride'/);
   assert.match(driverApiRouteSource, /rides\.ridestatus = "accepted"/);
   assert.match(driverApiRouteSource, /router\.post\('\/whereiam'/);
+  assert.match(driverApiRouteSource, /requiredCurrentStatusForDriverTransition/);
+  assert.match(driverApiRouteSource, /error_code: "INVALID_RIDE_TRANSITION"/);
   assert.match(driverApiRouteSource, /rides\.ridestatus = req\.body\.status/);
   assert.match(driverApiRouteSource, /ride_started_at = new Date\(\)/);
   assert.match(driverApiRouteSource, /router\.post\('\/completeride'/);
   assert.match(driverApiRouteSource, /rides\.ridestatus = "completed"/);
+  assert.match(driverApiRouteSource, /Only an in-progress ride can be completed/);
   assert.match(driverApiRouteSource, /applyRideCompletionFinancials\(/);
   assert.match(driverApiRouteSource, /router\.post\('\/paybycash'/);
   assert.match(driverApiRouteSource, /buildPaymentDocument\(/);
