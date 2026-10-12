@@ -3771,6 +3771,12 @@ router.post("/rideoffers/accept", function (req, res) {
     if (!req.body.user_id || !req.body.onride_id || !req.body.offer_id) {
       return senderr(res);
     }
+    if (String(user._id) !== String(req.body.user_id)) {
+      return res.status(403).json({
+        status: "false",
+        message: "Unauthorized access"
+      });
+    }
 
     acceptRideOffer({
       rideId: req.body.onride_id,

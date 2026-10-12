@@ -120,6 +120,7 @@ const {
 const {
   getDriverOfferForRide,
   isDriverOfferRide,
+  isPassengerBroadcastRide,
   isDriverPricingEnabled,
   submitRideOffer,
   withdrawRideOffer
@@ -3531,6 +3532,14 @@ router.post('/goride', function (req, res) {
 	                    error_code: "DRIVER_OFFER_REQUIRED"
 	                  });
 	                }
+
+                    if (isPassengerBroadcastRide(rides)) {
+                      return res.json({
+                        status: "false",
+                        message: "Accept the passenger's price through the offer flow",
+                        error_code: "PASSENGER_PRICE_ACCEPTANCE_REQUIRED"
+                      });
+                    }
 
 	                if (rides.ridestatus == "requested" || rides.ridestatus == "scheduled" || rides.ridestatus == "ridenotaccepted" || rides.ridestatus == "scheduleridenotaccepted") {
                   validateDriverCanAcceptRide(driver._id, rides, function (canAccept) {

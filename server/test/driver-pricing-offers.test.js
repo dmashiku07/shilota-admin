@@ -110,6 +110,12 @@ test("passenger price broadcast request preparation sets broadcast-specific defa
   assert.equal(ride.broadcast_expires_at.toISOString(), "2026-07-22T09:07:00.000Z");
 });
 
+test("exact passenger-price acceptance and passenger identity are enforced by server routes", function () {
+  assert.match(driverApiRouteSource, /PASSENGER_PRICE_ACCEPTANCE_REQUIRED/);
+  assert.match(driverApiRouteSource, /isPassengerBroadcastRide\(rides\)/);
+  assert.match(apiRouteSource, /String\(user\._id\) !== String\(req\.body\.user_id\)/);
+});
+
 test("passenger price broadcast authorization blocks requests when the feature flag is off", async function () {
   const previous = config.featureFlags.passenger_price_broadcast_enabled;
   config.featureFlags.passenger_price_broadcast_enabled = false;

@@ -34,64 +34,65 @@ const planEditTemplateSource = fs.readFileSync(
   "utf8"
 );
 
-test("driver subscription plan validation rejects invalid values", function () {
+test("driver package validation rejects invalid package terms", function () {
   let errors = validateSubscriptionPlanPayload({
     customer_type: "DRIVER",
     name: "Starter",
     price: -1,
     currency: "TZS",
-    duration_unit: "DAY",
+    duration_unit: "WEEK",
     duration_value: 0,
-    daily_ride_limit: 0,
+    ride_credit_count: 0,
     is_unlimited: false,
     display_order: -1
   });
 
   assert.equal(errors.price, "Price must be zero or greater");
   assert.equal(errors.duration_value, "Duration value must be greater than zero");
-  assert.equal(errors.daily_ride_limit, "Bundle ride limit must be greater than zero for limited driver plans");
+  assert.equal(errors.ride_credit_count, "Driver package ride credits must be greater than zero");
   assert.equal(errors.display_order, "Display order must be zero or greater");
 });
 
-test("unlimited driver plan may omit bundle ride limit", function () {
+test("approved driver package keeps a total ride-credit allowance", function () {
   const plan = new SubscriptionPlan({});
   applySubscriptionPlanFields(plan, {
     customer_type: "DRIVER",
-    name: "Unlimited",
-    description: "All day access",
+    name: "UAT Driver Package",
+    description: "10 rides over 7 days",
     price: 10000,
     currency: "TZS",
-    duration_unit: "MONTH",
-    duration_value: 1,
-    daily_ride_limit: "",
-    is_unlimited: true,
-    is_active: true,
-    display_order: 0
-  });
-
-  const validationError = plan.validateSync();
-  assert.equal(validationError, undefined);
-  assert.equal(plan.daily_ride_limit, null);
-});
-
-test("limited driver plan requires a positive bundle ride limit", function () {
-  const plan = new SubscriptionPlan({
-    customer_type: "DRIVER",
-    name: "Daily 3",
-    description: "",
-    price: 1000,
-    currency: "TZS",
-    duration_unit: "DAY",
+    duration_unit: "WEEK",
     duration_value: 1,
     daily_ride_limit: null,
+    ride_credit_count: 10,
     is_unlimited: false,
     is_active: true,
     display_order: 0
   });
 
   const validationError = plan.validateSync();
-  assert.ok(validationError);
-  assert.ok(validationError.errors.daily_ride_limit);
+  assert.equal(validationError, undefined);
+  assert.equal(plan.ride_credit_count, 10);
+});
+
+test("driver package service requires a total ride-credit allowance", function () {
+  const plan = new SubscriptionPlan({
+    customer_type: "DRIVER",
+    name: "Package",
+    description: "",
+    price: 1000,
+    currency: "TZS",
+    duration_unit: "WEEK",
+    duration_value: 1,
+    daily_ride_limit: null,
+    ride_credit_count: null,
+    is_unlimited: false,
+    is_active: true,
+    display_order: 0
+  });
+
+  const errors = validateSubscriptionPlanPayload(plan.toObject());
+  assert.equal(errors.ride_credit_count, "Driver package ride credits must be greater than zero");
 });
 
 test("driver plan admin UI labels rides as total bundle allowance", function () {
@@ -111,13 +112,14 @@ test("driver plan admin UI labels rides as total bundle allowance", function () 
 test("activation and deactivation update plan state without changing pricing fields", function () {
   const plan = new SubscriptionPlan({
     customer_type: "DRIVER",
-    name: "Weekly 5",
+    name: "Weekly 10",
     description: "",
     price: 5000,
     currency: "TZS",
     duration_unit: "WEEK",
     duration_value: 1,
-    daily_ride_limit: 5,
+    daily_ride_limit: null,
+    ride_credit_count: 10,
     is_unlimited: false,
     is_active: true,
     display_order: 1
@@ -129,7 +131,7 @@ test("activation and deactivation update plan state without changing pricing fie
 
   setPlanActiveStatus(plan, true);
   assert.equal(plan.is_active, true);
-  assert.equal(plan.daily_ride_limit, 5);
+  assert.equal(plan.ride_credit_count, 10);
 });
 
 test("reordering plans rewrites display order predictably", function () {
