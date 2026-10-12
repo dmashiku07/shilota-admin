@@ -7,6 +7,14 @@ var User = require('../models/admin');
 var cetsSyncService = require('../services/cetsSyncService');
 var { logAuditFromRequest } = require('../services/auditLogService');
 var { evaluateDriverEligibility } = require('../services/driverEligibilityService');
+var DriverLocalArea = require('../schema/driverlocalareas');
+var {
+  canManageDriver,
+  requireAdmin,
+  requireAssignedDriver,
+  requireSuperAdmin
+} = require('../services/adminAccessService');
+var { UAT_RADIUS_OPTIONS_KM, normalizeActiveRadiusKm } = require('../services/driverDispatchRadiusService');
 var {
   buildPaginationResult,
   buildSearchQuery,
@@ -14,6 +22,13 @@ var {
   getPaginationParams,
   mergeMatch
 } = require('../utils/pagination');
+
+router.use(requireAdmin);
+
+function scopedDriverMatch(req, match) {
+  if (req.adminAccess.role !== "OPS_ADMIN") return match;
+  return mergeMatch(match, { _id: { $in: req.adminAccess.admin.assigned_driver_ids || [] } });
+}
 
 function sendDriverActivationMail(driver, callback) {
   User.findOne({}).sort({
@@ -71,7 +86,7 @@ router.route('/').get(async function (req, res) {
         searchMatch.$or.push({ phone_number: phoneNumber });
       }
     }
-    const match = mergeMatch({ deletion_status: 0 }, searchMatch);
+    const match = scopedDriverMatch(req, mergeMatch({ deletion_status: 0 }, searchMatch));
     const totalItems = await Driver.countDocuments(match).exec();
     const drivers = await Driver.find(match)
       .sort(buildSort(params.sortBy, params.sortDir))
@@ -111,7 +126,7 @@ router.route('/').get(async function (req, res) {
   }
 });
 
-router.route('/deactive/:id').post(function (req, res) {
+router.route('/deactive/:id').post(requireAssignedDriver, function (req, res) {
   Driver.findById(req.params.id, function (err, driver) {
     if (!driver)
       return next(new Error('Could not load Document'));
@@ -146,7 +161,7 @@ router.route('/deactive/:id').post(function (req, res) {
   });
 });
 
-router.route('/active/:id').post(function (req, res) {
+router.route('/active/:id').post(requireAssignedDriver, function (req, res) {
   Driver.findById(req.params.id, function (err, driver) {
     if (!driver)
       return next(new Error('Could not load Document'));
@@ -183,14 +198,14 @@ router.route('/active/:id').post(function (req, res) {
   });
 });
 
-router.route('/info/:id').get(function (req, res) {
+router.route('/info/:id').get(requireAssignedDriver, function (req, res) {
   Driver.findById(req.params.id).populate("category_id")
     .exec(function (err, driver) {
       res.json(driver);
     });
 });
 
-router.route('/driverCount').get(function (req, res) {
+router.route('/driverCount').get(requireSuperAdmin, function (req, res) {
   Driver.count(function (err, count) {
     if (err)
       return res.json({
@@ -201,7 +216,7 @@ router.route('/driverCount').get(function (req, res) {
   });
 });
 
-router.route('/onlineDriver').get(function (req, res) {
+router.route('/onlineDriver').get(requireSuperAdmin, function (req, res) {
   Driver.aggregate(
     [{
       $match: {
@@ -243,7 +258,7 @@ router.route('/onlineDriver').get(function (req, res) {
 });
 
 
-router.route('/activeDriver').get(function (req, res) {
+router.route('/activeDriver').get(requireSuperAdmin, function (req, res) {
   Driver.count({
     $and: [{
       approval: 1
@@ -270,10 +285,10 @@ router.route("/deleteddrivers").get(async function (req, res) {
       defaultSortBy: '_id',
       allowedSortFields: ['_id', 'full_name', 'email', 'phone_number']
     });
-    const match = mergeMatch(
+    const match = scopedDriverMatch(req, mergeMatch(
       { deletion_status: 1 },
       buildSearchQuery(params.search, ['full_name', 'email', 'phone_number'])
-    );
+    ));
     const totalItems = await Driver.countDocuments(match).exec();
     const drivers = await Driver.find(match)
       .sort(buildSort(params.sortBy, params.sortDir))
@@ -290,7 +305,7 @@ router.route("/deleteddrivers").get(async function (req, res) {
   }
 });
 
-router.route('/revokedeletion/:id').post(function (req, res) {
+router.route('/revokedeletion/:id').post(requireAssignedDriver, function (req, res) {
   Driver.findById(req.params.id, function (err, driver) {
     if (!driver)
       return next(new Error('Could not load Document'));
@@ -314,6 +329,51 @@ router.route('/revokedeletion/:id').post(function (req, res) {
         });
     }
   });
+});
+
+router.post('/local-areas', requireSuperAdmin, async function (req, res) {
+  const key = String(req.body.local_area_key || "").trim();
+  const label = String(req.body.label || "").trim();
+  if (!key || !label) return res.status(400).json({ status: "false", message: "Local area key and label are required" });
+  try {
+    const area = await DriverLocalArea.findOneAndUpdate({ local_area_key: key }, {
+      $set: { label: label, allowed_radius_options_km: UAT_RADIUS_OPTIONS_KM, is_active: req.body.is_active !== false }
+    }, { new: true, upsert: true, setDefaultsOnInsert: true }).exec();
+    return res.json({ status: "true", result: area });
+  } catch (_error) {
+    return res.status(400).json({ status: "false", message: "Unable to save local area" });
+  }
+});
+
+router.get('/local-areas', async function (_req, res) {
+  const areas = await DriverLocalArea.find({ is_active: true }).sort({ label: 1 }).exec();
+  return res.json({ status: "true", result: areas });
+});
+
+router.post('/:id/dispatch-scope', requireAssignedDriver, async function (req, res) {
+  const radiusKm = normalizeActiveRadiusKm(req.body.active_radius_km);
+  const localAreaKey = String(req.body.local_area_key || "").trim();
+  if (!localAreaKey || radiusKm === null) return res.status(400).json({ status: "false", message: "An active local area and 1, 2, or 3 km radius are required" });
+  const area = await DriverLocalArea.findOne({ local_area_key: localAreaKey, is_active: true }).exec();
+  if (!area || area.allowed_radius_options_km.indexOf(radiusKm) < 0) return res.status(400).json({ status: "false", message: "Radius is not available for this local area" });
+  const driver = await Driver.findByIdAndUpdate(req.params.id, { $set: { local_area_key: localAreaKey, active_radius_km: radiusKm } }, { new: true }).exec();
+  if (!driver) return res.status(404).json({ status: "false", message: "Driver not found" });
+  return res.json({ status: "true", result: { driver_id: driver._id, local_area_key: driver.local_area_key, active_radius_km: driver.active_radius_km } });
+});
+
+router.post('/:id/ops-assignment', requireSuperAdmin, async function (req, res) {
+  const opsAdminId = String(req.body.ops_admin_id || "").trim();
+  if (!opsAdminId) return res.status(400).json({ status: "false", message: "Ops Admin is required" });
+  const Admin = require('../models/admin');
+  const opsAdmin = await Admin.findById(opsAdminId).exec();
+  if (!opsAdmin || String(opsAdmin.role || "").toUpperCase() !== "OPS_ADMIN") return res.status(400).json({ status: "false", message: "A valid Ops Admin is required" });
+  const driver = await Driver.findById(req.params.id).exec();
+  if (!driver) return res.status(404).json({ status: "false", message: "Driver not found" });
+  if (!opsAdmin.assigned_driver_ids.some(function (id) { return String(id) === String(driver._id); })) {
+    opsAdmin.assigned_driver_ids.push(driver._id);
+    await opsAdmin.save();
+  }
+  return res.json({ status: "true", message: "Driver assigned to Ops Admin" });
 });
 
 module.exports = router;

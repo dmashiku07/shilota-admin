@@ -131,6 +131,10 @@ const admin = mongoose.Schema ({
     type: String,
     default: "admin"
   },
+  assigned_driver_ids: {
+    type: [{ type: mongoose.Schema.Types.ObjectId, ref: "Driver" }],
+    default: []
+  },
 },
 {
   collection: 'admin'

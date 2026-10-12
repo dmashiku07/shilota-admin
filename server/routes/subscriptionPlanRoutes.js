@@ -4,6 +4,7 @@ var SubscriptionPlan = require("../schema/subscriptionplans");
 var SubscriptionPlanFeature = require("../schema/subscriptionplanfeatures");
 var Subscription = require("../schema/subscriptions");
 var { logAuditFromRequest } = require("../services/auditLogService");
+var { requireAdmin, requireSuperAdmin } = require("../services/adminAccessService");
 var {
   PASSENGER_FEATURE_DEFINITIONS,
   applySubscriptionPlanFields,
@@ -13,6 +14,8 @@ var {
   setPlanActiveStatus,
   validateSubscriptionPlanPayload
 } = require("../services/subscriptionPlanService");
+
+router.use(requireAdmin);
 
 function validationResponse(res, errors) {
   return res.json({
@@ -175,7 +178,7 @@ router.get("/:id", async function (req, res) {
   }
 });
 
-router.post("/", async function (req, res) {
+router.post("/", requireSuperAdmin, async function (req, res) {
   var errors = validateSubscriptionPlanPayload(req.body || {});
   if (Object.keys(errors).length > 0) {
     return validationResponse(res, errors);
@@ -215,7 +218,7 @@ router.post("/", async function (req, res) {
   }
 });
 
-router.put("/:id", async function (req, res) {
+router.put("/:id", requireSuperAdmin, async function (req, res) {
   var errors = validateSubscriptionPlanPayload(req.body || {});
   if (Object.keys(errors).length > 0) {
     return validationResponse(res, errors);
@@ -259,7 +262,7 @@ router.put("/:id", async function (req, res) {
   }
 });
 
-router.post("/:id/activate", async function (req, res) {
+router.post("/:id/activate", requireSuperAdmin, async function (req, res) {
   try {
     var plan = await SubscriptionPlan.findById(req.params.id).exec();
     if (!plan) {
@@ -287,7 +290,7 @@ router.post("/:id/activate", async function (req, res) {
   }
 });
 
-router.post("/:id/deactivate", async function (req, res) {
+router.post("/:id/deactivate", requireSuperAdmin, async function (req, res) {
   try {
     var plan = await SubscriptionPlan.findById(req.params.id).exec();
     if (!plan) {
@@ -315,7 +318,7 @@ router.post("/:id/deactivate", async function (req, res) {
   }
 });
 
-router.post("/reorder", async function (req, res) {
+router.post("/reorder", requireSuperAdmin, async function (req, res) {
   var customerType = String(req.body.customer_type || "").trim().toUpperCase();
   if (!customerType) {
     return validationResponse(res, {
@@ -358,7 +361,7 @@ router.post("/reorder", async function (req, res) {
   }
 });
 
-router.delete("/:id", function (req, res) {
+router.delete("/:id", requireSuperAdmin, function (req, res) {
   Subscription.findOne({ plan_id: req.params.id }).exec(function (subscriptionErr, subscription) {
     if (subscriptionErr) {
       return res.json({ status: "false", message: "Unable to delete subscription plan" });
