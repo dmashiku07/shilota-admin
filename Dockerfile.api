@@ -6,10 +6,10 @@ WORKDIR /app
 
 COPY package.json package-lock.json ./
 
-# Install the locked dependency tree once. The cache mount preserves downloaded
-# packages across cold Docker layer rebuilds.
-RUN --mount=type=cache,id=shilota-npm,target=/root/.npm \
-    npm ci --legacy-peer-deps --ignore-scripts --no-audit --no-fund
+# Install the locked dependency tree once. Railway Metal does not support the
+# Docker cache-mount identifier syntax, while Docker layer caching still keeps
+# this layer reusable when the lockfile is unchanged.
+RUN npm ci --legacy-peer-deps --ignore-scripts --no-audit --no-fund
 
 FROM dependencies AS build
 
