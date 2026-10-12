@@ -1,14 +1,12 @@
 var express = require("express");
 var router = express.Router();
-var jwt = require("jsonwebtoken");
-var config = require("../config");
-var Admin = require("../models/admin");
 var Subscription = require("../schema/subscriptions");
 var Driver = require("../schema/driver");
 var User = require("../schema/user");
 var SubscriptionPlan = require("../schema/subscriptionplans");
 var SubscriptionPlanFeature = require("../schema/subscriptionplanfeatures");
 var { buildActor, logAuditFromRequest } = require("../services/auditLogService");
+var { canManageDriver, requireAdmin } = require("../services/adminAccessService");
 var {
   buildPaginationResult,
   buildSort,
@@ -29,35 +27,6 @@ var {
 
 function sendValidationError(res, message) {
   return res.status(400).json({ status: "false", message: message });
-}
-
-async function requireAdmin(req, res, next) {
-  try {
-    var authorization = String(req.headers.authorization || "");
-    var token = authorization.replace(/^JWT\s+/i, "").trim();
-    if (!token) {
-      return res.status(401).json({ status: "false", message: "Unauthorized access" });
-    }
-    var decoded = jwt.verify(token, config.secret);
-    var payload = decoded && decoded.data ? decoded.data : decoded;
-    var adminId = payload && (payload._id || payload.id);
-    if (!adminId) {
-      return res.status(401).json({ status: "false", message: "Unauthorized access" });
-    }
-    var admin = await Admin.findById(adminId).exec();
-    if (!admin) {
-      return res.status(401).json({ status: "false", message: "Unauthorized access" });
-    }
-    req.user = {
-      _id: admin._id,
-      role: "admin",
-      full_name: admin.name || admin.username,
-      username: admin.username
-    };
-    return next();
-  } catch (_error) {
-    return res.status(401).json({ status: "false", message: "Unauthorized access" });
-  }
 }
 
 router.post("/grant", requireAdmin, async function (req, res) {
@@ -81,6 +50,9 @@ router.post("/grant", requireAdmin, async function (req, res) {
     var plan = await SubscriptionPlan.findById(planId).exec();
     if (!driver) {
       return sendValidationError(res, "Driver not found");
+    }
+    if (!canManageDriver(req, driver._id)) {
+      return res.status(403).json({ status: "false", message: "You are not assigned to this driver" });
     }
     if (!plan || plan.customer_type !== "DRIVER" || plan.is_active !== true) {
       return sendValidationError(res, "An active driver subscription plan is required");
@@ -195,6 +167,9 @@ router.post("/:id/revoke", requireAdmin, async function (req, res) {
     }).exec();
     if (!subscription) {
       return res.status(404).json({ status: "false", message: "Active admin grant not found" });
+    }
+    if (!canManageDriver(req, subscription.driver_id)) {
+      return res.status(403).json({ status: "false", message: "You are not assigned to this driver" });
     }
     var actor = buildActor(req);
     subscription.status = "CANCELLED";
