@@ -102,6 +102,16 @@ var DriverSchema = new Schema({
     type: Object,
     default: {}
   },
+  local_area_key: {
+    type: String,
+    default: "",
+    trim: true
+  },
+  active_radius_km: {
+    type: Number,
+    enum: [1, 2, 3],
+    default: 1
+  },
   live_status: {
     type: String,
     default: 0

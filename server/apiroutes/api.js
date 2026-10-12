@@ -14,6 +14,7 @@ const googledistance = require("google-distance");
 const timezone = require("../utils/timezone");
 const socketRegistry = require("../socketRegistry");
 const { buildIceServers } = require("../services/turnService");
+const { driverMatchesActiveRadius } = require("../services/driverDispatchRadiusService");
 /* image downloader */
 const download = require("image-downloader");
 /* cron */
@@ -481,9 +482,12 @@ function filterDriversByAcceptanceSettings(drivers, ride) {
     return [];
   }
   if (config.featureFlags.acceptance_settings_enabled !== true) {
-    return drivers;
+    return drivers.filter(driverMatchesActiveRadius);
   }
   return drivers.filter(function (driver) {
+    if (!driverMatchesActiveRadius(driver)) {
+      return false;
+    }
     let settings = driver.acceptance_settings || {};
     let maxPickupDistance = Number(settings.max_pickup_distance_km || 0);
     let minFare = Number(settings.min_fare || 0);

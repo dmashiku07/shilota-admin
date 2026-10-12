@@ -10,6 +10,7 @@ const moment = require("moment");
 const socketRegistry = require("../socketRegistry");
 const { buildIceServers } = require("../services/turnService");
 const timezone = require("../utils/timezone");
+const { UAT_RADIUS_OPTIONS_KM, driverMatchesActiveRadius, normalizeActiveRadiusKm } = require("../services/driverDispatchRadiusService");
 
 /* schemas */
 let Driver = require("../schema/driver");
@@ -413,6 +414,9 @@ function buildDriverServiceTypeMatch(serviceType) {
 }
 
 function driverMatchesAcceptanceSettings(driver, ride) {
+  if (!driverMatchesActiveRadius(driver)) {
+    return false;
+  }
   if (config.featureFlags.acceptance_settings_enabled !== true) {
     return true;
   }
@@ -2066,6 +2070,33 @@ router.post('/updateprofile', function (req, res) {
       }
     });
   }
+});
+
+router.post('/active-radius/:userid', function (req, res) {
+  passport.authenticate('jwt', { session: false }, async function (err, driver) {
+    if (err || !driver || String(driver._id) !== String(req.params.userid)) {
+      return res.status(401).json({ status: "false", message: "Unauthorized access" });
+    }
+    const radiusKm = normalizeActiveRadiusKm(req.body && req.body.active_radius_km);
+    if (radiusKm === null) {
+      return res.status(400).json({
+        status: "false",
+        message: "Active radius must be one of " + UAT_RADIUS_OPTIONS_KM.join(", ") + " km"
+      });
+    }
+    try {
+      const updated = await Driver.findByIdAndUpdate(driver._id, {
+        $set: { active_radius_km: radiusKm }
+      }, { new: true }).exec();
+      return res.json({
+        status: "true",
+        active_radius_km: updated.active_radius_km,
+        local_area_key: updated.local_area_key || ""
+      });
+    } catch (_error) {
+      return res.status(500).json({ status: "false", message: "Unable to update active radius" });
+    }
+  })(req, res);
 });
 
 /* add & edit & delete edit emergency_contact */
