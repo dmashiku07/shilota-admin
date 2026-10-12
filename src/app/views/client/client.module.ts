@@ -64,6 +64,8 @@ import { RatingShimModule } from "app/shared/rating/rating-shim.module";
     TranslateModule,
     NgxSkeletonLoaderModule,
     NgxIntlTelInputModule,
+    // ngx-bootstrap's Angular 22 module is imported directly; its legacy
+    // `forRoot()` API is not available in the installed package.
     BsDropdownModule,
     AdsenseShimModule,
     AgmShimModule,
