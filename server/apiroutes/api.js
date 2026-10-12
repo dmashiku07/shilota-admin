@@ -3579,7 +3579,8 @@ router.post(
 	                            return senderr(res);
 	                          }
 	                          filterEligibleDrivers(driver, {
-	                            now: new Date()
+	                            now: new Date(),
+                            allowExhaustedPackageVisibility: true
 	                          }).then(function (eligibleDrivers) {
 	                            driver = filterDriversByAcceptanceSettings(eligibleDrivers, rides);
 	                            filterBlockedDriversForRide(driver, rides, function (availableDrivers) {
@@ -3636,7 +3637,8 @@ router.post(
                         senderr(res);
                       } else {
                         filterEligibleDrivers(driver, {
-                          now: new Date()
+	                          now: new Date(),
+                          allowExhaustedPackageVisibility: true
                         }).then(function (eligibleDrivers) {
                         driver = filterDriversByAcceptanceSettings(eligibleDrivers, rides);
                         filterBlockedDriversForRide(driver, rides, function (availableDrivers) {
@@ -4530,7 +4532,8 @@ function dispatchDueScheduledRides() {
               console.error("Nearby driver query failed:", err);
             } else if (Array.isArray(driver) && driver.length > 0 && rides.notify == 0) {
               filterEligibleDrivers(driver, {
-                now: new Date()
+                now: new Date(),
+                allowExhaustedPackageVisibility: true
               }).then(function (eligibleDrivers) {
               driver = filterDriversByAcceptanceSettings(eligibleDrivers, rides);
               filterBlockedDriversForRide(driver, rides, function (availableDrivers) {

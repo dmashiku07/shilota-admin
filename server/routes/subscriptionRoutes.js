@@ -19,7 +19,8 @@ var {
   formatDateKey,
   formatDriverSubscription,
   expireDriverSubscriptions,
-  getSubscriptionUsageSnapshot
+  getSubscriptionUsageSnapshot,
+  validatePlanForPurchase
 } = require("../services/driverSubscriptionService");
 var {
   expirePassengerSubscriptions,
@@ -83,6 +84,10 @@ router.post("/grant", requireAdmin, async function (req, res) {
     }
     if (!plan || plan.customer_type !== "DRIVER" || plan.is_active !== true) {
       return sendValidationError(res, "An active driver subscription plan is required");
+    }
+    var planValidationError = validatePlanForPurchase(plan);
+    if (planValidationError) {
+      return sendValidationError(res, planValidationError);
     }
 
     await expireDriverSubscriptions(new Date());
