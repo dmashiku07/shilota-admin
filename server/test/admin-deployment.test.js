@@ -12,6 +12,10 @@ const angularConfig = JSON.parse(
 const packageJson = JSON.parse(
   fs.readFileSync(path.join(__dirname, "..", "..", "package.json"), "utf8")
 );
+const appRoutingSource = fs.readFileSync(
+  path.join(__dirname, "..", "..", "src", "app", "app-routing.module.ts"),
+  "utf8"
+);
 
 test("production admin build is configured for /admin/", () => {
   const productionConfig =
@@ -25,6 +29,20 @@ test("production admin build is configured for /admin/", () => {
     browser: ""
   });
   assert.match(packageJson.scripts["build:admin"], /ng build --configuration production/);
+});
+
+test("the /admin base route starts the admin login instead of the passenger client", () => {
+  assert.match(appRoutingSource, /path: ''[\s\S]*?views\/admin\/admin\.module/);
+  assert.doesNotMatch(appRoutingSource, /views\/client\/client\.module/);
+});
+
+test("the admin login owns only the base route so authenticated dashboard paths remain reachable", () => {
+  const adminRoutingSource = fs.readFileSync(
+    path.join(__dirname, "..", "..", "src", "app", "views", "admin", "admin-routing.module.ts"),
+    "utf8"
+  );
+
+  assert.match(adminRoutingSource, /path: '',\s*pathMatch: 'full',\s*component: ContentLayoutComponent/);
 });
 
 test("Express serves the Angular admin app only under /admin", () => {

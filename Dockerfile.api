@@ -22,10 +22,12 @@ ENV NODE_OPTIONS=--max-old-space-size=2048
 
 # Keep the expensive Angular build independent from backend-only changes.
 COPY angular.json tsconfig.json browserslist ./
-COPY scripts/write-runtime-config.js scripts/verify-admin-build.js ./scripts/
+COPY scripts/write-runtime-config.js scripts/verify-admin-build.js scripts/patch-ngx-intl-tel-input.js ./scripts/
 COPY src ./src
 
-RUN npm run build:admin && npm run verify:admin-build
+# The staging image must never retain a previously compiled Angular bundle.
+# In particular, older bundles used ngx-bootstrap's removed `forRoot()` API.
+RUN node scripts/patch-ngx-intl-tel-input.js && rm -rf dist .angular && npm run build:admin && npm run verify:admin-build
 
 # These files change frequently but do not affect the compiled admin bundle.
 COPY app.js ./app.js

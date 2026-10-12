@@ -18,6 +18,7 @@ import { AdminguardGuard } from 'app/guards/adminguard.guard';
 const routes: Routes = [
   {
     path: '',
+    pathMatch: 'full',
     component: ContentLayoutComponent,
     data: {expectedRole: 'admin'},
     children: [

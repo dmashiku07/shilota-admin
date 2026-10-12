@@ -23,7 +23,7 @@ export class AdminguardGuard {
       const role = tokenPayLoad?.data?.role?.toString?.().trim?.() || "";
       if (expectedRole && role && role !== expectedRole.trim()) {
         if (expectedRole === "admin") {
-          return this.router.createUrlTree(["admin"]);
+          return this.router.createUrlTree(["/"]);
         } else {
           return this.router.createUrlTree(["signin"]);
         }
@@ -31,7 +31,7 @@ export class AdminguardGuard {
       return true;
     } else {
       if (expectedRole === "admin") {
-        return this.router.createUrlTree(["admin"]);
+        return this.router.createUrlTree(["/"]);
       } else {
         return this.router.createUrlTree(["signin"]);
       }

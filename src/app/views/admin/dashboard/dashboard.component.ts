@@ -167,7 +167,7 @@ export class DashboardComponent implements OnInit {
   }
   onLogoutClick() {
     this.authService.logout();
-    this.router.navigate(['admin/login']);
+    this.router.navigate(['/']);
     return false;
   }
 
