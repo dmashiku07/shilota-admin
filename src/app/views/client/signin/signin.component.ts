@@ -22,7 +22,8 @@ import {
 import { WebappService } from "../../../service/webapp.service";
 import { AuthenticationService } from "app/service/authentication.service";
 import * as firebaseui from 'firebaseui';
-import * as firebase from 'firebase';
+import firebase from 'firebase/app';
+import 'firebase/auth';
 import { CredentialResponse } from 'google-one-tap';	
 import jwt_decode from "jwt-decode";
 
