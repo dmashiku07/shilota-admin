@@ -34,6 +34,7 @@
     "reconcile:expired-offers": "node scripts/reconcile-phase11.js expired-offers",
     "reconcile:expired-broadcasts": "node scripts/reconcile-phase11.js expired-broadcasts",
     "seed:credentials": "node scripts/seed-credentials.js",
+    "bootstrap:staging-super-admin": "node scripts/bootstrap-staging-super-admin.js",
     "test:backend": "node --test server/test/*.test.js",
     "test": "ng test",
     "lint": "ng lint"
