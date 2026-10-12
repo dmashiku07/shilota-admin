@@ -99,7 +99,7 @@ test("subscription plan routes are audit logged", function () {
 });
 
 test("manual admin routes write audit logs", function () {
-  assert.match(driverRouteSource, /driver\.activated/);
+  assert.match(driverRouteSource, /driver\.activation_requested/);
   assert.match(driverRouteSource, /driver\.deactivated/);
   assert.match(safetyRouteSource, /call_log\.reviewed/);
   assert.match(safetyRouteSource, /price_broadcast_settings\.updated/);

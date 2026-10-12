@@ -89,7 +89,7 @@ test("payments, wallets, settlements, and call logs keep settlement-critical fie
   );
 
   assert.ok(callLogPaths.created_at, "expected call logs schema to include created_at");
-  assert.equal(callLogPaths.created_at.options.expires, undefined);
+  assert.equal(callLogPaths.created_at.options.expires, 604800);
 });
 
 test("passenger routes keep request and confirm ride lifecycle branches", function () {
