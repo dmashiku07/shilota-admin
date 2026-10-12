@@ -153,6 +153,7 @@ function validateSubscriptionPlanPayload(payload) {
   const durationUnit = normalizeUpperText(payload.duration_unit);
   const durationValue = toInteger(payload.duration_value, null);
   const dailyRideLimit = normalizeNullableNumber(payload.daily_ride_limit);
+  const rideCreditCount = normalizeNullableNumber(payload.ride_credit_count);
   const isUnlimited = normalizeBoolean(payload.is_unlimited, false);
   const displayOrder = toInteger(payload.display_order, 0);
 
@@ -177,9 +178,9 @@ function validateSubscriptionPlanPayload(payload) {
   if (!Number.isInteger(displayOrder) || displayOrder < 0) {
     errors.display_order = "Display order must be zero or greater";
   }
-  if (customerType === "DRIVER" && !isUnlimited) {
-    if (!Number.isFinite(dailyRideLimit) || dailyRideLimit <= 0) {
-      errors.daily_ride_limit = "Bundle ride limit must be greater than zero for limited driver plans";
+  if (customerType === "DRIVER") {
+    if (!Number.isInteger(rideCreditCount) || rideCreditCount <= 0) {
+      errors.ride_credit_count = "Driver package ride credits must be greater than zero";
     }
   }
   if (isUnlimited && dailyRideLimit !== null && dailyRideLimit <= 0) {
@@ -203,6 +204,7 @@ function normalizeSubscriptionPlanPayload(payload) {
     duration_unit: normalizeUpperText(payload.duration_unit),
     duration_value: toInteger(payload.duration_value, 1),
     daily_ride_limit: isUnlimited ? null : normalizeNullableNumber(payload.daily_ride_limit),
+    ride_credit_count: normalizeNullableNumber(payload.ride_credit_count),
     is_unlimited: isUnlimited,
     is_active: normalizeBoolean(payload.is_active, true),
     display_order: toInteger(payload.display_order, 0),
@@ -220,6 +222,7 @@ function applySubscriptionPlanFields(plan, payload) {
   plan.duration_unit = normalized.duration_unit;
   plan.duration_value = normalized.duration_value;
   plan.daily_ride_limit = normalized.daily_ride_limit;
+  plan.ride_credit_count = normalized.ride_credit_count;
   plan.is_unlimited = normalized.is_unlimited;
   plan.is_active = normalized.is_active;
   plan.display_order = normalized.display_order;

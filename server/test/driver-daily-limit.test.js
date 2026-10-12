@@ -166,8 +166,10 @@ function createSubscriptionMocks(subscriptionState, rideStore) {
         if (!subscriptionState || String(subscriptionState._id) !== String(query._id)) {
           return null;
         }
-        if (update.$inc && typeof update.$inc.rides_used_today === "number") {
-          subscriptionState.rides_used_today += update.$inc.rides_used_today;
+        if (update.$inc) {
+          Object.keys(update.$inc).forEach(function (key) {
+            subscriptionState[key] = Number(subscriptionState[key] || 0) + Number(update.$inc[key] || 0);
+          });
         }
         if (update.$set) {
           Object.assign(subscriptionState, update.$set);
@@ -187,7 +189,7 @@ function createSubscriptionMocks(subscriptionState, rideStore) {
   };
 }
 
-test("first completed ride increments daily usage", async function () {
+test("first completed ride consumes one package credit", async function () {
   const subscriptionState = {
     _id: "sub-1",
     driver_id: "driver-1",
@@ -196,8 +198,12 @@ test("first completed ride increments daily usage", async function () {
     expires_at: new Date("2026-07-23T00:00:00.000Z"),
     rides_used_today: 0,
     ride_count_date: "2026-07-22",
-    daily_limit_snapshot: 3,
-    is_unlimited_snapshot: false
+    daily_limit_snapshot: null,
+    is_unlimited_snapshot: false,
+    payment_status: "PAID",
+    ride_credit_total_snapshot: 10,
+    ride_credits_remaining: 10,
+    ride_credits_consumed: 0
   };
   const restore = createSubscriptionMocks(subscriptionState, createRideStore([
     { _id: "ride-1", driver_id: "driver-1", ridestatus: "completed", subscription_usage_counted_at: null }
@@ -211,7 +217,9 @@ test("first completed ride increments daily usage", async function () {
     });
     assert.equal(result.counted, true);
     assert.equal(subscriptionState.rides_used_today, 1);
-    assert.equal(result.usage.remaining_rides, 2);
+    assert.equal(subscriptionState.ride_credits_remaining, 9);
+    assert.equal(subscriptionState.ride_credits_consumed, 1);
+    assert.equal(result.usage.remaining_rides, 9);
   } finally {
     restore();
   }

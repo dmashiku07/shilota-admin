@@ -104,11 +104,14 @@ async function evaluateDriverEligibility(driverOrId, options) {
   const currentSubscription = await getCurrentDriverSubscription(driver._id, now);
   if (currentSubscription) {
     const usage = getSubscriptionUsageSnapshot(currentSubscription, now);
-    if (usage.reached_daily_limit) {
+    if (currentSubscription.ride_credit_total_snapshot !== null && typeof currentSubscription.ride_credit_total_snapshot !== "undefined" && String(currentSubscription.payment_status || "").toUpperCase() !== "PAID") {
+      return buildIneligibleResult(SUBSCRIPTION_REQUIRED_CODE, "A paid driver package is required before accepting rides", currentSubscription);
+    }
+    if (usage.package_exhausted) {
       return {
         eligible: false,
         code: SUBSCRIPTION_LIMIT_REACHED_CODE,
-        message: "You have reached your daily completed-ride limit for this subscription",
+        message: "Your driver package has no ride credits remaining",
         subscription: currentSubscription,
         usage: usage
       };
@@ -217,17 +220,18 @@ async function filterEligibleDrivers(drivers, options) {
       $in: drivers.map(function (driver) { return String(driver._id); })
     },
     status: "ACTIVE",
+    payment_status: "PAID",
     starts_at: {
       $lte: now
     },
     expires_at: {
       $gt: now
     }
-  }).select("driver_id rides_used_today ride_count_date daily_limit_snapshot is_unlimited_snapshot").exec();
+  }).select("driver_id rides_used_today ride_count_date daily_limit_snapshot is_unlimited_snapshot ride_credit_total_snapshot ride_credits_remaining ride_credits_consumed").exec();
 
   const eligibleDriverIds = activeSubscriptions.reduce(function (result, subscription) {
     const usage = getSubscriptionUsageSnapshot(subscription, now);
-    if (!usage.reached_daily_limit) {
+    if (options && options.allowExhaustedPackageVisibility ? true : !usage.package_exhausted) {
       result[String(subscription.driver_id)] = true;
     }
     return result;

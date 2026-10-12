@@ -1613,6 +1613,7 @@ router.get('/subscriptionplans/:userid', function (req, res) {
               duration_unit: plan.duration_unit,
               duration_value: plan.duration_value,
               daily_ride_limit: plan.daily_ride_limit,
+              ride_credit_count: plan.ride_credit_count,
               is_unlimited: plan.is_unlimited,
               validity_label: formatPlanValidity(plan)
             };
@@ -1728,7 +1729,11 @@ router.get('/subscriptions/remainingrides/:userid', function (req, res) {
         rides_used_today: usage ? usage.rides_used_today : 0,
         daily_limit: usage ? usage.daily_limit : null,
         remaining_rides: usage ? usage.remaining_rides : null,
-        reached_daily_limit: usage ? usage.reached_daily_limit : false
+        reached_daily_limit: usage ? usage.reached_daily_limit : false,
+        ride_credit_total: usage ? usage.ride_credit_total : null,
+        ride_credits_remaining: usage ? usage.ride_credits_remaining : null,
+        ride_credits_consumed: usage ? usage.ride_credits_consumed : 0,
+        package_exhausted: usage ? usage.package_exhausted : false
       });
     } catch (_error) {
       return res.json({

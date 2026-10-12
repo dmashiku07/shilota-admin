@@ -2813,8 +2813,8 @@ router.post("/grabrides" /* , passport.authenticate('jwt', {
                   return;
                 }
                 Promise.all([
-                  filterEligibleDrivers(driver, { now: new Date() }),
-                  filterEligibleDrivers(deliveryDriver, { now: new Date() })
+                  filterEligibleDrivers(driver, { now: new Date(), allowExhaustedPackageVisibility: true }),
+                  filterEligibleDrivers(deliveryDriver, { now: new Date(), allowExhaustedPackageVisibility: true })
                 ]).then(function (eligibleDriverSets) {
                   driver = groupEligibleDriversByCategory(eligibleDriverSets[0]);
                   deliveryDriver = groupEligibleDriversByCategory(eligibleDriverSets[1]);

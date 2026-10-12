@@ -9,6 +9,8 @@ const DRIVER_SUBSCRIPTION_ACTOR_TYPE = "driver_subscription";
 const DRIVER_CUSTOMER_TYPE = "DRIVER";
 const ACTIVE_SUBSCRIPTION_STATUSES = ["ACTIVE"];
 const PENDING_SUBSCRIPTION_STATUSES = ["PENDING_PAYMENT"];
+const UAT_DRIVER_RIDE_CREDITS = 10;
+const UAT_DRIVER_DURATION_DAYS = 7;
 
 function formatDateKey(date) {
   return timezone.formatInTimezone(date || new Date(), timezone.DEFAULT_TIMEZONE).slice(0, 10);
@@ -40,6 +42,7 @@ function addDuration(date, unit, value) {
 }
 
 function takePlanSnapshot(plan) {
+  const rideCredits = Math.max(parseInt(plan.ride_credit_count, 10) || 0, 0);
   return {
     plan_name_snapshot: String(plan.name || "").trim(),
     price_snapshot: toNumber(plan.price),
@@ -51,6 +54,7 @@ function takePlanSnapshot(plan) {
         ? plan.daily_ride_limit
         : null,
     is_unlimited_snapshot: !!plan.is_unlimited
+    ,ride_credit_total_snapshot: rideCredits || UAT_DRIVER_RIDE_CREDITS
   };
 }
 
@@ -75,6 +79,9 @@ function buildPendingDriverSubscriptionRecord(driverId, plan, now) {
     duration_value_snapshot: snapshot.duration_value_snapshot,
     daily_limit_snapshot: snapshot.daily_limit_snapshot,
     is_unlimited_snapshot: snapshot.is_unlimited_snapshot
+    ,ride_credit_total_snapshot: snapshot.ride_credit_total_snapshot
+    ,ride_credits_remaining: snapshot.ride_credit_total_snapshot
+    ,ride_credits_consumed: 0
   };
 }
 
@@ -87,6 +94,12 @@ function validatePlanForPurchase(plan) {
   }
   if (plan.is_active !== true) {
     return "Subscription plan is not active";
+  }
+  if (String(plan.duration_unit || "").toUpperCase() !== "WEEK" || Number(plan.duration_value) !== 1) {
+    return "Driver UAT packages must be valid for 7 days";
+  }
+  if (Number(plan.ride_credit_count) !== UAT_DRIVER_RIDE_CREDITS) {
+    return "Driver UAT packages must include 10 ride credits";
   }
   return "";
 }
@@ -199,14 +212,24 @@ function getSubscriptionUsageSnapshot(subscription, now) {
       remaining_rides: null,
       is_unlimited: false,
       reached_daily_limit: false
+      ,ride_credit_total: null
+      ,ride_credits_remaining: null
+      ,ride_credits_consumed: 0
+      ,package_exhausted: false
     };
   }
 
-  resetDailyUsageIfNeeded(subscription, now);
-  const isUnlimited = !!subscription.is_unlimited_snapshot;
-  const dailyLimit = isUnlimited ? null : Math.max(parseInt(subscription.daily_limit_snapshot, 10) || 0, 0);
+  const creditTotal = Number.isInteger(subscription.ride_credit_total_snapshot) && subscription.ride_credit_total_snapshot >= 0
+    ? subscription.ride_credit_total_snapshot : null;
+  const remainingCredits = creditTotal === null ? null : Math.max(parseInt(subscription.ride_credits_remaining, 10) || 0, 0);
+  const consumedCredits = creditTotal === null ? 0 : Math.max(parseInt(subscription.ride_credits_consumed, 10) || 0, 0);
+  // These legacy aliases keep older mobile clients readable while all
+  // enforcement uses the package-credit values below.
+  const isUnlimited = creditTotal === null && !!subscription.is_unlimited_snapshot;
+  const dailyLimit = creditTotal;
   const ridesUsedToday = Math.max(parseInt(subscription.rides_used_today, 10) || 0, 0);
-  const remainingRides = isUnlimited ? null : Math.max(dailyLimit - ridesUsedToday, 0);
+  const remainingRides = creditTotal === null ? (isUnlimited ? null : Math.max((parseInt(subscription.daily_limit_snapshot, 10) || 0) - ridesUsedToday, 0)) : remainingCredits;
+  const exhausted = creditTotal === null ? (!isUnlimited && remainingRides <= 0) : remainingCredits <= 0;
 
   return {
     rides_used_today: ridesUsedToday,
@@ -214,16 +237,17 @@ function getSubscriptionUsageSnapshot(subscription, now) {
     daily_limit: dailyLimit,
     remaining_rides: remainingRides,
     is_unlimited: isUnlimited,
-    reached_daily_limit: isUnlimited ? false : remainingRides <= 0
+    reached_daily_limit: exhausted,
+    ride_credit_total: creditTotal,
+    ride_credits_remaining: remainingCredits,
+    ride_credits_consumed: consumedCredits,
+    package_exhausted: exhausted
   };
 }
 
 function buildSubscriptionUsageLabel(subscription, now) {
   const usage = getSubscriptionUsageSnapshot(subscription, now);
-  if (usage.is_unlimited) {
-    return "Unlimited rides";
-  }
-  return String(usage.rides_used_today) + " / " + String(usage.daily_limit || 0) + " rides used today • " + String(usage.remaining_rides || 0) + " remaining";
+  return String(usage.ride_credits_remaining || 0) + " of " + String(usage.ride_credit_total || 0) + " ride credits remaining";
 }
 
 async function getLatestDriverSubscription(driverId) {
@@ -318,32 +342,26 @@ async function consumeCompletedRideUsage(options) {
     };
   }
 
-  const todayKey = formatDateKey(now);
-  await Subscription.updateOne(
-    {
-      _id: subscription._id,
-      ride_count_date: {
-        $ne: todayKey
-      }
-    },
-    {
-      $set: {
-        ride_count_date: todayKey,
-        rides_used_today: 0
-      }
-    }
-  ).exec();
+  // Legacy records retain their historical daily audit reset until the
+  // explicit package migration assigns a credit balance.
+  if (subscription.ride_credit_total_snapshot === null || typeof subscription.ride_credit_total_snapshot === "undefined") {
+    resetDailyUsageIfNeeded(subscription, now);
+  }
 
   const updatedSubscription = await Subscription.findOneAndUpdate(
     {
-      _id: subscription._id
+      _id: subscription._id,
+      status: "ACTIVE",
+      payment_status: "PAID",
+      expires_at: { $gt: now },
+      ride_credits_remaining: { $gt: 0 }
     },
     {
       $inc: {
-        rides_used_today: 1
-      },
-      $set: {
-        ride_count_date: todayKey
+        // Retained as a non-enforcement audit counter for historic reports.
+        rides_used_today: 1,
+        ride_credits_remaining: -1,
+        ride_credits_consumed: 1
       }
     },
     {
@@ -352,8 +370,8 @@ async function consumeCompletedRideUsage(options) {
   ).exec();
 
   return {
-    counted: true,
-    reason: "counted",
+    counted: !!updatedSubscription,
+    reason: updatedSubscription ? "counted" : "no_remaining_credits",
     subscription: updatedSubscription,
     usage: updatedSubscription ? getSubscriptionUsageSnapshot(updatedSubscription, now) : null
   };
@@ -524,6 +542,10 @@ function formatDriverSubscription(subscription) {
     duration_value_snapshot: subscription.duration_value_snapshot,
     daily_limit_snapshot: subscription.daily_limit_snapshot,
     is_unlimited_snapshot: subscription.is_unlimited_snapshot,
+    ride_credit_total_snapshot: subscription.ride_credit_total_snapshot,
+    ride_credits_remaining: usage.ride_credits_remaining,
+    ride_credits_consumed: usage.ride_credits_consumed,
+    package_exhausted: usage.package_exhausted,
     remaining_rides: usage.remaining_rides,
     reached_daily_limit: usage.reached_daily_limit,
     created_at: subscription.created_at,

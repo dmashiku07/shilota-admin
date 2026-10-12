@@ -33,6 +33,7 @@ function formatPlan(plan, planFeatures, activeSubscriberCount) {
     duration_unit: plan.duration_unit,
     duration_value: plan.duration_value,
     daily_ride_limit: plan.daily_ride_limit,
+    ride_credit_count: plan.ride_credit_count,
     is_unlimited: plan.is_unlimited,
     is_active: plan.is_active,
     display_order: plan.display_order,

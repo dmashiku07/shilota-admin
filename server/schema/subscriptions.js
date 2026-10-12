@@ -132,6 +132,23 @@ var SubscriptionSchema = new Schema(
       type: Boolean,
       default: false
     },
+    // Immutable package terms and remaining balance.  Nullable values identify
+    // a legacy subscription until the explicit migration is run.
+    ride_credit_total_snapshot: {
+      type: Number,
+      default: null,
+      min: 0
+    },
+    ride_credits_remaining: {
+      type: Number,
+      default: null,
+      min: 0
+    },
+    ride_credits_consumed: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
     plan_features_snapshot: {
       type: [
         {

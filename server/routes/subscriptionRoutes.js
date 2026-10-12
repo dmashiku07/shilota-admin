@@ -138,6 +138,9 @@ router.post("/grant", requireAdmin, async function (req, res) {
       duration_value_snapshot: plan.duration_value,
       daily_limit_snapshot: plan.daily_ride_limit,
       is_unlimited_snapshot: plan.is_unlimited,
+      ride_credit_total_snapshot: plan.ride_credit_count,
+      ride_credits_remaining: plan.ride_credit_count,
+      ride_credits_consumed: 0,
       plan_features_snapshot: (features || []).map(function (feature) {
         return { feature_code: feature.feature_code, feature_value: feature.feature_value };
       })
@@ -155,7 +158,8 @@ router.post("/grant", requireAdmin, async function (req, res) {
         reason: reason,
         starts_at: window.starts_at,
         expires_at: window.expires_at,
-        represents_payment: false
+        represents_payment: false,
+        ride_credit_total: plan.ride_credit_count
       }
     });
 
@@ -242,29 +246,9 @@ router.get("/", async function (req, res) {
       }
     }
     if (req.query.reached_limit === "true") {
-      match.is_unlimited_snapshot = {
-        $ne: true
-      };
-      match.ride_count_date = todayKey;
-      match.$expr = {
-        $gte: ["$rides_used_today", "$daily_limit_snapshot"]
-      };
+      match.ride_credits_remaining = { $lte: 0 };
     } else if (req.query.reached_limit === "false") {
-      match.$or = [
-        {
-          is_unlimited_snapshot: true
-        },
-        {
-          ride_count_date: {
-            $ne: todayKey
-          }
-        },
-        {
-          $expr: {
-            $lt: ["$rides_used_today", "$daily_limit_snapshot"]
-          }
-        }
-      ];
+      match.ride_credits_remaining = { $gt: 0 };
     }
 
     if (customerType === "DRIVER" && req.query.driver) {
@@ -332,6 +316,9 @@ router.get("/", async function (req, res) {
         item.rides_used_today = usage.rides_used_today;
         item.remaining_rides = usage.remaining_rides;
         item.reached_daily_limit = usage.reached_daily_limit;
+        item.ride_credit_total = usage.ride_credit_total;
+        item.ride_credits_remaining = usage.ride_credits_remaining;
+        item.package_exhausted = usage.package_exhausted;
       }
       return item;
     });

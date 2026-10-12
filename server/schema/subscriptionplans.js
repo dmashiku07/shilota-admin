@@ -47,16 +47,17 @@ var SubscriptionPlanSchema = new Schema(
       default: null,
       validate: {
         validator: function (value) {
-          if (this.is_unlimited) {
-            return value === null || typeof value === "undefined" || Number(value) > 0;
-          }
-          if (this.customer_type === "DRIVER") {
-            return Number(value) > 0;
-          }
           return value === null || typeof value === "undefined" || Number(value) > 0;
         },
         message: "Bundle ride limit is invalid for the selected plan type"
       }
+    },
+    // Driver packages use a fixed pool of ride credits.  The legacy daily limit
+    // remains readable so existing documents and historic reports are intact.
+    ride_credit_count: {
+      type: Number,
+      default: null,
+      min: 1
     },
     is_unlimited: {
       type: Boolean,
