@@ -106,10 +106,15 @@ const featureFlags = {
     false
   )
 };
+const resolvedJwtSecret = process.env.JWT_SECRET || localConfig.secret;
+
+if (!resolvedJwtSecret || resolvedJwtSecret === "CHANGE_ME") {
+  throw new Error("JWT_SECRET must be configured with a non-default value");
+}
 
 module.exports = {
   database: process.env.MONGO_URL || localConfig.database || "mongodb://127.0.0.1:27017/shilota_db",
-  secret: process.env.JWT_SECRET || localConfig.secret || "CHANGE_ME",
+  secret: resolvedJwtSecret,
   apiPort: resolvedApiPort,
   socketPort: asNumber(process.env.SOCKET_PORT || localConfig.socketPort, 8081),
   httpsMode: process.env.HTTPS_MODE || localConfig.httpsMode || "disable",

@@ -125,7 +125,7 @@ const {
 } = require("../services/rideOfferService");
 
 const OTP_EXPIRY_MINUTES = 5;
-const OTP_MAX_ATTEMPTS = 5;
+const OTP_MAX_ATTEMPTS = 3;
 const DRIVER_WALLET_TYPE = "driver";
 const DRIVER_FORGOT_PASSWORD_OTP_PURPOSE = "forgot_password";
 const VALID_DRIVER_SERVICE_TYPES = ["ride", "delivery"];
@@ -951,7 +951,7 @@ router.post("/getotp", async function (req, res) {
   }
 
   const otp = randomstring.generate({
-    length: 6,
+    length: 4,
     charset: "numeric"
   });
   const message = `Your Shilota verification code is ${otp}`;
@@ -991,7 +991,6 @@ router.post("/getotp", async function (req, res) {
   return res.json({
     status: "true",
     message: smsResult.skipped ? "OTP generated successfully" : "OTP sent successfully",
-    otp: otp,
     country_code: `+${phoneParts.countryCode}`,
     phone_number: phoneParts.normalizedPhoneNumber,
     sms_enabled: !smsResult.skipped,

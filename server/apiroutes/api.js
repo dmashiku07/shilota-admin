@@ -131,7 +131,7 @@ const {
 } = require("../services/rideRevenuePolicy");
 
 const OTP_EXPIRY_MINUTES = 5;
-const OTP_MAX_ATTEMPTS = 5;
+const OTP_MAX_ATTEMPTS = 3;
 const FORGOT_PASSWORD_OTP_PURPOSE = "forgot_password";
 const SCHEDULE_MAX_DAYS = 7;
 const SCHEDULE_DISPATCH_LEAD_MINUTES = 30;
@@ -1017,10 +1017,63 @@ async function verifyOtpForPurpose(phoneNumber, purpose, otp) {
 
 /* signup as user */
 router.post("/signup", async function (req, res) {
-  if (!req.body.email || !req.body.password) {
-    senderr(res);
-  } else {
+  if (!req.body.email || !req.body.password || !req.body.phone_number) {
+    return res.json({
+      status: "false",
+      message: "Email, password, and a verified phone number are required"
+    });
+  }
+
+  const phoneParts = buildPhoneParts(req.body.phone_number);
+  if (!phoneParts) {
+    return res.json({
+      status: "false",
+      message: "Invalid phone number"
+    });
+  }
+
+  try {
+    const verifiedOtp = await OtpVerification.findOne({
+      phone_number: phoneParts.normalizedPhoneNumber,
+      purpose: "signup",
+      verified: true,
+      consumed: false,
+      expires_at: { $gt: new Date() }
+    })
+      .sort({ createdAt: -1 })
+      .exec();
+
+    if (!verifiedOtp) {
+      return res.json({
+        status: "false",
+        message: "Verify your phone number before creating an account"
+      });
+    }
+
+    const claimedOtp = await OtpVerification.findOneAndUpdate(
+      {
+        _id: verifiedOtp._id,
+        consumed: false
+      },
+      {
+        $set: {
+          consumed: true,
+          consumed_at: new Date()
+        }
+      },
+      { new: true }
+    ).exec();
+
+    if (!claimedOtp) {
+      return res.json({
+        status: "false",
+        message: "Verify your phone number before creating an account"
+      });
+    }
+
     req.body.email = req.body.email.toLowerCase();
+    req.body.country_code = phoneParts.countryCode;
+    req.body.phone_number = phoneParts.nationalNumber;
     User.count(
       {
         email: req.body.email
@@ -1071,6 +1124,8 @@ router.post("/signup", async function (req, res) {
         }
       }
     );
+  } catch (_error) {
+    return senderr(res);
   }
 });
 
@@ -1391,7 +1446,7 @@ router.post("/getotp", async function (req, res) {
   }
 
   const otp = randomstring.generate({
-    length: 6,
+    length: 4,
     charset: "numeric"
   });
   const message = `Your Shilota verification code is ${otp}`;
@@ -1431,7 +1486,6 @@ router.post("/getotp", async function (req, res) {
   return res.json({
     status: "true",
     message: smsResult.skipped ? "OTP generated successfully" : "OTP sent successfully",
-    otp: otp,
     phone_number: phoneParts.normalizedPhoneNumber,
     sms_enabled: !smsResult.skipped,
     expires_in: OTP_EXPIRY_MINUTES * 60

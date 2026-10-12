@@ -83,6 +83,13 @@ app.use(bodyParser.json());
 app.use(cors());
 const port = process.env.PORT || config.apiPort;
 
+app.get('/healthz', function (_req, res) {
+  const databaseReady = mongoose.connection.readyState === 1;
+  return res.status(databaseReady ? 200 : 503).json({
+    status: databaseReady ? 'ok' : 'unavailable'
+  });
+});
+
 app.use(cors());
 app.use(passport.initialize());
 //app.use(logger('dev')); /* View logs */
