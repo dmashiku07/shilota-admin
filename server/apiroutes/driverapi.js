@@ -967,7 +967,8 @@ router.post("/getotp", async function (req, res) {
   }
 
   const otp = randomstring.generate({
-    length: 4,
+    // Keep staging driver phone/password verification compatible with production.
+    length: 6,
     charset: "numeric"
   });
   const message = `Your Shilota verification code is ${otp}`;
