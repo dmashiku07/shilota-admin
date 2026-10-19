@@ -36,6 +36,16 @@ test("the /admin base route starts the admin login instead of the passenger clie
   assert.doesNotMatch(appRoutingSource, /views\/client\/client\.module/);
 });
 
+test("legacy /admin/... links reach their requested admin page instead of the dashboard wildcard", () => {
+  const legacyAdminRoute = appRoutingSource.indexOf("path: 'admin'");
+  const baseAdminRoute = appRoutingSource.indexOf("path: ''");
+
+  assert.ok(legacyAdminRoute >= 0);
+  assert.ok(baseAdminRoute >= 0);
+  assert.ok(legacyAdminRoute < baseAdminRoute);
+  assert.match(appRoutingSource, /path: '',\s*pathMatch: 'full'/);
+});
+
 test("the admin login owns only the base route so authenticated dashboard paths remain reachable", () => {
   const adminRoutingSource = fs.readFileSync(
     path.join(__dirname, "..", "..", "src", "app", "views", "admin", "admin-routing.module.ts"),
