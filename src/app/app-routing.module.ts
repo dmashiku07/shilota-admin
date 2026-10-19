@@ -2,16 +2,19 @@ import { NgModule } from '@angular/core';
 import { RouterModule, Routes } from '@angular/router';
 
 const appRoutes: Routes = [
-  // The application is served below /admin/. Angular therefore sees the URL
-  // after that base path: /admin/ is the empty route, not "admin".
-  {
-    path: '',
-    loadChildren: () => import('./views/admin/admin.module').then(m => m.AdminModule)
-  },
-  // Keep existing in-app links that still include an admin segment functional
-  // while components are migrated to base-relative links.
+  // Historical in-app links include an `admin` segment. This route must come
+  // first: an empty route without `pathMatch: 'full'` is a prefix match and
+  // would otherwise consume `/admin/...` and render the module's dashboard
+  // wildcard instead of the requested page.
   {
     path: 'admin',
+    loadChildren: () => import('./views/admin/admin.module').then(m => m.AdminModule)
+  },
+  // The application is served below /admin/. At the base URL, Angular sees an
+  // empty route and should open the same admin module.
+  {
+    path: '',
+    pathMatch: 'full',
     loadChildren: () => import('./views/admin/admin.module').then(m => m.AdminModule)
   },
   { path: '**', redirectTo: '' }
