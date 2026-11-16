@@ -27,7 +27,7 @@ export class LoginComponent implements OnInit {
     public toastr: ToastrService
   ) {
     if (this.authService.loggedIn()) {
-      this.router.navigate(["/dashboard"]);
+      this.router.navigate(["/admin", "dashboard"]);
     }
   }
 
@@ -56,7 +56,7 @@ export class LoginComponent implements OnInit {
             !localStorage.getItem("user")
           ) {
             this.authService.storeUserData(data["token"], data["user"]);
-            this.router.navigate(["/dashboard"]);
+            this.router.navigate(["/admin", "dashboard"]);
           } else {
             this.toastr.error("Kindly sign out as user");
             window.scrollTo(0, 0);
