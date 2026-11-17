@@ -29,6 +29,9 @@ import { PaymentRidehistoryComponent } from './payment-ridehistory/payment-rideh
 import { DeletedUserComponent } from './deleteduser/deleteduser.component';
 import { DeletedDriverComponent } from './deleteddriver/deleteddriver.component';
 import { ServerPaginationComponent } from './server-pagination/server-pagination.component';
+import { OperationsReportingService } from '../../../service/operations-reporting.service';
+import { LatraComponent } from './latra/latra.component';
+import { DisbursementsComponent } from './disbursements/disbursements.component';
 
 
 @NgModule({
@@ -39,7 +42,7 @@ import { ServerPaginationComponent } from './server-pagination/server-pagination
     FilterOrderShimModule,
     PaginationShimModule
   ],
-  declarations: [UserComponent, ViewComponent, DriverComponent, DetailsComponent, VehicleComponent,  RidesComponent, RidesDetailsComponent, VechicledetailComponent, PaymentComponent, PaymentdetailsComponent, RideHistoryComponent,  DriverPayComponent,  SettlementHistoryComponent, PaymentRidehistoryComponent,DeletedUserComponent,DeletedDriverComponent, ServerPaginationComponent],
-  providers: [UserService,DriverService,VehicleService,RidesService,PaymentService,SettlementService],
+  declarations: [UserComponent, ViewComponent, DriverComponent, DetailsComponent, VehicleComponent,  RidesComponent, RidesDetailsComponent, VechicledetailComponent, PaymentComponent, PaymentdetailsComponent, RideHistoryComponent,  DriverPayComponent,  SettlementHistoryComponent, PaymentRidehistoryComponent,DeletedUserComponent,DeletedDriverComponent, ServerPaginationComponent, LatraComponent, DisbursementsComponent],
+  providers: [UserService,DriverService,VehicleService,RidesService,PaymentService,SettlementService, OperationsReportingService],
 })
 export class ManagementModule { }

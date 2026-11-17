@@ -15,6 +15,8 @@ import { RideHistoryComponent } from './ride-history/ride-history.component';
 import { DriverPayComponent } from './driver-pay/driver-pay.component';
 import { SettlementHistoryComponent } from './settlement-history/settlement-history.component';
 import { PaymentRidehistoryComponent } from './payment-ridehistory/payment-ridehistory.component';
+import { LatraComponent } from './latra/latra.component';
+import { DisbursementsComponent } from './disbursements/disbursements.component';
 
 const routes: Routes = [
   {
@@ -97,6 +99,14 @@ const routes: Routes = [
         path: 'viewRide/:id',
         component: PaymentRidehistoryComponent,
        
+      },
+      {
+        path: 'latra',
+        component: LatraComponent,
+      },
+      {
+        path: 'disbursements',
+        component: DisbursementsComponent,
       },
 
       

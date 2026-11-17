@@ -69,6 +69,16 @@ export const ROUTES: RouteInfo[] = [
     },
 
     {
+        path: '/admin/management/disbursements', title: 'Disbursements', icon: 'fa fa-money', class: '', badge: '',
+        badgeClass: 'badge badge-pill badge-danger float-right mr-1 mt-1', isExternalLink: false, submenu: []
+    },
+
+    {
+        path: '/admin/management/latra', title: 'LATRA', icon: 'fa fa-file-text-o', class: '', badge: '',
+        badgeClass: 'badge badge-pill badge-danger float-right mr-1 mt-1', isExternalLink: false, submenu: []
+    },
+
+    {
         path: '', title: 'Reports', icon: 'fa fa-line-chart', class: 'has-sub',
         badge: '', badgeClass: 'badge badge-pill badge-danger float-right mr-1 mt-1', isExternalLink: false, submenu: [
             {
