@@ -23,6 +23,14 @@ export class OperationsReportingService {
     return this.http.get(this.apiUrl + '/latra/submissions', this.options(params));
   }
 
+  getLatraSubmission(id: string) {
+    return this.http.get(this.apiUrl + '/latra/submissions/' + id, this.options());
+  }
+
+  retryLatraSubmission(id: string) {
+    return this.http.post(this.apiUrl + '/latra/submissions/' + id + '/retry', {}, this.options());
+  }
+
   getDisbursements(params: any) {
     return this.http.get(this.apiUrl + '/disbursements', this.options(params));
   }

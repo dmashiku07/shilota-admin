@@ -203,8 +203,8 @@ function submissionConfirmation(submission) {
     data.reference_number || data.referenceNumber || response.reference_number || response.referenceNumber || null;
 }
 
-function serializeSubmission(submission) {
-  return {
+function serializeSubmission(submission, includePayload) {
+  const result = {
     id: submission._id,
     submissionType: submission.submission_type || "unknown",
     reportDate: submission.report_date || null,
@@ -218,6 +218,13 @@ function serializeSubmission(submission) {
     confirmationReference: submissionConfirmation(submission),
     errorMessage: submission.error_message || submission.reason || null
   };
+  if (includePayload) {
+    result.requestPayload = submission.request_payload || null;
+    result.responsePayload = submission.response_payload || null;
+    result.reason = submission.reason || null;
+    result.nextRetryAt = submission.next_retry_at || null;
+  }
+  return result;
 }
 
 // Read-only operational reporting. It deliberately does not trigger a CeTS/LATRA submission.
@@ -228,6 +235,15 @@ router.get("/admin/latra/submissions", async function (req, res) {
     if (req.query.status) criteria.status = req.query.status;
     if (req.query.type) criteria.submission_type = req.query.type;
     if (req.query.driverId) criteria.entity_id = req.query.driverId;
+    if (req.query.confirmation === "confirmed") {
+      criteria.latra_reference_number = { $exists: true, $nin: [null, ""] };
+    } else if (req.query.confirmation === "unconfirmed") {
+      criteria.$or = [
+        { latra_reference_number: { $exists: false } },
+        { latra_reference_number: null },
+        { latra_reference_number: "" }
+      ];
+    }
     const from = parseDate(req.query.from, false);
     const to = parseDate(req.query.to, true);
     if (from || to) {
@@ -250,6 +266,55 @@ router.get("/admin/latra/submissions", async function (req, res) {
     });
   } catch (error) {
     return res.status(error.statusCode || 500).json({ success: false, msg: error.message || "Unable to load LATRA submissions" });
+  }
+});
+
+router.get("/admin/latra/submissions/:id", async function (req, res) {
+  try {
+    await requireAdmin(req);
+    const submission = await CetsSubmission.findById(req.params.id).exec();
+    if (!submission) {
+      return res.status(404).json({ success: false, msg: "LATRA submission not found" });
+    }
+    return res.json({ success: true, item: serializeSubmission(submission, true) });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({ success: false, msg: error.message || "Unable to load LATRA submission" });
+  }
+});
+
+// A retry is intentional and is only initiated by an authenticated admin's explicit action.
+router.post("/admin/latra/submissions/:id/retry", async function (req, res) {
+  try {
+    await requireAdmin(req);
+    const submission = await CetsSubmission.findById(req.params.id).exec();
+    if (!submission) {
+      return res.status(404).json({ success: false, msg: "LATRA submission not found" });
+    }
+    const allowedTypes = ["driver", "vehicle", "trip", "daily_report"];
+    if (!allowedTypes.includes(submission.submission_type)) {
+      return res.status(400).json({ success: false, msg: "This submission type cannot be retried" });
+    }
+    if (submission.submission_type === "daily_report" && !submission.report_date) {
+      return res.status(400).json({ success: false, msg: "This daily report has no report date" });
+    }
+    if (submission.submission_type !== "daily_report" && !submission.entity_id) {
+      return res.status(400).json({ success: false, msg: "This submission has no record identifier" });
+    }
+    const immediate = await cetsSyncService.runSubmissionNow(
+      submission.submission_type,
+      submission.entity_id || null,
+      submission.report_date || null,
+      {}
+    );
+    const refreshed = await CetsSubmission.findById(immediate.submission._id).exec();
+    return res.json({ success: true, item: serializeSubmission(refreshed || immediate.submission, true) });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({
+      success: false,
+      msg: error.message || "Unable to retry LATRA submission",
+      upstreamStatus: typeof error.upstreamStatus === "undefined" ? null : error.upstreamStatus,
+      upstreamBody: typeof error.upstreamBody === "undefined" ? null : error.upstreamBody
+    });
   }
 });
 
