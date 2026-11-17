@@ -27,8 +27,12 @@ export class OperationsReportingService {
     return this.http.get(this.apiUrl + '/latra/submissions/' + id, this.options());
   }
 
-  retryLatraSubmission(id: string) {
-    return this.http.post(this.apiUrl + '/latra/submissions/' + id + '/retry', {}, this.options());
+  saveLatraCorrection(id: string, overrides: any) {
+    return this.http.put(this.apiUrl + '/latra/submissions/' + id + '/correction', { overrides }, this.options());
+  }
+
+  retryLatraSubmission(id: string, overrides: any = {}) {
+    return this.http.post(this.apiUrl + '/latra/submissions/' + id + '/retry', { overrides }, this.options());
   }
 
   getDisbursements(params: any) {

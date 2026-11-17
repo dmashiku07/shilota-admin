@@ -203,7 +203,45 @@ function submissionConfirmation(submission) {
     data.reference_number || data.referenceNumber || response.reference_number || response.referenceNumber || null;
 }
 
-function serializeSubmission(submission, includePayload) {
+const CORRECTION_FIELDS = {
+  driver: ["driverName", "driverEmail", "driverPhone", "driverLicenseNumber", "licenceCategory"],
+  vehicle: ["vehicleRegistrationNumber", "vehicleModel", "vehicleChasisNumber", "vehicleTypeEnum", "vehicleRegistrationDate"],
+  trip: ["tripId", "originCoordinates", "endCoordinates", "startTime", "endTime", "totalFareAmount", "tripDistance", "rating", "driverEarning", "driverLicenseNumber", "vehicleRegistrationNumber", "passengerName", "passengerPhone", "passengerNida", "pickupPoint", "dropOffPoint"],
+  daily_report: ["totalTrip", "totalPaidAmount", "reportDate", "operator"]
+};
+
+function sanitizeOverrides(submissionType, input) {
+  const allowed = CORRECTION_FIELDS[submissionType] || [];
+  const source = input && typeof input === "object" ? input : {};
+  return allowed.reduce(function (result, key) {
+    if (Object.prototype.hasOwnProperty.call(source, key)) {
+      result[key] = source[key];
+    }
+    return result;
+  }, {});
+}
+
+function inferMissingFields(submission) {
+  const payload = submission.request_payload || {};
+  const responseData = ((submission.response_payload || {}).data) || {};
+  const overrides = submission.payload_overrides || {};
+  return (CORRECTION_FIELDS[submission.submission_type] || []).filter(function (key) {
+    if (key === "operator") {
+      return !overrides.operator && !payload.operator && (responseData.operator === null || responseData.operator === "" || !Object.prototype.hasOwnProperty.call(payload, "operator"));
+    }
+    return payload[key] === null || payload[key] === "" || typeof payload[key] === "undefined";
+  });
+}
+
+async function getSuccessfulTemplate(submission) {
+  return CetsSubmission.findOne({
+    submission_type: submission.submission_type,
+    status: "synced",
+    _id: { $ne: submission._id }
+  }).sort({ processed_at: -1, createdAt: -1 }).lean().exec();
+}
+
+function serializeSubmission(submission, includePayload, successfulTemplate) {
   const result = {
     id: submission._id,
     submissionType: submission.submission_type || "unknown",
@@ -223,6 +261,17 @@ function serializeSubmission(submission, includePayload) {
     result.responsePayload = submission.response_payload || null;
     result.reason = submission.reason || null;
     result.nextRetryAt = submission.next_retry_at || null;
+    result.payloadOverrides = submission.payload_overrides || {};
+    result.correctionFields = CORRECTION_FIELDS[submission.submission_type] || [];
+    result.missingFields = inferMissingFields(submission);
+    result.successfulTemplate = successfulTemplate ? {
+      id: successfulTemplate._id,
+      status: successfulTemplate.status,
+      sentAt: successfulTemplate.last_attempt_at || successfulTemplate.processed_at || successfulTemplate.createdAt || null,
+      requestPayload: successfulTemplate.request_payload || null,
+      responsePayload: successfulTemplate.response_payload || null,
+      confirmationReference: submissionConfirmation(successfulTemplate)
+    } : null;
   }
   return result;
 }
@@ -276,9 +325,28 @@ router.get("/admin/latra/submissions/:id", async function (req, res) {
     if (!submission) {
       return res.status(404).json({ success: false, msg: "LATRA submission not found" });
     }
-    return res.json({ success: true, item: serializeSubmission(submission, true) });
+    const successfulTemplate = await getSuccessfulTemplate(submission);
+    return res.json({ success: true, item: serializeSubmission(submission, true, successfulTemplate) });
   } catch (error) {
     return res.status(error.statusCode || 500).json({ success: false, msg: error.message || "Unable to load LATRA submission" });
+  }
+});
+
+router.put("/admin/latra/submissions/:id/correction", async function (req, res) {
+  try {
+    await requireAdmin(req);
+    const submission = await CetsSubmission.findById(req.params.id).exec();
+    if (!submission) {
+      return res.status(404).json({ success: false, msg: "LATRA submission not found" });
+    }
+    const overrides = sanitizeOverrides(submission.submission_type, req.body && req.body.overrides);
+    submission.payload_overrides = Object.assign({}, submission.payload_overrides || {}, overrides);
+    submission.reason = "admin_correction_saved";
+    await submission.save();
+    const successfulTemplate = await getSuccessfulTemplate(submission);
+    return res.json({ success: true, item: serializeSubmission(submission, true, successfulTemplate) });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({ success: false, msg: error.message || "Unable to save LATRA correction" });
   }
 });
 
@@ -304,10 +372,15 @@ router.post("/admin/latra/submissions/:id/retry", async function (req, res) {
       submission.submission_type,
       submission.entity_id || null,
       submission.report_date || null,
-      {}
+      sanitizeOverrides(
+        submission.submission_type,
+        (req.body && req.body.overrides) || submission.payload_overrides || {}
+      )
     );
     const refreshed = await CetsSubmission.findById(immediate.submission._id).exec();
-    return res.json({ success: true, item: serializeSubmission(refreshed || immediate.submission, true) });
+    const finalSubmission = refreshed || immediate.submission;
+    const successfulTemplate = await getSuccessfulTemplate(finalSubmission);
+    return res.json({ success: true, item: serializeSubmission(finalSubmission, true, successfulTemplate) });
   } catch (error) {
     return res.status(error.statusCode || 500).json({
       success: false,

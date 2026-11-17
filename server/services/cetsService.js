@@ -290,7 +290,8 @@ function buildDailyReportPayload(reportDate, totals, overrides) {
   const payload = {
     totalTrip: parseInt(typeof overrides.totalTrip !== "undefined" ? overrides.totalTrip : totals.totalTrip, 10),
     totalPaidAmount: parseInt(typeof overrides.totalPaidAmount !== "undefined" ? overrides.totalPaidAmount : totals.totalPaidAmount, 10),
-    reportDate: String(overrides.reportDate || reportDate || "").trim()
+    reportDate: String(overrides.reportDate || reportDate || "").trim(),
+    operator: String(overrides.operator || config.cets.operator || "").trim()
   };
 
   if (!Number.isFinite(payload.totalTrip)) {
@@ -300,6 +301,7 @@ function buildDailyReportPayload(reportDate, totals, overrides) {
     throw Object.assign(new Error("totalPaidAmount is required"), { statusCode: 400 });
   }
   requireValue(payload.reportDate, "reportDate is required");
+  requireValue(payload.operator, "operator is required");
 
   return payload;
 }

@@ -13,8 +13,10 @@ export class LatraComponent implements OnInit {
   loading = false;
   detailLoading = false;
   retrying = false;
+  savingCorrection = false;
   errorMessage = '';
   selected: any = null;
+  editableOverrides: any = {};
   filter: any = { from: '', to: '', status: '', type: '', confirmation: '' };
   pagination: any = { page: 1, pageSize: 25, totalItems: 0, totalPages: 1 };
 
@@ -54,6 +56,7 @@ export class LatraComponent implements OnInit {
     this.selected = null;
     this.reporting.getLatraSubmission(row.id).subscribe((res: any) => {
       this.selected = res.item || null;
+      this.setEditableOverrides();
       this.detailLoading = false;
       this.cdr.detectChanges();
     }, (error) => { this.detailLoading = false; this.errorMessage = error?.error?.msg || 'Unable to load this record.'; this.cdr.detectChanges(); });
@@ -61,10 +64,12 @@ export class LatraComponent implements OnInit {
 
   retrySelected() {
     if (!this.selected || this.retrying) return;
+    if (!window.confirm('Resubmit this LATRA record to CeTS using the values shown below? This sends an external request and records the result.')) return;
     this.retrying = true;
     this.errorMessage = '';
-    this.reporting.retryLatraSubmission(this.selected.id).subscribe((res: any) => {
+    this.reporting.retryLatraSubmission(this.selected.id, this.editableOverrides).subscribe((res: any) => {
       this.selected = res.item || this.selected;
+      this.setEditableOverrides();
       this.retrying = false;
       this.load();
       this.cdr.detectChanges();
@@ -74,6 +79,39 @@ export class LatraComponent implements OnInit {
       this.load();
       this.cdr.detectChanges();
     });
+  }
+
+  saveCorrection(resubmit: boolean = false) {
+    if (!this.selected || this.savingCorrection) return;
+    this.savingCorrection = true;
+    this.errorMessage = '';
+    this.reporting.saveLatraCorrection(this.selected.id, this.editableOverrides).subscribe((res: any) => {
+      this.selected = res.item || this.selected;
+      this.setEditableOverrides();
+      this.savingCorrection = false;
+      this.load();
+      this.cdr.detectChanges();
+      if (resubmit) this.retrySelected();
+    }, (error) => {
+      this.savingCorrection = false;
+      this.errorMessage = error?.error?.msg || 'Unable to save the LATRA correction.';
+      this.cdr.detectChanges();
+    });
+  }
+
+  setEditableOverrides() {
+    const saved = this.selected?.payloadOverrides || {};
+    const payload = this.selected?.requestPayload || {};
+    this.editableOverrides = { ...saved };
+    (this.selected?.correctionFields || []).forEach((field: string) => {
+      if (typeof this.editableOverrides[field] === 'undefined' && typeof payload[field] !== 'undefined') {
+        this.editableOverrides[field] = payload[field];
+      }
+    });
+  }
+
+  fieldLabel(field: string) {
+    return String(field || '').replace(/([A-Z])/g, ' $1').replace(/^./, value => value.toUpperCase());
   }
 
   exportSelectedCsv() {
