@@ -59,6 +59,9 @@ export class LatraComponent implements OnInit {
       this.setEditableOverrides();
       this.detailLoading = false;
       this.cdr.detectChanges();
+      setTimeout(() => {
+        document.getElementById('latra-submission-details')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
     }, (error) => { this.detailLoading = false; this.errorMessage = error?.error?.msg || 'Unable to load this record.'; this.cdr.detectChanges(); });
   }
 
@@ -112,6 +115,15 @@ export class LatraComponent implements OnInit {
 
   fieldLabel(field: string) {
     return String(field || '').replace(/([A-Z])/g, ' $1').replace(/^./, value => value.toUpperCase());
+  }
+
+  submittedValue(field: string) {
+    const value = this.selected?.requestPayload?.[field];
+    return value === null || typeof value === 'undefined' || value === '' ? 'Not submitted' : value;
+  }
+
+  fieldNeedsAttention(field: string) {
+    return (this.selected?.missingFields || []).includes(field);
   }
 
   exportSelectedCsv() {
