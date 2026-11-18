@@ -10,52 +10,60 @@ export const ROUTES: RouteInfo[] = [
     },
 
     {
-        path: '', title: 'Users', icon: 'fa fa-users', class: 'has-sub',
+        path: '', title: 'Passenger Management', icon: 'fa fa-users', class: 'has-sub',
         badge: '', badgeClass: 'badge badge-pill badge-danger float-right mr-1 mt-1', isExternalLink: false, submenu: [
             {
-                path: '/admin/management/user', title: 'Riders', icon: '', class: '',
+                path: '/admin/management/user', title: 'All Passengers', icon: '', class: '',
                 badge: '', badgeClass: '', isExternalLink: false, submenu: []
             },
             {
-                path: '/admin/management/driver', title: 'Drivers', icon: '', class: '',
+                path: '/admin/management/deletedusers', title: 'Deleted Passenger Accounts', icon: '', class: '',
                 badge: '', badgeClass: '', isExternalLink: false, submenu: []
             }
         ]
     },
 
     {
-        path: '', title: 'Deleted Accounts', icon: 'fa fa-users', class: 'has-sub',
+        path: '', title: 'Driver Management', icon: 'fa fa-id-card-o', class: 'has-sub',
         badge: '', badgeClass: 'badge badge-pill badge-danger float-right mr-1 mt-1', isExternalLink: false, submenu: [
             {
-                path: '/admin/management/deletedusers', title: 'Riders', icon: '', class: '',
+                path: '/admin/management/driver', title: 'All Drivers', icon: '', class: '',
                 badge: '', badgeClass: '', isExternalLink: false, submenu: []
             },
             {
-                path: '/admin/management/deleteddrivers', title: 'Drivers', icon: '', class: '',
+                path: '/admin/management/deleteddrivers', title: 'Deleted Driver Accounts', icon: '', class: '',
                 badge: '', badgeClass: '', isExternalLink: false, submenu: []
             }
         ]
     },
 
     {
-        path: '/admin/management/vehicle', title: 'Vehicles', icon: 'fa fa-car', class: '', badge: '',
+        path: '', title: 'Vehicle & Fleet Management', icon: 'fa fa-car', class: 'has-sub', badge: '',
         badgeClass: 'badge badge-pill badge-danger float-right mr-1 mt-1', isExternalLink: false, submenu: [
+            { path: '/admin/management/vehicle', title: 'Vehicles', icon: '', class: '', badge: '', badgeClass: '', isExternalLink: false, submenu: [] },
+            { path: '/admin/bodytype/view', title: 'Body Types', icon: '', class: '', badge: '', badgeClass: '', isExternalLink: false, submenu: [] },
+            { path: '/admin/amenities/view', title: 'Amenities', icon: '', class: '', badge: '', badgeClass: '', isExternalLink: false, submenu: [] },
+            { path: '/admin/category/view', title: 'Vehicle Categories', icon: '', class: '', badge: '', badgeClass: '', isExternalLink: false, submenu: [] }
         ]
     },
 
     {
-        path: '', title: 'Cabs', icon: 'fa fa-taxi', class: 'has-sub',
+        path: '', title: 'Ride & Trip Management', icon: 'fa fa-road', class: 'has-sub',
         badge: '', badgeClass: 'badge badge-pill badge-danger float-right mr-1 mt-1', isExternalLink: false, submenu: [
             {
-                path: '/admin/bodytype/view', title: 'Body types', icon: '', class: '',
+                path: '/admin/management/rides', title: 'Rides', icon: '', class: '',
                 badge: '', badgeClass: '', isExternalLink: false, submenu: []
             },
             {
-                path: '/admin/amenities/view', title: 'Amenities', icon: '', class: '',
+                path: '/admin/destination-broadcast-monitor', title: 'Destination Broadcasts', icon: '', class: '',
                 badge: '', badgeClass: '', isExternalLink: false, submenu: []
             },
             {
-                path: '/admin/category/view', title: 'Category', icon: '', class: '',
+                path: '/admin/price-broadcast-settings', title: 'Price Broadcast Settings', icon: '', class: '',
+                badge: '', badgeClass: '', isExternalLink: false, submenu: []
+            },
+            {
+                path: '/admin/pool-settings', title: 'Pool Settings', icon: '', class: '',
                 badge: '', badgeClass: '', isExternalLink: false, submenu: []
             }
         ]
@@ -63,36 +71,60 @@ export const ROUTES: RouteInfo[] = [
     },
 
     {
-        path: '/admin/management/rides', title: 'Rides', icon: 'fa fa-history', class: '', badge: '',
-        badgeClass: 'badge badge-pill badge-danger float-right mr-1 mt-1', isExternalLink: false, submenu: [
+        path: '', title: 'Payments & Finance', icon: 'fa fa-money', class: 'has-sub',
+        badge: '', badgeClass: 'badge badge-pill badge-danger float-right mr-1 mt-1', isExternalLink: false, submenu: [
+            {
+                path: '/admin/management/disbursements', title: 'Disbursements', icon: '', class: '',
+                badge: '', badgeClass: '', isExternalLink: false, submenu: []
+            },
+            ...(environment.featureFlags.commission_enabled ? [{
+                path: '/admin/commissions/view', title: 'Commission Settings', icon: '', class: '',
+                badge: '', badgeClass: '', isExternalLink: false, submenu: []
+            },
+            {
+                path: '/admin/management/driverPay', title: 'Driver Payments', icon: '', class: '',
+                badge: '', badgeClass: '', isExternalLink: false, submenu: []
+            },
+            {
+                path: '/admin/management/settlementHistory', title: 'Settlement History', icon: '', class: '',
+                badge: '', badgeClass: '', isExternalLink: false, submenu: []
+            }] : [])
         ]
     },
 
     {
-        path: '/admin/management/disbursements', title: 'Disbursements', icon: 'fa fa-money', class: '', badge: '',
-        badgeClass: 'badge badge-pill badge-danger float-right mr-1 mt-1', isExternalLink: false, submenu: []
+        path: '', title: 'Receipts & Transactions', icon: 'fa fa-file-text-o', class: 'has-sub',
+        badge: '', badgeClass: 'badge badge-pill badge-danger float-right mr-1 mt-1', isExternalLink: false, submenu: [
+            {
+                path: '/admin/management/receipts', title: 'Payment & Ride Receipts', icon: '', class: '',
+                badge: '', badgeClass: '', isExternalLink: false, submenu: []
+            }
+        ]
     },
 
     {
-        path: '/admin/management/latra', title: 'LATRA', icon: 'fa fa-file-text-o', class: '', badge: '',
-        badgeClass: 'badge badge-pill badge-danger float-right mr-1 mt-1', isExternalLink: false, submenu: []
-    },
-
-    {
-        path: '', title: 'Reports', icon: 'fa fa-line-chart', class: 'has-sub',
+        path: '', title: 'Reports & Analytics', icon: 'fa fa-line-chart', class: 'has-sub',
         badge: '', badgeClass: 'badge badge-pill badge-danger float-right mr-1 mt-1', isExternalLink: false, submenu: [
             {
                 path: '/admin/reports', title: 'Platform Reports', icon: '', class: '',
                 badge: '', badgeClass: '', isExternalLink: false, submenu: []
+            },
+            {
+                path: '/admin/demand-heatmap', title: 'Demand Heatmap', icon: '', class: '',
+                badge: '', badgeClass: '', isExternalLink: false, submenu: []
+            },
+            {
+                path: '/admin/management/latra', title: 'LATRA Compliance', icon: '', class: '',
+                badge: '', badgeClass: '', isExternalLink: false, submenu: []
             }
         ]
     },
 
     {
-        path: '', title: 'Safety', icon: 'fa fa-shield', class: 'has-sub',
+        path: '', title: 'Safety & Emergencies', icon: 'fa fa-shield', class: 'has-sub',
         badge: '', badgeClass: 'badge badge-pill badge-danger float-right mr-1 mt-1', isExternalLink: false, submenu: [
             {
-                path: '/admin/sos-alerts', title: 'Emergency Alert', icon: '', class: '',
+                path: '/admin/sos-alerts', title: 'Emergency Alerts', icon: '', class: '',
                 badge: '', badgeClass: '', isExternalLink: false, submenu: []
             },
             {
@@ -106,28 +138,12 @@ export const ROUTES: RouteInfo[] = [
             {
                 path: '/admin/rider-blocks', title: 'Rider Blocks', icon: '', class: '',
                 badge: '', badgeClass: '', isExternalLink: false, submenu: []
-            },
-            {
-                path: '/admin/demand-heatmap', title: 'Demand Heatmap', icon: '', class: '',
-                badge: '', badgeClass: '', isExternalLink: false, submenu: []
-            },
-            {
-                path: '/admin/pool-settings', title: 'Pool Settings', icon: '', class: '',
-                badge: '', badgeClass: '', isExternalLink: false, submenu: []
-            },
-            {
-                path: '/admin/price-broadcast-settings', title: 'Price Broadcast Settings', icon: '', class: '',
-                badge: '', badgeClass: '', isExternalLink: false, submenu: []
-            },
-            {
-                path: '/admin/destination-broadcast-monitor', title: 'Destination Broadcasts', icon: '', class: '',
-                badge: '', badgeClass: '', isExternalLink: false, submenu: []
             }
         ]
     },
 
     {
-        path: '', title: 'Settings', icon: 'fa fa-sitemap', class: 'has-sub',
+        path: '', title: 'System Settings', icon: 'fa fa-sitemap', class: 'has-sub',
         badge: '', badgeClass: 'badge badge-pill badge-danger float-right mr-1 mt-1', isExternalLink: false, submenu: [
             {
                 path: '/admin/account/website', title: 'Website Settings', icon: '', class: '',
@@ -152,10 +168,6 @@ export const ROUTES: RouteInfo[] = [
     {
         path: '', title: 'Subscriptions', icon: 'fa fa-credit-card', class: 'has-sub',
         badge: '', badgeClass: 'badge badge-pill badge-danger float-right mr-1 mt-1', isExternalLink: false, submenu: [
-            ...(environment.featureFlags.commission_enabled ? [{
-                path: '/admin/commissions/view', title: 'Commission Settings', icon: '', class: '',
-                badge: '', badgeClass: '', isExternalLink: false, submenu: []
-            }] : []),
             {
                 path: '/admin/subscription-plans/view', title: 'Driver Subscription Plans', icon: '', class: '',
                 badge: '', badgeClass: '', isExternalLink: false, submenu: []
@@ -174,15 +186,6 @@ export const ROUTES: RouteInfo[] = [
                 path: '/admin/driver-subscriptions/view?customer_type=PASSENGER', title: 'Passenger Subscriptions', icon: '', class: '',
                 badge: '', badgeClass: '', isExternalLink: false, submenu: []
             },
-            ...(environment.featureFlags.commission_enabled ? [{
-                path: '/admin/management/driverPay', title: 'Driver Payment', icon: '', class: '',
-                badge: '', badgeClass: '', isExternalLink: false, submenu: []
-            },
-            {
-                path: '/admin/management/settlementHistory', title: 'Settlement History', icon: '', class: '',
-                badge: '', badgeClass: '', isExternalLink: false, submenu: []
-            }] : []),
-
         ]
 
     },

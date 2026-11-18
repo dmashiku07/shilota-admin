@@ -1,4 +1,5 @@
 import { ChangeDetectorRef, Component, OnInit } from '@angular/core';
+import { ActivatedRoute } from '@angular/router';
 import { OperationsReportingService } from '../../../../service/operations-reporting.service';
 
 @Component({
@@ -10,11 +11,15 @@ export class DisbursementsComponent implements OnInit {
   rows: any[] = [];
   totals: any[] = [];
   loading = false;
+  receiptMode = false;
   filter: any = { from: '', to: '', paymentType: '', driverId: '' };
   pagination: any = { page: 1, pageSize: 25, totalItems: 0, totalPages: 1 };
 
-  constructor(private reporting: OperationsReportingService, private cdr: ChangeDetectorRef) {}
-  ngOnInit() { this.load(); }
+  constructor(private reporting: OperationsReportingService, private route: ActivatedRoute, private cdr: ChangeDetectorRef) {}
+  ngOnInit() {
+    this.receiptMode = this.route.snapshot.routeConfig?.path === 'receipts';
+    this.load();
+  }
   load() {
     this.loading = true;
     const params: any = { ...this.filter, page: this.pagination.page, pageSize: this.pagination.pageSize };

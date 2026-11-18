@@ -108,6 +108,10 @@ const routes: Routes = [
         path: 'disbursements',
         component: DisbursementsComponent,
       },
+      {
+        path: 'receipts',
+        component: DisbursementsComponent,
+      },
 
       
       
