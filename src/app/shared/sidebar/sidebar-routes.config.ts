@@ -10,7 +10,7 @@ export const ROUTES: RouteInfo[] = [
     },
 
     {
-        path: '', title: 'Passenger Management', icon: 'fa fa-users', class: 'has-sub',
+        path: '', title: 'Passenger', icon: 'fa fa-users', class: 'has-sub',
         badge: '', badgeClass: 'badge badge-pill badge-danger float-right mr-1 mt-1', isExternalLink: false, submenu: [
             {
                 path: '/admin/management/user', title: 'All Passengers', icon: '', class: '',
@@ -24,7 +24,7 @@ export const ROUTES: RouteInfo[] = [
     },
 
     {
-        path: '', title: 'Driver Management', icon: 'fa fa-id-card-o', class: 'has-sub',
+        path: '', title: 'Driver', icon: 'fa fa-id-card-o', class: 'has-sub',
         badge: '', badgeClass: 'badge badge-pill badge-danger float-right mr-1 mt-1', isExternalLink: false, submenu: [
             {
                 path: '/admin/management/driver', title: 'All Drivers', icon: '', class: '',
@@ -38,7 +38,7 @@ export const ROUTES: RouteInfo[] = [
     },
 
     {
-        path: '', title: 'Vehicle & Fleet Management', icon: 'fa fa-car', class: 'has-sub', badge: '',
+        path: '', title: 'Vehicle & Fleet', icon: 'fa fa-car', class: 'has-sub', badge: '',
         badgeClass: 'badge badge-pill badge-danger float-right mr-1 mt-1', isExternalLink: false, submenu: [
             { path: '/admin/management/vehicle', title: 'Vehicles', icon: '', class: '', badge: '', badgeClass: '', isExternalLink: false, submenu: [] },
             { path: '/admin/bodytype/view', title: 'Body Types', icon: '', class: '', badge: '', badgeClass: '', isExternalLink: false, submenu: [] },
@@ -48,7 +48,7 @@ export const ROUTES: RouteInfo[] = [
     },
 
     {
-        path: '', title: 'Ride & Trip Management', icon: 'fa fa-road', class: 'has-sub',
+        path: '', title: 'Ride & Trip', icon: 'fa fa-road', class: 'has-sub',
         badge: '', badgeClass: 'badge badge-pill badge-danger float-right mr-1 mt-1', isExternalLink: false, submenu: [
             {
                 path: '/admin/management/rides', title: 'Rides', icon: '', class: '',
