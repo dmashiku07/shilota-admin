@@ -2773,6 +2773,94 @@ router.get('/wallethistory/:userid', function (req, res) {
 });
 
 /* dashboard for driver */
+/* Driver-safe earnings and payout summary. This deliberately exposes only the
+ * authenticated driver's own payments and legacy settlement records. */
+router.get('/earnings/:userid', function (req, res) {
+  passport.authenticate('jwt', { session: false }, async function (err, driver) {
+    if (err || !driver || String(driver._id) !== String(req.params.userid)) {
+      return res.status(401).json({ status: 'error', message: 'Unauthorized access' });
+    }
+
+    function parseDate(value, endOfDay) {
+      if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(String(value))) return null;
+      const date = new Date(String(value) + (endOfDay ? 'T23:59:59.999Z' : 'T00:00:00.000Z'));
+      return Number.isNaN(date.getTime()) ? null : date;
+    }
+    function money(value) {
+      const number = Number(value || 0);
+      return Number.isFinite(number) ? Math.round(number * 100) / 100 : 0;
+    }
+
+    try {
+      const today = new Date();
+      const defaultFrom = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
+      const defaultTo = new Date(defaultFrom);
+      defaultTo.setUTCDate(defaultTo.getUTCDate() + 1);
+      defaultTo.setMilliseconds(defaultTo.getMilliseconds() - 1);
+      const from = parseDate(req.query.from, false) || defaultFrom;
+      const to = parseDate(req.query.to, true) || defaultTo;
+      if (from > to) {
+        return res.status(400).json({ status: 'false', message: 'The start date must be before the end date' });
+      }
+
+      const paymentCriteria = { driver_id: String(driver._id), drop_time: { $gte: from, $lte: to } };
+      const [payments, settlements] = await Promise.all([
+        Payments.find(paymentCriteria).sort({ drop_time: -1, _id: -1 }).limit(100).lean().exec(),
+        Settlements.find({ driver_id: String(driver._id) }).sort({ created_at: -1, _id: -1 }).limit(100).lean().exec()
+      ]);
+
+      const summary = {
+        completedRides: payments.length,
+        grossEarnings: 0,
+        cashCollected: 0,
+        onlineEarnings: 0,
+        driverCredit: money(driver.walletmoney),
+        amountAwaitingSettlement: 0
+      };
+      const receipts = payments.map(function (payment) {
+        const amount = money(payment.ride_fare || payment.baseprice);
+        const type = String(payment.payment_type || 'unknown').toLowerCase();
+        const isCash = type === 'cash' || Number(payment.direct_to_driver) === 1;
+        summary.grossEarnings += amount;
+        if (isCash) summary.cashCollected += amount;
+        else summary.onlineEarnings += amount;
+        if (!isCash && Number(payment.paid) !== 1) summary.amountAwaitingSettlement += amount;
+        return {
+          id: String(payment._id),
+          rideId: payment.onride_id || null,
+          amount: amount,
+          paymentMethod: payment.payment_type || 'unknown',
+          status: payment.payment_status || 'pending',
+          directToDriver: Number(payment.direct_to_driver) === 1,
+          paidAt: payment.paid_at || payment.drop_time || null
+        };
+      });
+      Object.keys(summary).forEach(function (key) {
+        if (key !== 'completedRides') summary[key] = money(summary[key]);
+      });
+
+      return res.json({
+        status: 'true',
+        range: { from: from, to: to },
+        summary: summary,
+        payouts: settlements.map(function (settlement) {
+          return {
+            id: String(settlement._id),
+            amount: money(settlement.total_earning),
+            rideCount: Number(settlement.ride_count || 0),
+            paymentMethod: settlement.payment_type || 'unknown',
+            status: settlement.payment_status || 'pending',
+            createdAt: settlement.created_at || null
+          };
+        }),
+        receipts: receipts
+      });
+    } catch (error) {
+      return res.status(500).json({ status: 'false', message: 'Unable to load earnings and payout information' });
+    }
+  })(req, res);
+});
+
 router.get('/dashboard/:userid', function (req, res) {
   passport.authenticate('jwt', { session: false }, function (err, driver) {
     if (err === "AccountDeleted") {
