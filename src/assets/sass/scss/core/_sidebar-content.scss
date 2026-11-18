@@ -18,7 +18,7 @@
         .app-sidebar{
             width:60px;
             &:hover{
-                width: 250px;
+                width: 270px;
                 .nav li.has-sub > a:after{
                     display: inherit;
                 }
@@ -79,7 +79,7 @@
     top: 0;
     bottom: 0;
     left: 0;
-    width: 260px;
+    width: 270px;
     display: block;
     z-index: 1;
     color: #fff;
@@ -95,7 +95,7 @@
     bottom: 0;
     left: 0;
     z-index: 3;
-    width: 250px;
+    width: 270px;
     height: 100vh;
     @include sidebar-shadow();
     -webkit-transition: width 0.3s cubic-bezier(0, 0, 0.2, 1);
